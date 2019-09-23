@@ -188,7 +188,7 @@ blockHeightRow ti chains bt bh = do
   elAttr "tr" ("style" =: "margin: 0;") $ do
     --el "td" $ text $ T.pack $ show blockHeight
     es <- forM chains $ \cid ->
-      maybe (return never) (blockWidget ti) $ getBlock bh cid bt
+      maybe (el "td" $ return never) (blockWidget ti) $ getBlock bh cid bt
     return $ leftmost es
 
 blockWidget :: MonadAppIO r t m => Dynamic t TickInfo -> BlockHeader -> m (Event t (Maybe ChainId))
@@ -196,7 +196,7 @@ blockWidget ti (BlockHeader ct _ blockHeight hash chainId _ _ _ _ _ _ _) = do
   (e,_) <- elAttr' "td" ("class" =: "blocksummary") $ do
                          -- <> "style" =: "padding: 0; margin: 0; border: 0; border-spacing: 0;") $ do
     el "div" $ do
-      elClass "span" "blockshape" $ text "Bk"
+      elClass "span" "blockshape" $ text (tshow $ unChainId chainId) --"Bk"
       elClass "span" "blockheight" $ text $ T.take 8 $ hashHex hash
     --divClass "txcount" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
     divClass "txcount" $ elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
@@ -248,7 +248,7 @@ blockWidth :: Int
 blockWidth = 110
 
 blockSeparation :: Int
-blockSeparation = 30
+blockSeparation = 50
 
 spacerRow
   :: (DomBuilder t m, PostBuild t m)
@@ -258,7 +258,7 @@ spacerRow
 spacerRow chains hoveredBlock = do
   elClass "tr" "spacer-row" $ do
     --el "td" $ text ""
-    elAttr "td" ("colspan" =: "10" <> "style" =: ("padding: 0;")) $
+    elAttr "td" ("colspan" =: "10" <> "style" =: ("padding: 0; height: " <> tshow blockSeparation <> "px")) $
       chainweb chains hoveredBlock
 
 chainweb
