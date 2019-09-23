@@ -107,20 +107,20 @@ recentBlocks = void $ prerender blank $ do
   let h = Host "us1.testnet.chainweb.com" 443
   ese <- getServerInfo (h <$ pb)
   dse <- holdDyn Nothing ese
-  dynText (maybe "Getting server info..." tshow <$> dse)
-  networkView (foo h <$> dse)
+  --dynText (maybe "Getting server info..." tshow <$> dse)
+  networkView (blockHeaders h <$> dse)
   return ()
 
 numRows :: Int
 numRows = 5
 
-foo
+blockHeaders
   :: (MonadAppIO r t m, Prerender js t m)
   => Host
   -> Maybe ServerInfo
   -> m ()
-foo _ Nothing = blank
-foo h (Just si) = do
+blockHeaders _ Nothing = blank
+blockHeaders h (Just si) = do
   pb <- getPostBuild
   let mah = _siNewestBlockHeight si
       mih = mah - numRows
@@ -131,7 +131,7 @@ foo h (Just si) = do
 
 
 blockTableWidget
-  :: (MonadApp r t m, Prerender js t m)
+  :: (MonadAppIO r t m, Prerender js t m)
   => [ChainId]
   -> BlockTable
   -> m ()
@@ -148,7 +148,7 @@ blockTableWidget chains bt = do
     --el "div" $ text $ tshow $ _blockTable_heights bt
     --el "div" $ text $ tshow $ _blockTable_chainIds bt
 
-    el "tbody" $ void $ prerender blank $ do
+    el "tbody" $ do
       t <- liftIO getCurrentTime
       ti <- clockLossy 1 t
       let hs = S.toDescList $ M.keysSet $ _blockTable_blocks bt
@@ -197,11 +197,13 @@ blockWidget ti (BlockHeader ct _ blockHeight hash chainId _ _ _ _ _ _ _) = do
                          -- <> "style" =: "padding: 0; margin: 0; border: 0; border-spacing: 0;") $ do
     el "div" $ do
       elClass "span" "blockshape" $ text (tshow $ unChainId chainId) --"Bk"
-      elClass "span" "blockheight" $ text $ T.take 8 $ hashHex hash
-    --divClass "txcount" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
-    divClass "txcount" $ elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
-      text $ "? txs"
-    pastTimeWidget ti (posixSecondsToUTCTime ct)
+      let url = "/blockHash/" <> hashB64U hash
+      elClass "span" "blockheight" $ elAttr "a" ("href" =: url) $
+        text $ T.take 8 $ hashHex hash
+    --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
+    --divClass "blockdiv" $ elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
+    --  text $ "? txs"
+    divClass "blockdiv" $ pastTimeWidget ti (posixSecondsToUTCTime ct)
 
   return $ leftmost [Just chainId <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
 
@@ -261,15 +263,30 @@ spacerRow chains hoveredBlock = do
     elAttr "td" ("colspan" =: "10" <> "style" =: ("padding: 0; height: " <> tshow blockSeparation <> "px")) $
       chainweb chains hoveredBlock
 
+svgElDynAttr
+  :: (DomBuilder t m, PostBuild t m)
+  => Text
+  -> Dynamic t (Map Text Text)
+  -> m a
+  -> m a
+svgElDynAttr tag attrs child = elDynAttrNS (Just "http://www.w3.org/2000/svg") tag attrs child
+
+svgElAttr
+  :: (DomBuilder t m, PostBuild t m)
+  => Text
+  -> Map Text Text
+  -> m a
+  -> m a
+svgElAttr tag attrs child = svgElDynAttr tag (constDyn attrs) child
+
 chainweb
   :: (DomBuilder t m, PostBuild t m)
   => [ChainId]
   -> Dynamic t (Maybe ChainId)
   -> m ()
 chainweb chains hoveredBlock = do
-  elAttr "svg" ("viewBox" =: ("0 0 1100 " <> tshow blockSeparation) <>
-                "xmlns" =: "http://www.w3.org/2000/svg" <>
-                "style" =: "vertical-align: middle;") $ do
+  svgElAttr "svg" ("viewBox" =: ("0 0 1100 " <> tshow blockSeparation) <>
+                   "style" =: "vertical-align: middle;") $ do
     forM_ chains (linksFromBlock hoveredBlock)
     void $ networkView $ lastLinesForActiveBlock <$> hoveredBlock
 
@@ -294,16 +311,16 @@ linksFromBlock hoveredBlock f@(ChainId from) = do
                      then "stroke" =: "rgb(0,0,0)" <>
                           "stroke-width" =: "1.0"
                      else "stroke" =: "rgb(220,220,220)"
-  elDynAttr "g" (mkAttrs <$> hoveredBlock) $ do
+  svgElDynAttr "g" (mkAttrs <$> hoveredBlock) $ do
     linkFromTo from from
     mapM_ (linkFromTo from) toBlocks
 
-linkFromTo :: DomBuilder t m => Int -> Int -> m ()
+linkFromTo :: (DomBuilder t m, PostBuild t m) => Int -> Int -> m ()
 linkFromTo f t =
-    elAttr "line" ("x1" =: (tshow $ fromPos f) <>
-                   "y1" =: "0" <>
-                   "x2" =: (tshow $ toPos t) <>
-                   "y2" =: (tshow blockSeparation) ) blank
+    svgElAttr "line" ("x1" =: (tshow $ fromPos f) <>
+                      "y1" =: "0" <>
+                      "x2" =: (tshow $ toPos t) <>
+                      "y2" =: (tshow blockSeparation) ) blank
 
 petersonGraph :: M.Map Int [Int]
 petersonGraph = M.fromList
