@@ -1,0 +1,55 @@
+name: frontend
+version: 0.1
+cabal-version: >= 1.8
+build-type: Simple
+
+library
+  hs-source-dirs: src
+  build-depends:
+      aeson
+    , base
+    , base16-bytestring
+    , base64-bytestring
+    , bytes
+    , cereal
+    , common
+    , containers
+    , data-dword
+    , hashable
+    , jsaddle
+    , microlens
+    , microlens-aeson
+    , mtl
+    , obelisk-executable-config-lookup
+    , obelisk-frontend
+    , obelisk-generated-static
+    , obelisk-route
+    , perfect-vector-shuffle
+    , readable
+    , ref-tf
+    , reflex
+    , reflex-dom
+    , text
+    , time
+    , transformers
+    , unordered-containers
+  exposed-modules:
+    Frontend
+    Frontend.App
+    Frontend.ChainwebApi
+  ghc-options: -Wall
+
+executable frontend
+  main-is: main.hs
+  hs-source-dirs: src-bin
+  build-depends: base
+               , common
+               , obelisk-frontend
+               , obelisk-route
+               , reflex-dom
+               , obelisk-generated-static
+               , frontend
+  --TODO: Make these ghc-options optional
+  ghc-options: -threaded
+  if os(darwin)
+     ghc-options: -dynamic

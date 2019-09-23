@@ -1,0 +1,28 @@
+.blockid {
+    display: table-cell;
+    margin: auto;
+}
+
+td {
+    vertical-align: middle;
+    height: 30px;
+}
+
+td.blocksummary {
+    /*padding-top: 0;*/
+    border-left: 1px solid rgba(34,36,38,.1);
+    border-right: 1px solid rgba(34,36,38,.1);
+}
+
+.blockshape {
+    background: #e0e1e2 none;
+    padding: 5px;
+}
+
+.blockheight {
+    padding-left: 5px;
+}
+
+.txcount {
+    padding-top: 5px;
+}
