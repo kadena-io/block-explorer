@@ -36,7 +36,9 @@ library
   exposed-modules:
     Frontend
     Frontend.App
+    Frontend.Common
     Frontend.ChainwebApi
+    Frontend.Nav
   ghc-options: -Wall
 
 executable frontend

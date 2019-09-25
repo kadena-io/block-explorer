@@ -46,6 +46,7 @@ import           Common.Api
 import           Common.Route
 import           Frontend.App
 import           Frontend.ChainwebApi
+import           Frontend.Nav
 ------------------------------------------------------------------------------
 
 
@@ -59,10 +60,10 @@ chainScan
   :: (MonadApp r t m, Prerender js t m)
   => RoutedT t (R FrontendRoute) m ()
 chainScan = do
-    elAttr "div" ("class" =: "ui container" <> "style" =: "width: 1100px") $
+    elAttr "div" ("class" =: "ui container" <> "style" =: "width: 1100px") $ do
       subRoute_ $ \case
-        FrontendRoute_Main -> recentBlocks
-        FrontendRoute_BlockHash -> blockDetails
+        FR_Main -> recentBlocks
+        FR_Block -> blockDetails
     return ()
 
 -- Block payload info
@@ -104,7 +105,7 @@ recentBlocks
   => m ()
 recentBlocks = void $ prerender blank $ do
   pb <- getPostBuild
-  let h = Host "us1.testnet.chainweb.com" 443
+  let h = Host "eu2.testnet.chainweb.com" 443
   ese <- getServerInfo (h <$ pb)
   dse <- holdDyn Nothing ese
   --dynText (maybe "Getting server info..." tshow <$> dse)

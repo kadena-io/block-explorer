@@ -22,11 +22,14 @@ import           Prelude hiding ((.), id)
 import           Control.Category (Category (..))
 import           Control.Monad.Except
 import           Data.Map (Map)
+import           Data.Some (Some)
+import qualified Data.Some as Some
 import           Data.Text (Text)
 import           Data.Functor.Identity
 import           Data.Functor.Sum
 import           Obelisk.Route
 import           Obelisk.Route.TH
+import           Reflex.Dom
 ------------------------------------------------------------------------------
 
 data BackendRoute :: * -> * where
@@ -35,8 +38,8 @@ data BackendRoute :: * -> * where
   BackendRoute_Hashes :: BackendRoute (Map Text (Maybe Text))
 
 data FrontendRoute :: * -> * where
-  FrontendRoute_Main :: FrontendRoute ()
-  FrontendRoute_BlockHash :: FrontendRoute Text
+  FR_Main :: FrontendRoute ()
+  FR_Block :: FrontendRoute Text
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 pathOnlyEncoderIgnoringQuery :: (Applicative check, MonadError Text parse) => Encoder check parse [Text] PageName
@@ -65,10 +68,22 @@ backendRouteEncoder = handleEncoder (const (InL BackendRoute_Missing :/ ())) $
     InR obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
       -- The encoder given to PathEnd determines how to parse query parameters,
       -- in this example, we have none, so we insist on it.
-      FrontendRoute_Main -> PathEnd $ unitEncoder mempty
-      FrontendRoute_BlockHash -> PathSegment "blockHash" singlePathSegmentEncoder
+      FR_Main -> PathEnd $ unitEncoder mempty
+      FR_Block -> PathSegment "block" singlePathSegmentEncoder
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
   ]
+
+-- | Provide a human-readable name for a given section
+tabTitle :: DomBuilder t m => Some FrontendRoute -> m ()
+tabTitle sfr@(Some.Some sec) = case sec of
+  FR_Main -> text $ frToText sfr
+  FR_Block -> text $ frToText sfr
+
+-- | Provide a human-readable name for a given section
+frToText :: Some FrontendRoute -> Text
+frToText (Some.Some sec) = case sec of
+  FR_Main -> "Home"
+  FR_Block -> "Block"

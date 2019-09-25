@@ -261,6 +261,25 @@ hashHex = T.decodeUtf8 . B16.encode . unHash
 hashB64U :: Hash -> Text
 hashB64U = T.decodeUtf8 . B64U.encode . unHash
 
+{-
+data:{
+"txCount":0,
+"header":{
+  "creationTime":1569418573005922,
+  "parent":"ifz24oPHu-ttUpHcOsjWLoZ_wWxRzuogYkooxP-abQ8",
+  "height":84,
+  "hash":"ZUjXyjY2ObDy6Ybv74R7qsbS2WZjtJlp7mtE_QX4MVY",
+  "chainId":6,
+  "weight":"Jz2JAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "epochStart":1569418573005922,
+  "adjacents":{"7":"BxN7dkdn0YwuSs0-B1mLzMLIbyf_OuAkngPVkuFDY4M","1":"PqlYkCQqfHrrnvW5bhSv0mJYCsQz3ewXZ44QA2bANnI","5":"t5355Z7I_QLZ24gPhAxaGUru3BpeBAvl3dBLdbDW_kA"}
+  ,"payloadHash":"j5YYGad134kwmceK4Bvh-65ivs1eJBYf8meHHgjwO2w"
+  ,"chainwebVersion":"testnet02"
+  ,"target":"VB6tT6O7wHdoQ3HgVgmmjrj-gK4nnzPND0N74TgGAAA"
+  ,"nonce":"5630980"}
+}
+-}
+
 data BlockHeader = BlockHeader
   { _blockHeader_creationTime :: POSIXTime
   , _blockHeader_parent :: Hash
