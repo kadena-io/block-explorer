@@ -13,18 +13,24 @@ import           Control.Lens hiding (element)
 import           Data.Default
 import           Data.Proxy
 import           Data.Text (Text)
+import qualified Data.Text as T
 import           Obelisk.Route.Frontend
 import           Reflex
 import           Reflex.Dom
 ------------------------------------------------------------------------------
 
 
-instance Reflex t => Default (Event t a) where
-  def = never
+(<$$>) :: (Functor f1, Functor f2) => (a -> b) -> f1 (f2 a) -> f1 (f2 b)
+f <$$> a = fmap f <$> a
+infixl 4 <$$>
 
-infixr 8 <$$>
-(<$$>) :: (Functor f0, Functor f1) => (a -> b) -> f1 (f0 a) -> f1 (f0 b)
-(<$$>) = fmap . fmap
+(<$$$>) :: (Functor f1, Functor f2, Functor f3) => (a -> b) -> f1 (f2 (f3 a)) -> f1 (f2 (f3 b))
+f <$$$> a = fmap f <$$> a
+infixl 4 <$$$>
+
+
+tshow :: Show a => a -> Text
+tshow = T.pack . show
 
 data ListState = EmptyPlaceholder | AddForm | ListTable
   deriving (Eq,Ord,Show,Read)
@@ -35,7 +41,7 @@ data TableAction t a = TableAction
   }
 
 instance Reflex t => Default (TableAction t a) where
-  def = TableAction def def
+  def = TableAction never never
 
 extLink :: DomBuilder t m => Text -> m a -> m a
 extLink href m =

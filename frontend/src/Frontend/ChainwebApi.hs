@@ -2,16 +2,18 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell#-}
 
 module Frontend.ChainwebApi where
 
 ------------------------------------------------------------------------------
+import           Debug.Trace (traceShow, traceShowId)
 import           Data.Aeson
 import           Data.Aeson.Types
-import           Data.Bifunctor
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64.URL as B64U
+import           Data.Either
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import           Data.Hashable
@@ -19,50 +21,45 @@ import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Readable
-import           Data.Set (Set)
-import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import           Data.Time
 import           Data.Time.Clock.POSIX
-import           Data.Word
-import           GHC.Generics
+import           GHCJS.DOM.Types (MonadJSM)
 import           Lens.Micro
 import           Lens.Micro.Aeson
 import           Reflex.Dom hiding (Cut, Value)
 import           Text.Printf
 ------------------------------------------------------------------------------
-import           Frontend.App
+import           Frontend.Common
 ------------------------------------------------------------------------------
 
-data Remote a = InFlight | Crashed [String] | Landed a
-
-instance Show a => Show (Remote a) where
-  show InFlight = "Request in flight"
-  show (Landed _) = "Request landed"
-  show (Crashed es) = unlines $
-    "Request crashed with the following errors:" : es
-
-instance Functor Remote where
-  fmap f (Landed a) = Landed (f a)
-  fmap _ (Crashed es) = Crashed es
-  fmap _ InFlight = InFlight
-
-instance Semigroup a => Semigroup (Remote a) where
-  InFlight <> InFlight = InFlight
-  InFlight <> Crashed es = Crashed es
-  Crashed es <> InFlight = Crashed es
-  Crashed es1 <> Crashed es2 = Crashed (es1 <> es2)
-  InFlight <> Landed a = Landed a
-  Crashed es <> Landed a = Crashed es
-  Landed a <> InFlight = Landed a
-  Landed a <> Crashed es = Crashed es
-  Landed a1 <> Landed a2 = Landed (a1 <> a2)
-
-instance Semigroup a => Monoid (Remote a) where
-  mempty = InFlight
+--data Remote a = InFlight | Crashed [String] | Landed a
+--
+--instance Show a => Show (Remote a) where
+--  show InFlight = "Request in flight"
+--  show (Landed _) = "Request landed"
+--  show (Crashed es) = unlines $
+--    "Request crashed with the following errors:" : es
+--
+--instance Functor Remote where
+--  fmap f (Landed a) = Landed (f a)
+--  fmap _ (Crashed es) = Crashed es
+--  fmap _ InFlight = InFlight
+--
+--instance Semigroup a => Semigroup (Remote a) where
+--  InFlight <> InFlight = InFlight
+--  InFlight <> Crashed es = Crashed es
+--  Crashed es <> InFlight = Crashed es
+--  Crashed es1 <> Crashed es2 = Crashed (es1 <> es2)
+--  InFlight <> Landed a = Landed a
+--  Crashed es <> Landed a = Crashed es
+--  Landed a <> InFlight = Landed a
+--  Landed a <> Crashed es = Crashed es
+--  Landed a1 <> Landed a2 = Landed (a1 <> a2)
+--
+--instance Semigroup a => Monoid (Remote a) where
+--  mempty = InFlight
 
 --instance Applicative Remote where
 --  pure a = Landed a
@@ -72,16 +69,14 @@ instance Semigroup a => Monoid (Remote a) where
 --  Crashed s <*> _ = Crashed s
 --  _ <*> InFlight = InFlight
 
-remoteToMaybe :: Remote a -> Maybe a
-remoteToMaybe (Landed a) = Just a
-remoteToMaybe _ = Nothing
-
-remoteToEither :: Remote a -> Either [String] a
-remoteToEither InFlight = Left ["In flight"]
-remoteToEither (Crashed s) = Left s
-remoteToEither (Landed a) = Right a
-
-chainwebVersion = "testnet02"
+--remoteToMaybe :: Remote a -> Maybe a
+--remoteToMaybe (Landed a) = Just a
+--remoteToMaybe _ = Nothing
+--
+--remoteToEither :: Remote a -> Either [String] a
+--remoteToEither InFlight = Left ["In flight"]
+--remoteToEither (Crashed s) = Left s
+--remoteToEither (Landed a) = Right a
 
 type BlockHeight = Int
 --newtype BlockHeight = BlockHeight { unBlockHeight :: Int }
@@ -101,30 +96,46 @@ data Host = Host
   , hostPort :: Int
   } deriving (Eq,Ord,Show)
 
-apiBaseUrl :: Host -> Text -> Text
-apiBaseUrl h cver = T.pack $ printf "https://%s/chainweb/0.0/%s/" (T.unpack host) (T.unpack cver)
+data ChainwebVersion = Development | Testnet02 | Mainnet01
+  deriving (Eq,Ord,Show)
+
+versionText :: ChainwebVersion -> Text
+versionText Development = "development"
+versionText Testnet02 = "testnet02"
+versionText Mainnet01 = "mainnet01"
+
+data ChainwebHost = ChainwebHost
+  { chHost :: Host
+  , chVersion :: ChainwebVersion
+  } deriving (Eq,Ord,Show)
+
+apiBaseUrl :: ChainwebHost -> Text
+apiBaseUrl (ChainwebHost h cver) =
+    T.pack $ printf "https://%s/chainweb/0.0/%s/" (T.unpack host) (T.unpack $ versionText cver)
   where
     host = if hostPort h == 443
              then hostAddress h
              else hostAddress h <> ":" <> tshow (hostPort h)
 
-cutUrl :: Host -> Text -> Text
-cutUrl h cver = apiBaseUrl h cver <> "cut"
+cutUrl :: ChainwebHost -> Text
+cutUrl h = apiBaseUrl h <> "cut"
 
-chainBaseUrl :: Host -> ChainId -> Text
-chainBaseUrl h chainId = apiBaseUrl h chainwebVersion <> "chain/" <> (tshow (unChainId chainId))
+chainBaseUrl :: ChainwebHost -> ChainId -> Text
+chainBaseUrl h chainId = apiBaseUrl h <> "chain/" <> (tshow (unChainId chainId))
 
-chainHashesUrl :: Host -> BlockHeight -> BlockHeight -> ChainId -> Text
+chainHashesUrl :: ChainwebHost -> BlockHeight -> BlockHeight -> ChainId -> Text
 chainHashesUrl h minHeight maxHeight chainId = chainBaseUrl h chainId <>
   "/hash?minheight=" <> tshow minHeight <> "&maxheight=" <> tshow maxHeight
 
-headersUrl :: Host -> BlockHeight -> BlockHeight -> ChainId -> Text
+headersUrl :: ChainwebHost -> BlockHeight -> BlockHeight -> ChainId -> Text
 headersUrl h minHeight maxHeight chainId = chainBaseUrl h chainId <>
   "/header?minheight=" <> tshow minHeight <> "&maxheight=" <> tshow maxHeight
 
+headerUpdatesUrl :: ChainwebHost -> Text
+headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
+
 data ServerInfo = ServerInfo
   { _siApiVer :: Text -- TODO use this properly
-  , _siChainwebVer :: Text
   , _siChains :: [ChainId]
   , _siNewestBlockHeight :: BlockHeight
   } deriving (Eq,Ord,Show)
@@ -157,94 +168,61 @@ instance FromJSON Cut where
     -- <*> (HM.fromList . map (first fromText) . HM.toList <$> (o .: "hashes"))
 
 cutToServerInfo :: Cut -> ServerInfo
-cutToServerInfo c = ServerInfo "0.0" chainwebVersion (sort $ HM.keys chains) h
+cutToServerInfo c = ServerInfo "0.0" (sort $ HM.keys chains) h
   where
     chains = _cutChains c
     h = maximum $ map _tipHeight $ HM.elems chains
 
-getServerInfo
-  :: (MonadAppIO r t m)
-  => Event t Host
-  -> m (Event t (Maybe ServerInfo))
-getServerInfo host = do
-  cutToServerInfo <$$$> getCut host
-
 getCut
-  :: (MonadAppIO r t m)
-  => Event t Host
+  :: (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
+  => Event t ChainwebHost
   -> m (Event t (Maybe Cut))
 getCut host = do
-  resp <- performRequestsAsync $ fmap (\h -> (h, XhrRequest "GET" (cutUrl h chainwebVersion) def)) host
-  return (decodeXhrResponse . snd <$> traceEventWith (maybe "" T.unpack . _xhrResponse_responseText . snd) resp)
-
---getItems :: Value -> [Text]
---getItems val = val ^.. key "items" . values . _String
+  resp <- performRequestsAsync $ fmap (\h -> (h, XhrRequest "GET" (cutUrl h) def)) host
+  return (decodeXhrResponse . snd <$> resp)
 
 getItems :: Value -> [Value]
 getItems val = val ^.. key "items" . values
 
---mkBlockTable :: ((BlockHeight,BlockHeight,ChainId), XhrResponse) -> Maybe BlockTable
---mkBlockTable ((mih, mah, chainId), resp) = do
---    v <- decodeXhrResponse resp
---    return $ mconcat $ map singletonBlockTable $ getItems v
---
---getChainBlocks
---  :: (MonadAppIO r t m)
---  => Host
---  -> Event t (BlockHeight, BlockHeight, ChainId)
---  -> m (Event t (Maybe BlockTable))
---getChainBlocks h chainId = do
---  resp <- performRequestsAsync $ fmap (\a@(mih, mah, cid) -> (a, XhrRequest "GET" (chainHashesUrl h mih mah cid) def)) chainId
---  return (mkBlockTable <$> traceEventWith (maybe "" T.unpack . _xhrResponse_responseText . snd) resp)
+getBlockTable
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  => ChainwebHost
+  -> ServerInfo
+  -> m (Event t BlockTable)
+getBlockTable h si = do
+  pb <- getPostBuild
+  resp <- performRequestsAsync $ mkHeaderRequest2 h si <$ pb
+  return (foldl' (\bt val -> combineBlockTables bt val) mempty <$> (fmap decodeXhrResponse <$> resp))
 
-getBlocks2
-  :: (MonadAppIO r t m)
-  => Host
+getBlockTableDyn
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
+  => Dynamic t ChainwebHost
   -> Event t ServerInfo
   -> m (Event t BlockTable)
-getBlocks2 h si = do
-  resp <- performRequestsAsync $ fmap (mkHeaderRequest2 h) si
-  --return (mkBlockTable <$> traceEventWith (maybe "" T.unpack . _xhrResponse_responseText . snd) resp)
-  return (foldl' combineBlockTables2 mempty <$> (fmap decodeXhrResponse <$> resp))
+getBlockTableDyn h si = do
+  resp <- performRequestsAsync $ attachWith mkHeaderRequest2 (current h) si
+  return (foldl' combineBlockTables mempty <$> (fmap (decodeXhrResponse) <$> resp))
 
-combineBlockTables :: BlockTable -> XhrResponse -> BlockTable
-combineBlockTables bt resp = case decodeXhrResponse resp of
-                Nothing -> bt
-                Just v -> foldl' insertBlockTable bt $ catMaybes $ map (parseMaybe parseJSON) $ getItems v
+combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
+combineBlockTables bt Nothing = bt
+combineBlockTables bt (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx 0 b)) bt $ rights $
+  map (parseEither parseJSON) $ getItems v
 
-combineBlockTables2 :: BlockTable -> Maybe Value -> BlockTable
-combineBlockTables2 bt Nothing = bt
-combineBlockTables2 bt (Just v) = foldl' insertBlockTable bt $ catMaybes $ map (parseMaybe parseJSON) $ getItems v
-
-mkHeaderRequest :: Host -> ServerInfo -> [((BlockHeight,BlockHeight,ChainId), XhrRequest ())]
+mkHeaderRequest :: ChainwebHost -> ServerInfo -> [((BlockHeight,BlockHeight,ChainId), XhrRequest ())]
 mkHeaderRequest h si = map (\c -> ((minh, maxh, c), XhrRequest "GET" (chainHashesUrl h minh maxh c) cfg))
                          $ _siChains si
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
     maxh = _siNewestBlockHeight si
-    minh = maxh - 10
+    minh = maxh - blockTableNumRows
 
-mkHeaderRequest2 :: Host -> ServerInfo -> [XhrRequest ()]
+mkHeaderRequest2 :: ChainwebHost -> ServerInfo -> [XhrRequest ()]
 mkHeaderRequest2 h si = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
                          $ _siChains si
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
     maxh = _siNewestBlockHeight si
-    minh = maxh - 10
-
---getBlockHeader
---  :: (MonadAppIO r t m)
---  => Event t (ChainId, Text)
---  -> m (Event t Text)
---getBlockHeader cidAndHash = do
---  resp <- performRequestsAsync $ fmap mkPair cidAndHash
---  let rawText = fmap (T.dropWhile (=='"') . T.dropWhileEnd (=='"')) . _xhrResponse_responseText . snd <$> resp
---
---  -- decodeText . T.decodeUtf8 <=<
---  return $ fmapMaybe id $ traceEvent "block details" ((decodeB64UrlNoPaddingText =<<) <$> traceEvent "rawText" rawText)
---  --return $ traceEvent "block details" (mkBlockDetails <$> resp)
---  where
---    mkPair (cid, hash) = (cid, XhrRequest "GET" (blockHeaderUrl cid hash) def)
+    minh = maxh - blockTableNumRows
 
 newtype Hash = Hash { unHash :: ByteString }
   deriving (Eq,Ord,Show,Read)
@@ -261,24 +239,15 @@ hashHex = T.decodeUtf8 . B16.encode . unHash
 hashB64U :: Hash -> Text
 hashB64U = T.decodeUtf8 . B64U.encode . unHash
 
-{-
-data:{
-"txCount":0,
-"header":{
-  "creationTime":1569418573005922,
-  "parent":"ifz24oPHu-ttUpHcOsjWLoZ_wWxRzuogYkooxP-abQ8",
-  "height":84,
-  "hash":"ZUjXyjY2ObDy6Ybv74R7qsbS2WZjtJlp7mtE_QX4MVY",
-  "chainId":6,
-  "weight":"Jz2JAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-  "epochStart":1569418573005922,
-  "adjacents":{"7":"BxN7dkdn0YwuSs0-B1mLzMLIbyf_OuAkngPVkuFDY4M","1":"PqlYkCQqfHrrnvW5bhSv0mJYCsQz3ewXZ44QA2bANnI","5":"t5355Z7I_QLZ24gPhAxaGUru3BpeBAvl3dBLdbDW_kA"}
-  ,"payloadHash":"j5YYGad134kwmceK4Bvh-65ivs1eJBYf8meHHgjwO2w"
-  ,"chainwebVersion":"testnet02"
-  ,"target":"VB6tT6O7wHdoQ3HgVgmmjrj-gK4nnzPND0N74TgGAAA"
-  ,"nonce":"5630980"}
-}
--}
+data BlockHeaderTx = BlockHeaderTx
+  { _blockHeaderTx_txCount :: Int
+  , _blockHeaderTx_header :: BlockHeader
+  } deriving (Eq,Ord,Show)
+
+instance FromJSON BlockHeaderTx where
+  parseJSON = withObject "BlockHeaderTx" $ \o -> BlockHeaderTx
+    <$> o .: "txCount"
+    <*> o .: "header"
 
 data BlockHeader = BlockHeader
   { _blockHeader_creationTime :: POSIXTime
@@ -300,9 +269,9 @@ instance FromJSON BlockHeader where
     <$> (fmap (/1000000.0) $ o .: "creationTime")
     <*> o .: "parent"
     <*> o .: "height"
-    <*> (o .: "hash")
+    <*> o .: "hash"
     <*> o .: "chainId"
-    <*> (o .: "weight")
+    <*> o .: "weight"
     <*> (fmap (/1000000.0) $ o .: "epochStart")
     <*> o .: "adjacents"
     <*> (o .: "payloadHash")
@@ -311,30 +280,33 @@ instance FromJSON BlockHeader where
     <*> o .: "nonce"
 
 data BlockTable = BlockTable
-  { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeader)
+  { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
   } deriving (Eq,Ord)
 
 instance Show BlockTable where
   show (BlockTable bs) = unlines $ map show $ M.keys bs
 
 instance Semigroup BlockTable where
-  (BlockTable b1) <> (BlockTable b2) = BlockTable (b1 <> b2)
+  (BlockTable b1) <> (BlockTable b2) = BlockTable (M.unionWith M.union b1 b2)
 
 instance Monoid BlockTable where
   mempty = BlockTable mempty
 
-insertBlockTable :: BlockTable -> BlockHeader -> BlockTable
-insertBlockTable (BlockTable bs) b = BlockTable bs2
+blockTableNumRows :: Int
+blockTableNumRows = 5
+
+insertBlockTable :: BlockTable -> BlockHeaderTx -> BlockTable
+insertBlockTable (BlockTable bs) btx = BlockTable bs2
   where
+    b = _blockHeaderTx_header btx
     h = _blockHeader_height b
     c = _blockHeader_chainId b
-    bs2 = M.delete (h-10) $ M.alter f h bs
+    bs2 = M.delete (h - blockTableNumRows) $ M.alter f h bs
 
-    -- TODO This constant 10 should be passed in
-    f Nothing = Just $ M.singleton c b
-    f (Just m) = Just $ M.insert c b m
+    f Nothing = Just $ M.singleton c btx
+    f (Just m) = Just $ M.insert c btx m
 
-getBlock :: BlockHeight -> ChainId -> BlockTable -> Maybe BlockHeader
+getBlock :: BlockHeight -> ChainId -> BlockTable -> Maybe BlockHeaderTx
 getBlock bh cid bt = M.lookup cid =<< M.lookup bh (_blockTable_blocks bt)
 
 hush :: Either e a -> Maybe a

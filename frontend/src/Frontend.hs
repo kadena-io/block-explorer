@@ -11,60 +11,93 @@
 module Frontend where
 
 ------------------------------------------------------------------------------
-import           Control.Exception
 import           Control.Monad
-import           Control.Monad.Fix
 import           Control.Monad.Reader
 import           Control.Monad.Ref
-import           Control.Monad.Trans
 import           Data.Aeson
-import           Data.Bifunctor
-import qualified Data.ByteString.Base64.URL as B64U
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Set (Set)
+import           Data.Ord
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
-import           Immutable.Shuffle
-import           Language.Javascript.JSaddle.Types
-import           Lens.Micro
-import           Lens.Micro.Aeson
+import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Frontend
-import           Obelisk.Configs
 import           Obelisk.Generated.Static
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
-import           Text.Printf
 ------------------------------------------------------------------------------
-import           Common.Api
 import           Common.Route
 import           Frontend.App
+import           Frontend.AppState
 import           Frontend.ChainwebApi
-import           Frontend.Nav
+import           Frontend.Common
 ------------------------------------------------------------------------------
 
 
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = appHead
-  , _frontend_body = chainScan
+  , _frontend_body = do
+      route <- getAppRoute
+      --let h = Host "us1.testnet.chainweb.com" 443
+      --let h = Host "localhost" 60651
+      let h = Host "us3.tn1.chainweb.com" 443
+          ch = ChainwebHost h Development
+      void $ prerender blank $ do
+        dsi <- getServerInfo ch
+        void $ networkView (appWithServer route ch <$> dsi)
+      --void $ prerender blank $ runApp route ch (chainScan ch)
   }
+
+appWithServer
+  :: (DomBuilder t m, Routed t (R FrontendRoute) m, MonadHold t m, MonadFix m,
+      Prerender js t m, PostBuild t m, MonadJSM (Performable m),
+      HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m,
+      RouteToUrl (R FrontendRoute) (Client m), MonadRef m, MonadSample t (Performable m),
+      SetRoute t (R FrontendRoute) (Client m))
+  => Text
+  -> ChainwebHost
+  -> Maybe ServerInfo
+  -> m ()
+appWithServer _ _ Nothing = text "Loading server info..."
+appWithServer route ch (Just si) = runApp route ch si (chainScan ch)
+
+getServerInfo
+  :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
+      HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
+  => ChainwebHost
+  -> m (Dynamic t (Maybe ServerInfo))
+getServerInfo h = do
+  pb <- getPostBuild
+  ese <- cutToServerInfo <$$$> getCut (h <$ pb)
+  holdDyn Nothing ese
 
 chainScan
   :: (MonadApp r t m, Prerender js t m)
-  => RoutedT t (R FrontendRoute) m ()
-chainScan = do
-    elAttr "div" ("class" =: "ui container" <> "style" =: "width: 1100px") $ do
-      subRoute_ $ \case
-        FR_Main -> recentBlocks
-        FR_Block -> blockDetails
-    return ()
+  => ChainwebHost
+  -> RoutedT t (R FrontendRoute) m ()
+chainScan ch = do
+    --elAttr "div" ("class" =: "ui container" <> "style" =: "width: 1100px; overflow-x: auto;") $ do
+    elAttr "div" ("class" =: "ui container" <> "style" =: "width: 1200px;") $ do
+    dsi <- fmap join $ prerender (text "prerendering server info" >> return (constDyn Nothing)) $ getServerInfo ch
+    void $ networkView (mainApp ch <$> dsi)
+
+
+mainApp
+  :: (MonadApp r t m, Prerender js t m)
+  => ChainwebHost
+  -> Maybe ServerInfo
+  -> App (R FrontendRoute) t m ()
+mainApp _ Nothing = text "Loading server data..."
+mainApp ch (Just si) = do
+    subRoute_ $ \case
+      FR_Main -> blockTableWidget
+      FR_Block -> blockDetails
 
 -- Block payload info
 -- https://us2.testnet.chainweb.com/chainweb/0.0/testnet02/chain/0/payload/0hz5clj_QCseEvLm4YCrSczgl246fskX_ZAxPixFu6U
@@ -100,44 +133,14 @@ leftAndRightBorder = "border-left: 1px solid rgba(34,36,38,.1); border-right: 1p
 showResp :: Maybe Value -> String
 showResp = show
 
-recentBlocks
-  :: (MonadApp r t m, Prerender js t m)
-  => m ()
-recentBlocks = void $ prerender blank $ do
-  pb <- getPostBuild
-  let h = Host "eu2.testnet.chainweb.com" 443
-  ese <- getServerInfo (h <$ pb)
-  dse <- holdDyn Nothing ese
-  --dynText (maybe "Getting server info..." tshow <$> dse)
-  networkView (blockHeaders h <$> dse)
-  return ()
-
-numRows :: Int
-numRows = 5
-
-blockHeaders
-  :: (MonadAppIO r t m, Prerender js t m)
-  => Host
-  -> Maybe ServerInfo
-  -> m ()
-blockHeaders _ Nothing = blank
-blockHeaders h (Just si) = do
-  pb <- getPostBuild
-  let mah = _siNewestBlockHeight si
-      mih = mah - numRows
-  res <- getBlocks2 h (si <$ pb)
-  dbt <- holdDyn mempty res
-  networkView (blockTableWidget (_siChains si) <$> traceDyn "dbt" dbt)
-  return ()
-
-
 blockTableWidget
-  :: (MonadAppIO r t m, Prerender js t m)
-  => [ChainId]
-  -> BlockTable
-  -> m ()
-blockTableWidget chains bt = do
-  elAttr "table" ("class" =: "ui table" <>
+  :: (MonadApp r t m, Prerender js t m)
+  => App r t m ()
+blockTableWidget = do
+  pb <- getPostBuild
+  void $ prerender blank $ performEvent_ $ liftIO (putStrLn "In blockTableWidget") <$ pb
+  elAttr "table" ("id" =: "blockheaders" <>
+                  "class" =: "ui definition table" <>
                   "style" =: "border-left: 0; border-right: 0; border-collapse: collapse;") $ do
     --refreshes <- el "thead" $ el "tr" $ do
     --  --el "th" blank
@@ -149,26 +152,35 @@ blockTableWidget chains bt = do
     --el "div" $ text $ tshow $ _blockTable_heights bt
     --el "div" $ text $ tshow $ _blockTable_chainIds bt
 
+    el "thead" $ do
+      el "tr" $ do
+        el "th" blank
+        chains <- asks (_siChains . _as_serverInfo)
+        --let sty = "width: " <> tshow blockWidth <> "px;"
+        forM_ chains $ \cid -> el "th" $
+          text $ "Chain " <> tshow cid
     el "tbody" $ do
-      t <- liftIO getCurrentTime
-      ti <- clockLossy 1 t
-      let hs = S.toDescList $ M.keysSet $ _blockTable_blocks bt
-      rowsWidget ti chains (take numRows hs) bt
+      ti <- prerender (return $ constDyn dummy) $ do
+        t <- liftIO getCurrentTime
+        clockLossy 1 t
+      dbt <- asks _as_blockTable
+      listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt) (rowsWidget (join ti))
+      return ()
+  where
+    dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
 
 rowsWidget
-  :: (MonadAppIO r t m, HasJSContext (Performable m))
+  :: (MonadApp r t m, Prerender js t m)
   => Dynamic t TickInfo
-  -> [ChainId]
-  -> [BlockHeight]
-  -> BlockTable
+  -> Down BlockHeight
+  -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m ()
-rowsWidget _ _ [] bt = text "No blocks available"
-rowsWidget ti chains [bh] bt = void $ blockHeightRow ti chains bt bh
-rowsWidget ti chains (bh:rest) bt = do
-    hoverChanges <- blockHeightRow ti chains bt bh
+rowsWidget ti (Down bh) cs = do
+    pb <- getPostBuild
+    void $ prerender blank $ performEvent_ $ liftIO (putStrLn "In rowsWidget") <$ pb
+    hoverChanges <- blockHeightRow ti bh cs
     hoveredBlock <- holdDyn Nothing hoverChanges
-    spacerRow chains hoveredBlock
-    rowsWidget ti chains rest bt
+    spacerRow hoveredBlock
 
 --getRecentBlocks
 --  :: (MonadAppIO r t m)
@@ -179,60 +191,90 @@ rowsWidget ti chains (bh:rest) bt = do
 --  foldDyn ($) InFlight $ mappend . Landed 1 <$> leftmost es
 
 blockHeightRow
-  :: MonadAppIO r t m
+  :: (MonadApp r t m, Prerender js t m)
   => Dynamic t TickInfo
-  -> [ChainId]
-  -> BlockTable
   -> BlockHeight
+  -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe ChainId))
-blockHeightRow ti chains bt bh = do
+blockHeightRow ti height headers = do
   elAttr "tr" ("style" =: "margin: 0;") $ do
-    --el "td" $ text $ T.pack $ show blockHeight
+    el "td" $ text $ tshow height
+    chains <- asks (_siChains . _as_serverInfo)
     es <- forM chains $ \cid ->
-      maybe (el "td" $ return never) (blockWidget ti) $ getBlock bh cid bt
+      blockWidget0 ti height cid headers
+      --maybe (el "td" $ return never) (blockWidget ti) $ M.lookup cid <$> header
     return $ leftmost es
 
-blockWidget :: MonadAppIO r t m => Dynamic t TickInfo -> BlockHeader -> m (Event t (Maybe ChainId))
-blockWidget ti (BlockHeader ct _ blockHeight hash chainId _ _ _ _ _ _ _) = do
-  (e,_) <- elAttr' "td" ("class" =: "blocksummary") $ do
-                         -- <> "style" =: "padding: 0; margin: 0; border: 0; border-spacing: 0;") $ do
+blockWidget0
+  :: (MonadApp r t m, Prerender js t m)
+  => Dynamic t TickInfo
+  -> BlockHeight
+  -> ChainId
+  -> Dynamic t (Map ChainId BlockHeaderTx)
+  -> m (Event t (Maybe ChainId))
+blockWidget0 ti height cid hs = do
+  (e,_) <- elAttr' "td" ("class" =: "blocksummary"
+                      <> "style" =: ("width: " <> tshow blockWidth)) $ do
+    let mbh = M.lookup cid <$> hs
     el "div" $ do
-      elClass "span" "blockshape" $ text (tshow $ unChainId chainId) --"Bk"
-      let url = "/blockHash/" <> hashB64U hash
-      elClass "span" "blockheight" $ elAttr "a" ("href" =: url) $
-        text $ T.take 8 $ hashHex hash
+      --elClass "span" "blockshape" $ text (tshow $ unChainId cid) --"Bk"
+      let mkUrl h = "href" =: ("/blockHash/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
+      elClass "span" "blockheight" $ elDynAttr "a" (maybe mempty mkUrl <$> mbh) $
+        dynText $ maybe "" (T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header) <$> mbh
     --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
-    --divClass "blockdiv" $ elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
-    --  text $ "? txs"
-    divClass "blockdiv" $ pastTimeWidget ti (posixSecondsToUTCTime ct)
+    divClass "blockdiv" $ do --elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
+      dynText $ maybe "" ((<> " txs") . tshow . _blockHeaderTx_txCount) <$> mbh
+    let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
+    prerender blank $ divClass "blockdiv" $
+      pastTimeWidget ti (fmap getCreationTime <$> mbh)
 
-  return $ leftmost [Just chainId <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
+  return $ leftmost [Just cid <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
+
+--blockWidget :: MonadAppIO r t m => Dynamic t TickInfo -> BlockHeader -> m (Event t (Maybe ChainId))
+--blockWidget ti (BlockHeader ct _ _ hash chainId _ _ _ _ _ _ _) = do
+--  (e,_) <- elAttr' "td" ("class" =: "blocksummary") $ do
+--                         -- <> "style" =: "padding: 0; margin: 0; border: 0; border-spacing: 0;") $ do
+--    el "div" $ do
+--      elClass "span" "blockshape" $ text (tshow $ unChainId chainId) --"Bk"
+--      let url = "/blockHash/" <> hashB64U hash
+--      elClass "span" "blockheight" $ elAttr "a" ("href" =: url) $
+--        text $ T.take 8 $ hashHex hash
+--    --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
+--    --divClass "blockdiv" $ elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
+--    --  text $ "? txs"
+--    divClass "blockdiv" $ pastTimeWidget ti (posixSecondsToUTCTime ct)
+--
+--  return $ leftmost [Just chainId <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
 
 pastTimeWidget
-  :: (DomBuilder t m, PostBuild t m, MonadHold t m, PerformEvent t m, TriggerEvent t m, MonadFix m, MonadIO m, MonadIO (Performable m))
+  -- :: (DomBuilder t m, PostBuild t m, MonadHold t m, PerformEvent t m, TriggerEvent t m, MonadFix m, MonadIO m, MonadIO (Performable m))
+  :: (DomBuilder t m, PostBuild t m)
   => Dynamic t TickInfo
-  -> UTCTime
+  -> Dynamic t (Maybe UTCTime)
   -> m ()
-pastTimeWidget ti t = do
+pastTimeWidget ti dt = do
   --text $ T.pack $ formatTime defaultTimeLocale "%H:%M:%S" t
-  let calcDiff lastTick = diffUTCTime (_tickInfo_lastUTC lastTick) t
-  dynText $ diffTimeToRelativeEnglish . calcDiff <$> ti
+  let calcDiff lastTick t = maybe "" (diffTimeToRelativeEnglish . diffUTCTime (_tickInfo_lastUTC lastTick)) t
+  dynText (calcDiff <$> ti <*> dt)
 
 diffTimeToRelativeEnglish :: NominalDiffTime -> Text
 diffTimeToRelativeEnglish delta
   | delta < 5 = "Just now"
-  | delta < oneMinute * 2 = tshow (round delta) <> " secs ago"
-  | delta < oneHour = tshow (round $ delta / oneMinute) <> " min ago"
+  | delta < oneMinute * 2 = tshow (roundInt delta) <> " secs ago"
+  | delta < oneHour = tshow (roundInt $ delta / oneMinute) <> " min ago"
   | delta < oneHour * 2 = "an hour ago"
-  | delta < oneDay = tshow (round $ delta / oneHour) <> " hours ago"
+  | delta < oneDay = tshow (roundInt $ delta / oneHour) <> " hours ago"
   | delta < oneDay * 2 = "1 day ago"
-  | delta < oneWeek = tshow (round $ delta / oneDay) <> " days ago"
+  | delta < oneWeek = tshow (roundInt $ delta / oneDay) <> " days ago"
   | delta < oneWeek * 2 = "1 week ago"
-  | delta < oneMonth = tshow (round $ delta / oneWeek) <> " weeks ago"
+  | delta < oneMonth = tshow (roundInt $ delta / oneWeek) <> " weeks ago"
   | delta < oneMonth * 2 = "1 month ago"
-  | delta < oneYear = tshow (round $ delta / oneMonth) <> " months ago"
+  | delta < oneYear = tshow (roundInt $ delta / oneMonth) <> " months ago"
   | delta < oneYear * 2 = "a year ago"
-  | otherwise = tshow (round $ delta / oneYear) <> " years ago"
+  | otherwise = tshow (roundInt $ delta / oneYear) <> " years ago"
+
+roundInt :: NominalDiffTime -> Int
+roundInt = round
 
 oneMinute :: NominalDiffTime
 oneMinute = 60
@@ -254,15 +296,15 @@ blockSeparation :: Int
 blockSeparation = 50
 
 spacerRow
-  :: (DomBuilder t m, PostBuild t m)
-  => [ChainId]
-  -> Dynamic t (Maybe ChainId)
+  :: (MonadApp r t m)
+  => Dynamic t (Maybe ChainId)
   -> m ()
-spacerRow chains hoveredBlock = do
+spacerRow hoveredBlock = do
   elClass "tr" "spacer-row" $ do
-    --el "td" $ text ""
-    elAttr "td" ("colspan" =: "10" <> "style" =: ("padding: 0; height: " <> tshow blockSeparation <> "px")) $
-      chainweb chains hoveredBlock
+    elClass "td" "emptyrowheader" $ text ""
+    let sty = "padding: 0; border-left: 0; height: " <> tshow blockSeparation <> "px"
+    elAttr "td" ("colspan" =: "10" <> "style" =: sty) $
+      chainweb hoveredBlock
 
 svgElDynAttr
   :: (DomBuilder t m, PostBuild t m)
@@ -270,7 +312,7 @@ svgElDynAttr
   -> Dynamic t (Map Text Text)
   -> m a
   -> m a
-svgElDynAttr tag attrs child = elDynAttrNS (Just "http://www.w3.org/2000/svg") tag attrs child
+svgElDynAttr elTag attrs child = elDynAttrNS (Just "http://www.w3.org/2000/svg") elTag attrs child
 
 svgElAttr
   :: (DomBuilder t m, PostBuild t m)
@@ -278,16 +320,16 @@ svgElAttr
   -> Map Text Text
   -> m a
   -> m a
-svgElAttr tag attrs child = svgElDynAttr tag (constDyn attrs) child
+svgElAttr elTag attrs child = svgElDynAttr elTag (constDyn attrs) child
 
 chainweb
-  :: (DomBuilder t m, PostBuild t m)
-  => [ChainId]
-  -> Dynamic t (Maybe ChainId)
+  :: (MonadApp r t m)
+  => Dynamic t (Maybe ChainId)
   -> m ()
-chainweb chains hoveredBlock = do
+chainweb hoveredBlock = do
   svgElAttr "svg" ("viewBox" =: ("0 0 1100 " <> tshow blockSeparation) <>
                    "style" =: "vertical-align: middle;") $ do
+    chains <- asks (_siChains . _as_serverInfo)
     forM_ chains (linksFromBlock hoveredBlock)
     void $ networkView $ lastLinesForActiveBlock <$> hoveredBlock
 
@@ -338,9 +380,10 @@ petersonGraph = M.fromList
     ]
 
 
-blockDetails :: (MonadApp r t m, Routed t Text (Client m), Prerender js t m) => m ()
-blockDetails = void $ prerender blank $ do
-    pb <- getPostBuild
+blockDetails
+  :: (MonadApp r t m)
+  => App Text t m ()
+blockDetails = do
     jobId <- askRoute
     dynText jobId
     --e <- getBlockHeader ((ChainId 0,) <$> tag (current jobId) pb)

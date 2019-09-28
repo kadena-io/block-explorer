@@ -23,9 +23,9 @@ backend = Backend
   }
 
 serveBackendRoute :: R BackendRoute -> Snap ()
-serveBackendRoute route = do
+serveBackendRoute br = do
   liftIO $ putStrLn "Incoming request"
-  case route of
+  case br of
     BackendRoute_Hashes :=> _
       -> do
       liftIO $ putStrLn "Serving file"

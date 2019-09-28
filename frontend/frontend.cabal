@@ -36,9 +36,12 @@ library
   exposed-modules:
     Frontend
     Frontend.App
+    Frontend.AppState
     Frontend.Common
     Frontend.ChainwebApi
     Frontend.Nav
+    Reflex.Dom.EventSource
+    Reflex.Dom.EventSource.Foreign
   ghc-options: -Wall
 
 executable frontend

@@ -18,15 +18,18 @@ import Control.Category
 -}
 
 ------------------------------------------------------------------------------
-import           Prelude hiding ((.), id)
-import           Control.Category (Category (..))
+--import           Prelude hiding ((.), id)
+--import           Control.Category (Category (..))
 import           Control.Monad.Except
 import           Data.Map (Map)
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
+import qualified Data.Text as T
+import           Data.Text.Encoding
 import           Data.Functor.Identity
 import           Data.Functor.Sum
+import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
@@ -75,6 +78,13 @@ concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
   ]
+
+getAppRoute :: HasConfigs m => m Text
+getAppRoute = do
+    mroute <- getConfig "common/route"
+    case mroute of
+      Nothing -> fail "Error getAppRoute: config/common/route not defined"
+      Just r -> return $ T.dropWhileEnd (== '/') $ T.strip $ decodeUtf8 r
 
 -- | Provide a human-readable name for a given section
 tabTitle :: DomBuilder t m => Some FrontendRoute -> m ()
