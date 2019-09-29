@@ -394,6 +394,14 @@ blockWidget args = do
           void $ networkView (blockHeaderWidget <$> blockDyn)
     _ -> text "Must pass chain ID and block hash"
 
+blockLink
+  :: (MonadApp r t m)
+  => ChainId
+  -> Hash
+  -> m ()
+blockLink chainId hash =
+  elAttr "a" ("href" =: ("/block/" <> tshow chainId <> "/" <> hashB64U hash)) $ text $ hashHex hash
+
 
 blockHeaderWidget
   :: (MonadApp r t m)
@@ -406,10 +414,10 @@ blockHeaderWidget (Just b) = do
       field "Creation Time" $ text . tshow . posixSecondsToUTCTime . _blockHeader_creationTime
       field "Chain" $ text . tshow . _blockHeader_chainId
       field "Block Height" $ text . tshow . _blockHeader_height
-      field "Parent" $ text . hashHex . _blockHeader_parent
+      field "Parent" $ parent . _blockHeader_parent
       field "Hash" $ text . hashHex . _blockHeader_hash
       field "Weight" $ text . _blockHeader_weight
-      field "Epoch Start" $ text . tshow . _blockHeader_epochStart
+      field "Epoch Start" $ text . tshow . posixSecondsToUTCTime . _blockHeader_epochStart
       field "Neighbors" $ neighbors . _blockHeader_neighbors
       field "Payload Hash" $ text . hashHex . _blockHeader_payloadHash
       field "Chainweb Version" $ text . _blockHeader_chainwebVer
@@ -420,8 +428,9 @@ blockHeaderWidget (Just b) = do
     field nm func = el "tr" $ do
       el "td" $ text nm
       el "td" $ func b
-    neighbors ns = el "ul" $ do
+    parent p = blockLink (_blockHeader_chainId b) p
+    neighbors ns = do
       forM_ (M.toList ns) $ \(cid,nh) -> do
-        el "li" $ do
+        el "div" $ do
           text $ "Chain " <> tshow cid <> ": "
-          elAttr "a" ("href" =: ("/block/" <> tshow cid <> "/" <> nh)) $ text nh
+          blockLink cid nh

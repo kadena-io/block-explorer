@@ -259,7 +259,7 @@ data BlockHeader = BlockHeader
   , _blockHeader_chainId :: ChainId
   , _blockHeader_weight :: Text
   , _blockHeader_epochStart :: POSIXTime
-  , _blockHeader_neighbors :: Map ChainId Text
+  , _blockHeader_neighbors :: Map ChainId Hash
   , _blockHeader_payloadHash :: Hash
   , _blockHeader_chainwebVer :: Text
   , _blockHeader_target :: Text
