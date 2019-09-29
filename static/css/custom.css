@@ -8,7 +8,7 @@ table#blockheaders th {
     text-align: center;
 }
 
-tbody tr:last-child {
+tbody.chainwebtable tr:last-child {
     display: none;
 }
 

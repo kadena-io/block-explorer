@@ -131,6 +131,9 @@ headersUrl :: ChainwebHost -> BlockHeight -> BlockHeight -> ChainId -> Text
 headersUrl h minHeight maxHeight chainId = chainBaseUrl h chainId <>
   "/header?minheight=" <> tshow minHeight <> "&maxheight=" <> tshow maxHeight
 
+headerUrl :: ChainwebHost -> ChainId -> Text -> Text
+headerUrl h chainId blockHash = chainBaseUrl h chainId <> "/header/" <> blockHash
+
 headerUpdatesUrl :: ChainwebHost -> Text
 headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
 
@@ -191,38 +194,37 @@ getBlockTable
   -> m (Event t BlockTable)
 getBlockTable h si = do
   pb <- getPostBuild
-  resp <- performRequestsAsync $ mkHeaderRequest2 h si <$ pb
+  resp <- performRequestsAsync $ mkHeaderRequest h si <$ pb
   return (foldl' (\bt val -> combineBlockTables bt val) mempty <$> (fmap decodeXhrResponse <$> resp))
 
-getBlockTableDyn
-  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
-  => Dynamic t ChainwebHost
-  -> Event t ServerInfo
-  -> m (Event t BlockTable)
-getBlockTableDyn h si = do
-  resp <- performRequestsAsync $ attachWith mkHeaderRequest2 (current h) si
-  return (foldl' combineBlockTables mempty <$> (fmap (decodeXhrResponse) <$> resp))
+getBlockHeader
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  => ChainwebHost
+  -> ChainId
+  -> Text
+  -> m (Event t (Maybe BlockHeader))
+getBlockHeader h c blockHash = do
+  pb <- getPostBuild
+  resp <- performRequestAsync $ mkSingleHeaderRequest h c blockHash <$ pb
+  return (decodeXhrResponse <$> resp)
 
 combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
 combineBlockTables bt Nothing = bt
 combineBlockTables bt (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx 0 b)) bt $ rights $
   map (parseEither parseJSON) $ getItems v
 
-mkHeaderRequest :: ChainwebHost -> ServerInfo -> [((BlockHeight,BlockHeight,ChainId), XhrRequest ())]
-mkHeaderRequest h si = map (\c -> ((minh, maxh, c), XhrRequest "GET" (chainHashesUrl h minh maxh c) cfg))
+mkHeaderRequest :: ChainwebHost -> ServerInfo -> [XhrRequest ()]
+mkHeaderRequest h si = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
                          $ _siChains si
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
     maxh = _siNewestBlockHeight si
     minh = maxh - blockTableNumRows
 
-mkHeaderRequest2 :: ChainwebHost -> ServerInfo -> [XhrRequest ()]
-mkHeaderRequest2 h si = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
-                         $ _siChains si
+mkSingleHeaderRequest :: ChainwebHost -> ChainId -> Text -> XhrRequest ()
+mkSingleHeaderRequest h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
-    maxh = _siNewestBlockHeight si
-    minh = maxh - blockTableNumRows
 
 newtype Hash = Hash { unHash :: ByteString }
   deriving (Eq,Ord,Show,Read)

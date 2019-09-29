@@ -18,6 +18,7 @@ import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Ord
+import           Data.Readable
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -78,7 +79,7 @@ getServerInfo h = do
   holdDyn Nothing ese
 
 chainScan
-  :: (MonadApp r t m, Prerender js t m)
+  :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
   => ChainwebHost
   -> RoutedT t (R FrontendRoute) m ()
 chainScan ch = do
@@ -89,7 +90,7 @@ chainScan ch = do
 
 
 mainApp
-  :: (MonadApp r t m, Prerender js t m)
+  :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
   => ChainwebHost
   -> Maybe ServerInfo
   -> App (R FrontendRoute) t m ()
@@ -142,16 +143,6 @@ blockTableWidget = do
   elAttr "table" ("id" =: "blockheaders" <>
                   "class" =: "ui definition table" <>
                   "style" =: "border-left: 0; border-right: 0; border-collapse: collapse;") $ do
-    --refreshes <- el "thead" $ el "tr" $ do
-    --  --el "th" blank
-    --  forM [0 :: Int .. 9] $ \c -> do
-    --    (e,_) <- elAttr' "th" ("style" =: leftAndRightBorder) $
-    --      text $ T.pack $ "Chain " <> show c
-    --    return $ ChainId c <$ domEvent Click e
-
-    --el "div" $ text $ tshow $ _blockTable_heights bt
-    --el "div" $ text $ tshow $ _blockTable_chainIds bt
-
     el "thead" $ do
       el "tr" $ do
         el "th" blank
@@ -159,7 +150,7 @@ blockTableWidget = do
         --let sty = "width: " <> tshow blockWidth <> "px;"
         forM_ chains $ \cid -> el "th" $
           text $ "Chain " <> tshow cid
-    el "tbody" $ do
+    elClass "tbody" "chainwebtable" $ do
       ti <- prerender (return $ constDyn dummy) $ do
         t <- liftIO getCurrentTime
         clockLossy 1 t
@@ -218,7 +209,7 @@ blockWidget0 ti height cid hs = do
     let mbh = M.lookup cid <$> hs
     el "div" $ do
       --elClass "span" "blockshape" $ text (tshow $ unChainId cid) --"Bk"
-      let mkUrl h = "href" =: ("/blockHash/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
+      let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
       elClass "span" "blockheight" $ elDynAttr "a" (maybe mempty mkUrl <$> mbh) $
         dynText $ maybe "" (T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header) <$> mbh
     --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
@@ -381,12 +372,54 @@ petersonGraph = M.fromList
 
 
 blockDetails
-  :: (MonadApp r t m)
-  => App Text t m ()
+  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m))
+  => App [Text] t m ()
 blockDetails = do
-    jobId <- askRoute
-    dynText jobId
-    --e <- getBlockHeader ((ChainId 0,) <$> tag (current jobId) pb)
-    --blockDyn <- holdDyn Nothing (Just <$> traceEvent "got block data" e)
-    --dynText (tshow <$> blockDyn)
-    --return ()
+    args <- askRoute
+    void $ networkView (blockWidget <$> args)
+
+blockWidget
+  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  => [Text]
+  -> m ()
+blockWidget args = do
+  as <- ask
+  case args of
+    [chainId, hash] -> do
+      case fromText chainId of
+        Nothing -> text $ "Invalid chain ID: " <> chainId
+        Just cid -> do
+          e <- getBlockHeader (_as_host as) (ChainId cid) hash
+          blockDyn <- holdDyn Nothing e
+          void $ networkView (blockHeaderWidget <$> blockDyn)
+    _ -> text "Must pass chain ID and block hash"
+
+
+blockHeaderWidget
+  :: (MonadApp r t m)
+  => Maybe BlockHeader
+  -> m ()
+blockHeaderWidget Nothing = text "Block does not exist"
+blockHeaderWidget (Just b) = do
+  elAttr "table" ("class" =: "ui definition table") $ do
+    el "tbody" $ do
+      field "Creation Time" $ text . tshow . posixSecondsToUTCTime . _blockHeader_creationTime
+      field "Chain" $ text . tshow . _blockHeader_chainId
+      field "Block Height" $ text . tshow . _blockHeader_height
+      field "Parent" $ text . hashHex . _blockHeader_parent
+      field "Hash" $ text . hashHex . _blockHeader_hash
+      field "Weight" $ text . _blockHeader_weight
+      field "Epoch Start" $ text . tshow . _blockHeader_epochStart
+      field "Neighbors" $ neighbors . _blockHeader_neighbors
+      field "Payload Hash" $ text . hashHex . _blockHeader_payloadHash
+      field "Chainweb Version" $ text . _blockHeader_chainwebVer
+      field "Target" $ text . _blockHeader_target
+      field "Nonce" $ text . _blockHeader_nonce
+      return ()
+  where
+    field nm func = el "tr" $ do
+      el "td" $ text nm
+      el "td" $ func b
+    neighbors ns = el "ul" $ do
+      forM_ (M.toList ns) $ \(cid,nh) -> do
+        el "li" $ text $ "Chain " <> tshow cid <> ": " <> nh
