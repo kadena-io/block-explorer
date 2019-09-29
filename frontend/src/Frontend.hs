@@ -422,4 +422,6 @@ blockHeaderWidget (Just b) = do
       el "td" $ func b
     neighbors ns = el "ul" $ do
       forM_ (M.toList ns) $ \(cid,nh) -> do
-        el "li" $ text $ "Chain " <> tshow cid <> ": " <> nh
+        el "li" $ do
+          text $ "Chain " <> tshow cid <> ": "
+          elAttr "a" ("href" =: ("/block/" <> tshow cid <> "/" <> nh)) $ text nh
