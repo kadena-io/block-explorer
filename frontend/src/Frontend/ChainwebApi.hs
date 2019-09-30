@@ -7,12 +7,15 @@
 module Frontend.ChainwebApi where
 
 ------------------------------------------------------------------------------
-import           Debug.Trace (traceShow, traceShowId)
+import           Control.Lens
+import           Control.Monad
 import           Data.Aeson
+import           Data.Aeson.Lens
 import           Data.Aeson.Types
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64.URL as B64U
+import qualified Data.ByteString.Lazy as BL
 import           Data.Either
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
@@ -20,14 +23,12 @@ import           Data.Hashable
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Maybe
+import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
-import           Lens.Micro
-import           Lens.Micro.Aeson
 import           Reflex.Dom hiding (Cut, Value)
 import           Text.Printf
 ------------------------------------------------------------------------------
@@ -86,7 +87,7 @@ type BlockHeight = Int
 --  show (BlockHeight b) = show b
 
 newtype ChainId = ChainId { unChainId :: Int }
-  deriving (Eq,Ord,Hashable,FromJSONKey, FromJSON)
+  deriving (Eq,Ord,Hashable,FromJSONKey,FromJSON)
 
 instance Show ChainId where
   show (ChainId b) = show b
@@ -136,6 +137,9 @@ headerUrl h chainId blockHash = chainBaseUrl h chainId <> "/header/" <> blockHas
 
 headerUpdatesUrl :: ChainwebHost -> Text
 headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
+
+payloadUrl :: ChainwebHost -> ChainId -> Hash -> Text
+payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash
 
 data ServerInfo = ServerInfo
   { _siApiVer :: Text -- TODO use this properly
@@ -208,9 +212,31 @@ getBlockHeader h c blockHash = do
   resp <- performRequestAsync $ mkSingleHeaderRequest h c blockHash <$ pb
   return (decodeXhrResponse <$> resp)
 
+getBlockPayload
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  => ChainwebHost
+  -> ChainId
+  -> Hash
+  -> m (Event t (Either String BlockPayload))
+getBlockPayload h c payloadHash = do
+    pb <- getPostBuild
+    resp <- performRequestAsync $ req <$ pb
+    return (decodeXhr <$> resp)
+  where
+    req = XhrRequest "GET" (payloadUrl h c payloadHash)
+            (def { _xhrRequestConfig_headers = "accept" =: "application/json" })
+
+decodeXhr :: FromJSON a => XhrResponse -> Either String a
+decodeXhr = eitherDecode . BL.fromStrict . T.encodeUtf8 <=<
+            note "decodeXhr encoding error" . _xhrResponse_responseText
+
+note :: e -> Maybe a -> Either e a
+note e Nothing = Left e
+note _ (Just a) = Right a
+
 combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
 combineBlockTables bt Nothing = bt
-combineBlockTables bt (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx 0 b)) bt $ rights $
+combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx 0 b)) bt0 $ rights $
   map (parseEither parseJSON) $ getItems v
 
 mkHeaderRequest :: ChainwebHost -> ServerInfo -> [XhrRequest ()]
@@ -311,9 +337,157 @@ insertBlockTable (BlockTable bs) btx = BlockTable bs2
 getBlock :: BlockHeight -> ChainId -> BlockTable -> Maybe BlockHeaderTx
 getBlock bh cid bt = M.lookup cid =<< M.lookup bh (_blockTable_blocks bt)
 
+data MinerData = MinerData
+  { _minerData_account :: Text
+  , _minerData_predicate :: Text
+  , _minerData_publicKeys :: [Text]
+  } deriving (Eq,Ord,Show)
+
+instance FromJSON MinerData where
+  parseJSON = withObject "MinerData" $ \o -> MinerData
+    <$> o .: "account"
+    <*> o .: "predicate"
+    <*> o .: "public-keys"
+
+data Transaction = Transaction
+  { _transaction_hash :: Hash
+  , _transaction_sigs :: [Sig]
+  , _transaction_cmd :: PactCommand
+  } deriving (Eq,Show)
+
+--instance FromJSON Transaction where
+--  parseJSON = withText "Transaction" $ \t ->
+--    case decodeB64UrlNoPaddingText t of
+--      Left e -> fail e
+--      Right bs -> pure $ Transaction $ T.decodeUtf8 bs
+
+instance FromJSON Transaction where
+  parseJSON = withObject "Transaction" $ \o -> Transaction
+    <$> o .: "hash"
+    <*> o .: "sigs"
+    <*> (withEmbeddedJSON "sig-embedded" parseJSON =<< (o .: "cmd"))
+
+newtype Sig = Sig { unSig :: Text }
+  deriving (Eq,Show)
+
+instance FromJSON Sig where
+  parseJSON = withObject "Sig" $ \o -> Sig
+    <$> o .: "sig"
+
+data PactCommand = PactCommand
+  { _pactCommand_payload :: Payload
+  , _pactCommand_signers :: [Signer]
+  , _pactCommand_meta :: ChainwebMeta
+  , _pactCommand_nonce :: Text
+  } deriving (Eq,Show)
+
+instance FromJSON PactCommand where
+  parseJSON = withObject "PactCommand" $ \o -> PactCommand
+    <$> o .: "payload"
+    <*> o .: "signers"
+    <*> o .: "meta"
+    <*> o .: "nonce"
+
+data Payload = ExecPayload Exec | ContPayload Cont
+  deriving (Eq,Show)
+
+instance FromJSON Payload where
+  parseJSON = withObject "Payload" $ \o -> do
+    case HM.lookup "exec" o of
+      Nothing -> case HM.lookup "cont" o of
+                   Nothing -> fail "Payload must be exec or cont"
+                   Just v -> ContPayload <$> parseJSON v
+      Just v -> ExecPayload <$> parseJSON v
+
+payloadCode :: Payload -> Text
+payloadCode (ExecPayload e) = _exec_code e
+payloadCode (ContPayload c) = _cont_pactId c
+
+data Exec = Exec
+  { _exec_code :: Text
+  , _exec_data :: Object
+  } deriving (Eq,Show)
+
+instance FromJSON Exec where
+  parseJSON = withObject "Exec" $ \o -> Exec
+    <$> o .: "code"
+    <*> o .: "data"
+
+data Cont = Cont
+  { _cont_pactId :: Text
+  , _cont_rollback :: Bool
+  , _cont_step :: Int
+  , _cont_data :: Object
+  , _cont_proof :: Text
+  } deriving (Eq,Show)
+
+instance FromJSON Cont where
+  parseJSON = withObject "Cont" $ \o -> Cont
+    <$> o .: "pactId"
+    <*> o .: "rollback"
+    <*> o .: "step"
+    <*> o .: "data"
+    <*> o .: "proof"
+
+data Signer = Signer
+  { _signer_addr :: Text
+  , _signer_scheme :: Text
+  , _signer_pubKey :: Text
+  } deriving (Eq,Ord,Show)
+
+instance FromJSON Signer where
+  parseJSON = withObject "Signer" $ \o -> Signer
+    <$> o .: "addr"
+    <*> o .: "scheme"
+    <*> o .: "pubKey"
+
+data ChainwebMeta = ChainwebMeta
+  { _chainwebMeta_chainId :: Text
+  , _chainwebMeta_creationTime :: POSIXTime
+  , _chainwebMeta_ttl :: Int
+  , _chainwebMeta_gasLimit :: Int
+  , _chainwebMeta_gasPrice :: Double
+  , _chainwebMeta_sender :: Text
+  } deriving (Eq,Ord,Show)
+
+instance FromJSON ChainwebMeta where
+  parseJSON = withObject "ChainwebMeta" $ \o -> ChainwebMeta
+    <$> o .: "chainId"
+    <*> o .: "creationTime"
+    <*> o .: "ttl"
+    <*> o .: "gasLimit"
+    <*> o .: "gasPrice"
+    <*> o .: "sender"
+
+data BlockPayload = BlockPayload
+  { _blockPayload_minerData :: MinerData
+  , _blockPayload_transactionsHash :: Hash
+  , _blockPayload_outputsHash :: Hash
+  , _blockPayload_payloadHash :: Hash
+  , _blockPayload_transactions :: [Transaction]
+  } deriving (Eq,Show)
+
+instance FromJSON BlockPayload where
+  parseJSON = withObject "BlockPayload" $ \o -> BlockPayload
+    <$> (fromBase64Url <$> o .: "minerData")
+    <*> o .: "transactionsHash"
+    <*> o .: "outputsHash"
+    <*> o .: "payloadHash"
+    <*> (fmap fromBase64Url <$> o .: "transactions")
+
 hush :: Either e a -> Maybe a
 hush (Left _) = Nothing
 hush (Right a) = Just a
+
+newtype Base64Url a = Base64Url { fromBase64Url :: a }
+  deriving (Eq,Ord,Show)
+
+instance FromJSON a => FromJSON (Base64Url a) where
+  parseJSON = withText "Base64Url" $ \t ->
+    case decodeB64UrlNoPaddingText t of
+      Left e -> fail e
+      Right bs -> either fail (pure . Base64Url) $
+                    eitherDecode $ BL.fromStrict bs
 
 decodeB64UrlNoPaddingText :: Text -> Either String ByteString
 decodeB64UrlNoPaddingText = B64U.decode . T.encodeUtf8 . pad

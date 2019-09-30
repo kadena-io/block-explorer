@@ -389,9 +389,11 @@ blockWidget args = do
       case fromText chainId of
         Nothing -> text $ "Invalid chain ID: " <> chainId
         Just cid -> do
-          e <- getBlockHeader (_as_host as) (ChainId cid) hash
+          let h = _as_host as
+              c = ChainId cid
+          e <- getBlockHeader h c hash
           blockDyn <- holdDyn Nothing e
-          void $ networkView (blockHeaderWidget <$> blockDyn)
+          void $ networkView (blockHeaderWidget h c <$> blockDyn)
     _ -> text "Must pass chain ID and block hash"
 
 blockLink
@@ -404,30 +406,45 @@ blockLink chainId hash =
 
 
 blockHeaderWidget
-  :: (MonadApp r t m)
-  => Maybe BlockHeader
+  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  => ChainwebHost
+  -> ChainId
+  -> Maybe BlockHeader
   -> m ()
-blockHeaderWidget Nothing = text "Block does not exist"
-blockHeaderWidget (Just b) = do
-  elAttr "table" ("class" =: "ui definition table") $ do
-    el "tbody" $ do
-      field "Creation Time" $ text . tshow . posixSecondsToUTCTime . _blockHeader_creationTime
-      field "Chain" $ text . tshow . _blockHeader_chainId
-      field "Block Height" $ text . tshow . _blockHeader_height
-      field "Parent" $ parent . _blockHeader_parent
-      field "Hash" $ text . hashHex . _blockHeader_hash
-      field "Weight" $ text . _blockHeader_weight
-      field "Epoch Start" $ text . tshow . posixSecondsToUTCTime . _blockHeader_epochStart
-      field "Neighbors" $ neighbors . _blockHeader_neighbors
-      field "Payload Hash" $ text . hashHex . _blockHeader_payloadHash
-      field "Chainweb Version" $ text . _blockHeader_chainwebVer
-      field "Target" $ text . _blockHeader_target
-      field "Nonce" $ text . _blockHeader_nonce
-      return ()
+blockHeaderWidget _ _ Nothing = text "Block does not exist"
+blockHeaderWidget h c (Just b) = do
+    p <- getBlockPayload h c (_blockHeader_payloadHash b)
+    dp <- holdDyn (Left "Retrieving payload data...") p
+    el "h2" $ text "Block Header"
+    elAttr "table" ("class" =: "ui definition table") $ do
+      el "tbody" $ do
+        field "Creation Time" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_creationTime b
+        field "Chain" $ text $ tshow $ _blockHeader_chainId b
+        field "Block Height" $ text $ tshow $ _blockHeader_height b
+        field "Parent" $ parent $ _blockHeader_parent b
+        field "Hash" $ text $ hashHex $ _blockHeader_hash b
+        field "Weight" $ text $ _blockHeader_weight b
+        field "Epoch Start" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_epochStart b
+        field "Neighbors" $ neighbors $ _blockHeader_neighbors b
+        field "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash b
+        field "Chainweb Version" $ text $ _blockHeader_chainwebVer b
+        field "Target" $ text $ _blockHeader_target b
+        field "Nonce" $ text $ _blockHeader_nonce b
+        return ()
+    el "h2" $ text "Block Payload"
+    elAttr "table" ("class" =: "ui definition table") $ do
+      el "tbody" $ do
+        field "Miner" $ dynText $ either T.pack (tshow . _blockPayload_minerData) <$> dp
+        field "Transactions Hash" $ dynText $ either T.pack (hashB64U . _blockPayload_transactionsHash) <$> dp
+        field "Outputs Hash" $ dynText $ either T.pack (hashB64U . _blockPayload_outputsHash) <$> dp
+        field "Payload Hash" $ dynText $ either T.pack (hashB64U . _blockPayload_payloadHash) <$> dp
+    el "h2" $ text "Transactions"
+    void $ simpleList (either (const []) (_blockPayload_transactions) <$> dp)
+      (divClass "ui segment" . el "code" . dynText . fmap (payloadCode . _pactCommand_payload . _transaction_cmd))
   where
-    field nm func = el "tr" $ do
+    field nm v = el "tr" $ do
       el "td" $ text nm
-      el "td" $ func b
+      el "td" v
     parent p = blockLink (_blockHeader_chainId b) p
     neighbors ns = do
       forM_ (M.toList ns) $ \(cid,nh) -> do

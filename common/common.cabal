@@ -7,8 +7,11 @@ library
   hs-source-dirs: src
   build-depends: base
                , containers
+               , dependent-sum
+               , obelisk-executable-config-lookup
                , obelisk-route
                , mtl
+               , reflex-dom
                , text
   default-extensions:
     TypeFamilies

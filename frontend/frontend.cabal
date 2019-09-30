@@ -11,14 +11,18 @@ library
     , base16-bytestring
     , base64-bytestring
     , bytes
+    , bytestring
     , cereal
     , common
     , containers
+    , data-default
     , data-dword
+    , dependent-sum
+    , ghcjs-dom
     , hashable
     , jsaddle
-    , microlens
-    , microlens-aeson
+    , lens
+    , lens-aeson
     , mtl
     , obelisk-executable-config-lookup
     , obelisk-frontend
@@ -29,6 +33,8 @@ library
     , ref-tf
     , reflex
     , reflex-dom
+    , reflex-dom-core
+    , stm
     , text
     , time
     , transformers

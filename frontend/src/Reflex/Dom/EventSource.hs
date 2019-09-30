@@ -74,7 +74,7 @@ data RawEventSource t a
 --eventSource :: (MonadJSM m, MonadJSM (Performable m), HasJSContext m, PerformEvent t m, TriggerEvent t m, PostBuild t m) => Text -> EventSourceConfig t -> m (EventSource t)
 --eventSource url config = eventSource' url config onBSMessage
 
-eventSource' :: (Show b, MonadJSM m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m) => Text -> Text -> EventSourceConfig t -> (Either ByteString JSVal -> JSM b) -> m (RawEventSource t b)
+eventSource' :: (MonadJSM m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m) => Text -> Text -> EventSourceConfig t -> (Either ByteString JSVal -> JSM b) -> m (RawEventSource t b)
 eventSource' url eventType config onRawMessage = do
   (eRecv, onMessage) <- newTriggerEvent
   currentSocketRef <- liftIO $ newIORef Nothing
