@@ -16,7 +16,6 @@ library
     , common
     , containers
     , data-default
-    , data-dword
     , dependent-sum
     , ghcjs-dom
     , hashable
@@ -51,6 +50,10 @@ library
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign
   ghc-options: -Wall
+
+  if impl(ghcjs)
+    build-depends:
+      ghcjs-base
 
 executable frontend
   main-is: main.hs

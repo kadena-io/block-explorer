@@ -1,3 +1,12 @@
+.main.container {
+    margin-top: 7em;
+}
+
+.ui.footer.segment {
+    margin: 5em 0em 0em;
+    padding: 5em 0em;
+}
+
 .blockid {
     display: table-cell;
     margin: auto;

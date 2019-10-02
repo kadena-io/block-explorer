@@ -126,5 +126,5 @@ blockPayloadWidget c bh bp = do
         tfield "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp
         let hash = hashB64U $ _blockHeader_hash bh
         tfield "Transactions" $
-          elAttr "a" ("href" =: ("/block/" <> tshow c <> "/" <> hash <> "/transactions")) $
+          elAttr "a" ("href" =: ("/block/" <> tshow c <> "/" <> hash <> "/txs")) $
             text $ (\ts -> tshow (length ts) <> " transactions") $ _blockPayload_transactions bp

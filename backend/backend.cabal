@@ -7,11 +7,15 @@ library
   hs-source-dirs: src
   if impl(ghcjs)
     buildable: False
-  build-depends: base
-               , common
-               , frontend
-               , obelisk-backend
-               , obelisk-route
+  build-depends:
+      base
+    , common
+    , dependent-sum
+    , frontend
+    , mtl
+    , obelisk-backend
+    , obelisk-route
+    , snap-core
   exposed-modules:
     Backend
   ghc-options: -Wall

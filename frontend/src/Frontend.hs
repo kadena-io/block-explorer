@@ -38,6 +38,7 @@ import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
+import           Frontend.Nav
 import           Frontend.Page.Block
 import           Frontend.Page.Transaction
 ------------------------------------------------------------------------------
@@ -86,8 +87,6 @@ chainScan
   => ChainwebHost
   -> RoutedT t (R FrontendRoute) m ()
 chainScan ch = do
-    --elAttr "div" ("class" =: "ui container" <> "style" =: "width: 1100px; overflow-x: auto;") $ do
-    elAttr "div" ("class" =: "ui container" <> "style" =: "width: 1200px;") $ do
     dsi <- fmap join $ prerender (text "prerendering server info" >> return (constDyn Nothing)) $ getServerInfo ch
     void $ networkView (mainApp ch <$> dsi)
 
@@ -99,28 +98,35 @@ mainApp
   -> App (R FrontendRoute) t m ()
 mainApp _ Nothing = text "Loading server data..."
 mainApp ch (Just si) = do
-    subRoute_ $ \case
-      FR_Main -> blockTableWidget
-      FR_Block -> blockPage
-
--- Block payload info
--- https://us2.testnet.chainweb.com/chainweb/0.0/testnet02/chain/0/payload/0hz5clj_QCseEvLm4YCrSczgl246fskX_ZAxPixFu6U
-
--- application/json;blockheader-encoding=object
+    divClass "ui fixed inverted menu" nav
+    elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1127;") $ do
+      subRoute_ $ \case
+        FR_Main -> blockTableWidget
+        FR_Block -> blockPage
+    divClass "ui inverted vertical footer segment" $ do
+      divClass "ui center aligned container" $ do
+        elAttr "img" ("src" =: static @"kadena-k-logo.png" <> "class" =: "ui centered mini image") blank
+        divClass "ui horizontal inverted small divided link list" $ do
+          lnk "Site Map" "#"
+          lnk "Contact Us" "#"
+          lnk "Terms and Conditions" "#"
+          lnk "Privacy Policy" "#"
+  where
+    lnk nm url = elAttr "a" ("class" =: "item" <> "href" =: url) $ text nm
 
 appHead :: DomBuilder t m => m ()
 appHead = do
-    el "title" $ text "ChainScan"
-    elAttr "link" ("rel" =: "shortcut icon" <>
-                   "href" =: "/static/favicon.svg" <>
-                   "type" =: "image/svg+xml"
-                  ) blank
+  el "title" $ text "ChainScan"
+  elAttr "link" ("rel" =: "shortcut icon" <>
+                 "href" =: "/static/favicon.svg" <>
+                 "type" =: "image/svg+xml"
+                ) blank
 
-    css (static @"semantic.min.css")
-    css (static @"css/custom.css")
-    --jsScript "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"
-    jsScript (static @"jquery-3.1.1.min.js")
-    jsScript (static @"semantic.min.js")
+  css (static @"semantic.min.css")
+  css (static @"css/custom.css")
+  --jsScript "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"
+  jsScript (static @"jquery-3.1.1.min.js")
+  jsScript (static @"semantic.min.js")
 
 css :: DomBuilder t m => Text -> m ()
 css url = elAttr "link" ("rel" =: "stylesheet" <> "type" =: "text/css" <> "href" =: url) blank
@@ -148,7 +154,7 @@ blockTableWidget = do
                   "style" =: "border-left: 0; border-right: 0; border-collapse: collapse;") $ do
     el "thead" $ do
       el "tr" $ do
-        el "th" blank
+        el "th" $ text "Height"
         chains <- asks (_siChains . _as_serverInfo)
         --let sty = "width: " <> tshow blockWidth <> "px;"
         forM_ chains $ \cid -> el "th" $
@@ -170,9 +176,9 @@ rowsWidget
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m ()
 rowsWidget ti (Down bh) cs = do
-    hoverChanges <- blockHeightRow ti bh cs
-    hoveredBlock <- holdDyn Nothing hoverChanges
-    spacerRow hoveredBlock
+  hoverChanges <- blockHeightRow ti bh cs
+  hoveredBlock <- holdDyn Nothing hoverChanges
+  spacerRow hoveredBlock
 
 --getRecentBlocks
 --  :: (MonadAppIO r t m)
@@ -221,22 +227,6 @@ blockWidget0 ti height cid hs = do
       pastTimeWidget ti (fmap getCreationTime <$> mbh)
 
   return $ leftmost [Just cid <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
-
---blockWidget :: MonadAppIO r t m => Dynamic t TickInfo -> BlockHeader -> m (Event t (Maybe ChainId))
---blockWidget ti (BlockHeader ct _ _ hash chainId _ _ _ _ _ _ _) = do
---  (e,_) <- elAttr' "td" ("class" =: "blocksummary") $ do
---                         -- <> "style" =: "padding: 0; margin: 0; border: 0; border-spacing: 0;") $ do
---    el "div" $ do
---      elClass "span" "blockshape" $ text (tshow $ unChainId chainId) --"Bk"
---      let url = "/blockHash/" <> hashB64U hash
---      elClass "span" "blockheight" $ elAttr "a" ("href" =: url) $
---        text $ T.take 8 $ hashHex hash
---    --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
---    --divClass "blockdiv" $ elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
---    --  text $ "? txs"
---    divClass "blockdiv" $ pastTimeWidget ti (posixSecondsToUTCTime ct)
---
---  return $ leftmost [Just chainId <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
 
 pastTimeWidget
   -- :: (DomBuilder t m, PostBuild t m, MonadHold t m, PerformEvent t m, TriggerEvent t m, MonadFix m, MonadIO m, MonadIO (Performable m))

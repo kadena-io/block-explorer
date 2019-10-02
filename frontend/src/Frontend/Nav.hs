@@ -12,6 +12,7 @@ import           Control.Monad (forM_)
 import           Data.Dependent.Sum (DSum ((:=>)))
 import qualified Data.Some as Some
 --import           Data.Universe (universe)
+import           Obelisk.Generated.Static
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom
@@ -25,19 +26,22 @@ leftMenuItems :: [Some.Some FrontendRoute]
 leftMenuItems = []
 
 nav
-  :: forall t m. (MonadApp (R FrontendRoute) t m, Routed t (R FrontendRoute) m)
+  :: (MonadApp r t m)
   => m ()
 nav = do
-  -- Get the current route, so that we can highlight the corresponding tab
-  currentTab <- askRoute
-
-  -- Iterate over all the top-level routes except Home
-  -- Home is reached by clicking logo
-  --forM_ leftMenuItems $ menuItem currentTab
-
-  divClass "right menu" $ do
-    --menuItem currentTab (Some.Some FR_Settings)
-    _ <- elClass "span" "clickable item" $ element "a" def (text "Logout")
+  divClass "ui container" $ do
+    elAttr "a" ("class" =: "header item" <>
+                "href" =: "/" <>
+                "style" =: "color: #e8098f;") $
+      --text "Chainscan"
+      elAttr "img" ("class" =: "logo" <>
+                    "src" =: static @"kadena-k-logo.png") $
+        text "Chainscan"
+    elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Chainscan"
+    divClass "right menu" $ do
+      elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Miners"
+      elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Developers"
+      elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Resources"
     return ()
 
 

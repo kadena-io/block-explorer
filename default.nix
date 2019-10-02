@@ -21,6 +21,8 @@ project ./. ({ pkgs, hackGet, ... }: {
                inherit sha256;
              }) {};
     in {
+      bytes = dontCheck super.bytes;
+      lens-aeson = dontCheck super.lens-aeson;
       perfect-vector-shuffle = doJailbreak (dontCheck (callHackageDirect {
         pkg = "perfect-vector-shuffle";
         ver = "0.1.1";

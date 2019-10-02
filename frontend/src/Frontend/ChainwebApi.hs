@@ -318,7 +318,7 @@ instance Monoid BlockTable where
   mempty = BlockTable mempty
 
 blockTableNumRows :: Int
-blockTableNumRows = 5
+blockTableNumRows = 6
 
 insertBlockTable :: BlockTable -> BlockHeaderTx -> BlockTable
 insertBlockTable (BlockTable bs) btx = BlockTable bs2
