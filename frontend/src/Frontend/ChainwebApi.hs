@@ -33,6 +33,7 @@ import           Reflex.Dom hiding (Cut, Value)
 import           Text.Printf
 ------------------------------------------------------------------------------
 import           Frontend.Common
+import           Common.Utils
 ------------------------------------------------------------------------------
 
 --data Remote a = InFlight | Crashed [String] | Landed a
@@ -229,10 +230,6 @@ getBlockPayload h c payloadHash = do
 decodeXhr :: FromJSON a => XhrResponse -> Either String a
 decodeXhr = eitherDecode . BL.fromStrict . T.encodeUtf8 <=<
             note "decodeXhr encoding error" . _xhrResponse_responseText
-
-note :: e -> Maybe a -> Either e a
-note e Nothing = Left e
-note _ (Just a) = Right a
 
 combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
 combineBlockTables bt Nothing = bt

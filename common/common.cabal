@@ -19,3 +19,4 @@ library
   exposed-modules:
     Common.Api
     Common.Route
+    Common.Utils

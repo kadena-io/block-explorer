@@ -46,6 +46,8 @@ library
     Frontend.Common
     Frontend.ChainwebApi
     Frontend.Nav
+    Frontend.Page.Block
+    Frontend.Page.Transaction
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign
   ghc-options: -Wall

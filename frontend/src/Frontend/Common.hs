@@ -24,15 +24,17 @@ f <$$$> a = fmap f <$$> a
 infixl 4 <$$$>
 
 
-tshow :: Show a => a -> Text
-tshow = T.pack . show
-
 data ListState = EmptyPlaceholder | AddForm | ListTable
   deriving (Eq,Ord,Show,Read)
 
 extLink :: DomBuilder t m => Text -> m a -> m a
 extLink href m =
   elAttr "a" ("href" =: href <> "target" =: "_blank" <> "rel" =: "noopener") $ m
+
+tfield :: DomBuilder t m => Text -> m a -> m a
+tfield nm v = el "tr" $ do
+  el "td" $ text nm
+  el "td" v
 
 ------------------------------------------------------------------------------
 --internalLink

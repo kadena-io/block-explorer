@@ -33,10 +33,13 @@ import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Common.Utils
 import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
+import           Frontend.Page.Block
+import           Frontend.Page.Transaction
 ------------------------------------------------------------------------------
 
 
@@ -98,7 +101,7 @@ mainApp _ Nothing = text "Loading server data..."
 mainApp ch (Just si) = do
     subRoute_ $ \case
       FR_Main -> blockTableWidget
-      FR_Block -> blockDetails
+      FR_Block -> blockPage
 
 -- Block payload info
 -- https://us2.testnet.chainweb.com/chainweb/0.0/testnet02/chain/0/payload/0hz5clj_QCseEvLm4YCrSczgl246fskX_ZAxPixFu6U
@@ -167,8 +170,6 @@ rowsWidget
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m ()
 rowsWidget ti (Down bh) cs = do
-    pb <- getPostBuild
-    void $ prerender blank $ performEvent_ $ liftIO (putStrLn "In rowsWidget") <$ pb
     hoverChanges <- blockHeightRow ti bh cs
     hoveredBlock <- holdDyn Nothing hoverChanges
     spacerRow hoveredBlock
@@ -369,85 +370,3 @@ petersonGraph = M.fromList
     , (8, [3,7,9])
     , (9, [4,8,5])
     ]
-
-
-blockDetails
-  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m))
-  => App [Text] t m ()
-blockDetails = do
-    args <- askRoute
-    void $ networkView (blockWidget <$> args)
-
-blockWidget
-  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
-  => [Text]
-  -> m ()
-blockWidget args = do
-  as <- ask
-  case args of
-    [chainId, hash] -> do
-      case fromText chainId of
-        Nothing -> text $ "Invalid chain ID: " <> chainId
-        Just cid -> do
-          let h = _as_host as
-              c = ChainId cid
-          e <- getBlockHeader h c hash
-          blockDyn <- holdDyn Nothing e
-          void $ networkView (blockHeaderWidget h c <$> blockDyn)
-    _ -> text "Must pass chain ID and block hash"
-
-blockLink
-  :: (MonadApp r t m)
-  => ChainId
-  -> Hash
-  -> m ()
-blockLink chainId hash =
-  elAttr "a" ("href" =: ("/block/" <> tshow chainId <> "/" <> hashB64U hash)) $ text $ hashHex hash
-
-
-blockHeaderWidget
-  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
-  => ChainwebHost
-  -> ChainId
-  -> Maybe BlockHeader
-  -> m ()
-blockHeaderWidget _ _ Nothing = text "Block does not exist"
-blockHeaderWidget h c (Just b) = do
-    p <- getBlockPayload h c (_blockHeader_payloadHash b)
-    dp <- holdDyn (Left "Retrieving payload data...") p
-    el "h2" $ text "Block Header"
-    elAttr "table" ("class" =: "ui definition table") $ do
-      el "tbody" $ do
-        field "Creation Time" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_creationTime b
-        field "Chain" $ text $ tshow $ _blockHeader_chainId b
-        field "Block Height" $ text $ tshow $ _blockHeader_height b
-        field "Parent" $ parent $ _blockHeader_parent b
-        field "Hash" $ text $ hashHex $ _blockHeader_hash b
-        field "Weight" $ text $ _blockHeader_weight b
-        field "Epoch Start" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_epochStart b
-        field "Neighbors" $ neighbors $ _blockHeader_neighbors b
-        field "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash b
-        field "Chainweb Version" $ text $ _blockHeader_chainwebVer b
-        field "Target" $ text $ _blockHeader_target b
-        field "Nonce" $ text $ _blockHeader_nonce b
-        return ()
-    el "h2" $ text "Block Payload"
-    elAttr "table" ("class" =: "ui definition table") $ do
-      el "tbody" $ do
-        field "Miner" $ dynText $ either T.pack (tshow . _blockPayload_minerData) <$> dp
-        field "Transactions Hash" $ dynText $ either T.pack (hashB64U . _blockPayload_transactionsHash) <$> dp
-        field "Outputs Hash" $ dynText $ either T.pack (hashB64U . _blockPayload_outputsHash) <$> dp
-        field "Payload Hash" $ dynText $ either T.pack (hashB64U . _blockPayload_payloadHash) <$> dp
-    el "h2" $ text "Transactions"
-    void $ simpleList (either (const []) (_blockPayload_transactions) <$> dp)
-      (divClass "ui segment" . el "code" . dynText . fmap (payloadCode . _pactCommand_payload . _transaction_cmd))
-  where
-    field nm v = el "tr" $ do
-      el "td" $ text nm
-      el "td" v
-    parent p = blockLink (_blockHeader_chainId b) p
-    neighbors ns = do
-      forM_ (M.toList ns) $ \(cid,nh) -> do
-        el "div" $ do
-          text $ "Chain " <> tshow cid <> ": "
-          blockLink cid nh

@@ -20,8 +20,12 @@ import Control.Category
 ------------------------------------------------------------------------------
 --import           Prelude hiding ((.), id)
 --import           Control.Category (Category (..))
+import           Control.Lens
 import           Control.Monad.Except
+import           Data.Bifunctor
+import           Data.Dependent.Sum (DSum (..))
 import           Data.Map (Map)
+import           Data.Readable
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
@@ -34,15 +38,59 @@ import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
 ------------------------------------------------------------------------------
+import           Common.Utils
+------------------------------------------------------------------------------
 
 data BackendRoute :: * -> * where
   -- | Used to handle unparseable routes.
   BackendRoute_Missing :: BackendRoute ()
   BackendRoute_Hashes :: BackendRoute (Map Text (Maybe Text))
 
+data BlockRoute :: * -> * where
+  Block_Header :: BlockRoute ()
+  Block_Transactions :: BlockRoute ()
+
+blockRouteEncoder
+  :: Encoder (Either Text) (Either Text) (R BlockRoute) PageName
+blockRouteEncoder = pathComponentEncoder $ \case
+  Block_Header -> PathEnd $ unitEncoder mempty
+  Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
+
+
+blockRouteEncoder2
+  :: Encoder (Either Text) (Either Text) (Int, Text, R BlockRoute) PageName
+blockRouteEncoder2 = unsafeMkEncoder $ EncoderImpl
+  { _encoderImpl_decode = \(path, _query) ->
+      case path of
+        (cidStr : hash : rest) -> do
+          cid <- maybe (Left "Could not parse chain id") Right $ fromText cidStr
+          br <- case rest of
+                  [] -> Right Block_Header
+                  ["txs"] -> Right Block_Transactions
+                  _ -> throwError $ "blockRouteEncoder: Invalid path " <> tshow path
+          pure (cid, hash, br :/ ())
+        l -> throwError $ "singletonListEncoderImpl: expected one item, got " <> tshow (length l)
+  , _encoderImpl_encode = \(cid, hash, br :/ _) ->
+      case br of
+        Block_Header -> ([tshow cid, hash], mempty)
+        Block_Transactions -> ([tshow cid, hash, "txs"], mempty)
+  }
+
+--blockRouteToPath :: BlockRoute () -> [Text]
+--blockRouteToPath Block_Header = []
+--blockRouteToPath Block_Transactions = ["txs"]
+
+--blockRouteEncoder
+--  :: Int
+--  -> Text
+--  -> Encoder (Either Text) (Either Text) (R BlockRoute) PageName
+--blockRouteEncoder chainId blockHash = pathComponentEncoder $ \case
+--  Block_Header -> PathEnd $ unitEncoder mempty
+--  Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
+
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
-  FR_Block :: FrontendRoute [Text]
+  FR_Block :: FrontendRoute (Int, Text, R BlockRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 pathOnlyEncoderIgnoringQuery :: (Applicative check, MonadError Text parse) => Encoder check parse [Text] PageName
@@ -72,11 +120,13 @@ backendRouteEncoder = handleEncoder (const (InL BackendRoute_Missing :/ ())) $
       -- The encoder given to PathEnd determines how to parse query parameters,
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty
-      FR_Block -> PathSegment "block" pathOnlyEncoder
+      FR_Block -> PathSegment "block" blockRouteEncoder2
+        --pathSegmentEncoder . bimap unwrappedEncoder (maybeEncoder (unitEncoder mempty) blockRouteEncoder)
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
+  , ''BlockRoute
   ]
 
 getAppRoute :: HasConfigs m => m Text
