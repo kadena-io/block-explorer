@@ -120,7 +120,10 @@ blockPayloadWidget c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Miner" $ text $ tshow $ _blockPayload_minerData bp
+        tfield "Miner" $ do
+          el "div" $ text $ "Account: " <> _minerData_account (_blockPayload_minerData bp)
+          el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayload_minerData bp)
+          el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayload_minerData bp)
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
         tfield "Outputs Hash" $ text $ hashB64U $ _blockPayload_outputsHash bp
         tfield "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp

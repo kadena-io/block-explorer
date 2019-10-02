@@ -103,14 +103,35 @@ mainApp ch (Just si) = do
       subRoute_ $ \case
         FR_Main -> blockTableWidget
         FR_Block -> blockPage
+    footer
+  where
+    lnk nm url = elAttr "a" ("class" =: "item" <> "href" =: url) $ text nm
+
+footer
+  :: (MonadApp r t m)
+  => m ()
+footer = do
     divClass "ui inverted vertical footer segment" $ do
       divClass "ui center aligned container" $ do
-        elAttr "img" ("src" =: static @"kadena-k-logo.png" <> "class" =: "ui centered mini image") blank
-        divClass "ui horizontal inverted small divided link list" $ do
-          lnk "Site Map" "#"
-          lnk "Contact Us" "#"
-          lnk "Terms and Conditions" "#"
-          lnk "Privacy Policy" "#"
+        divClass "ui stackable inverted divided grid" $ do
+          divClass "eight wide column" $ do
+            elAttr "img" ("src" =: static @"kadena-full-logo.png" <>
+                          "class" =: "ui centered small image" <>
+                          "alt" =: "Kadena" ) blank
+          divClass "four wide column" $ do
+            elClass "h4" "ui inverted header" $ text "Company"
+            divClass "ui inverted link list" $ do
+              lnk "Kadena Website" "https://kadena.io"
+              lnk "White Papers" "https://kadena.io/en/whitepapers/"
+              lnk "Contact Us" "mailto:info@kadena.io"
+          divClass "four wide column" $ do
+            elClass "h4" "ui inverted header" $ text "Social Media"
+            divClass "ui inverted link list" $ do
+              lnk "Discord" "https://discordapp.com/invite/bsUcWmX"
+              lnk "Twitter" "https://twitter.com/kadena_io"
+              lnk "Medium" "https://medium.com/kadena-io/"
+              lnk "GitHub" "https://github.com/kadena-io/"
+              lnk "YouTube" "https://www.youtube.com/KadenaBlockchain"
   where
     lnk nm url = elAttr "a" ("class" =: "item" <> "href" =: url) $ text nm
 
