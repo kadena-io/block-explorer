@@ -18,6 +18,7 @@ import           Control.Monad.Ref
 import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Maybe
 import           Data.Ord
 import           Data.Readable
 import qualified Data.Set as S
@@ -70,10 +71,11 @@ transactionPage bp = do
                 tfield "Creation Time" $ text $ tshow $ _chainwebMeta_creationTime meta
             tfield "Signers" $ do
               forM_ (_pactCommand_signers $ _transaction_cmd t) $ \s -> do
+                --text $ tshow s
                 elClass "table" "ui definition table" $ el "tbody" $ do
-                  tfield "Account" $ text $ _signer_addr s
                   tfield "Public Key" $ text $ _signer_pubKey s
-                  tfield "Scheme" $ text $ _signer_scheme s
+                  tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
+                  tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
             tfield "Signatures" $ do
               forM_ (_transaction_sigs t) $ \s -> do
                 el "div" $ text $ unSig s

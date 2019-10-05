@@ -427,15 +427,15 @@ instance FromJSON Cont where
     <*> o .: "proof"
 
 data Signer = Signer
-  { _signer_addr :: Text
-  , _signer_scheme :: Text
+  { _signer_addr :: Maybe Text
+  , _signer_scheme :: Maybe Text
   , _signer_pubKey :: Text
   } deriving (Eq,Ord,Show)
 
 instance FromJSON Signer where
   parseJSON = withObject "Signer" $ \o -> Signer
-    <$> o .: "addr"
-    <*> o .: "scheme"
+    <$> o .:? "addr"
+    <*> o .:? "scheme"
     <*> o .: "pubKey"
 
 data ChainwebMeta = ChainwebMeta
