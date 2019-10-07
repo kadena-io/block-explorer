@@ -21,11 +21,8 @@ module Frontend.AppState where
 ------------------------------------------------------------------------------
 --import           Control.Error
 import           Control.Lens
-import           Control.Monad
 import           Control.Monad.Fix
-import           Data.JSString.Text
 import           Data.Text (Text)
-import           Foreign.JavaScript.Utils (jsonDecode)
 import           GHC.Generics
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex
@@ -33,7 +30,6 @@ import           Reflex.Dom
 import           Reflex.Dom.EventSource
 ------------------------------------------------------------------------------
 import           Frontend.ChainwebApi
-import           Frontend.Common
 ------------------------------------------------------------------------------
 
 -- TODO Move into common later
@@ -86,7 +82,6 @@ stateManager
     -- ^ Not in use yet
     -> m (AppState t)
 stateManager _ h si _ = do
-    pb <- getPostBuild
     let cfg = EventSourceConfig never True
     es <- startEventSource h cfg
     let downEvent = _eventSource_recv es

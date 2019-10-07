@@ -78,13 +78,13 @@ blockPageNoPayload h c r bh = do
 
 
 blockHeaderPage
-  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  :: (MonadApp r t m)
   => ChainwebHost
   -> ChainId
   -> BlockHeader
   -> BlockPayload
   -> m ()
-blockHeaderPage h c bh bp = do
+blockHeaderPage _ c bh bp = do
     el "h2" $ text "Block Header"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
@@ -111,7 +111,7 @@ blockHeaderPage h c bh bp = do
           blockLink cid nh
 
 blockPayloadWidget
-  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  :: (MonadApp r t m)
   => ChainId
   -> BlockHeader
   -> BlockPayload

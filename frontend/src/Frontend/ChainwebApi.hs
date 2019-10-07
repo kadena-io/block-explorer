@@ -23,16 +23,15 @@ import           Data.Hashable
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
+import           GHC.Generics
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value)
 import           Text.Printf
 ------------------------------------------------------------------------------
-import           Frontend.Common
 import           Common.Utils
 ------------------------------------------------------------------------------
 
@@ -96,10 +95,18 @@ instance Show ChainId where
 data Host = Host
   { hostAddress :: Text
   , hostPort :: Int
-  } deriving (Eq,Ord,Show)
+  } deriving (Eq,Ord,Show,Read,Generic)
+
+instance ToJSON Host where
+    toEncoding = genericToEncoding defaultOptions
+instance FromJSON Host
 
 data ChainwebVersion = Development | Testnet02 | Mainnet01
-  deriving (Eq,Ord,Show)
+  deriving (Eq,Ord,Show,Read,Generic)
+
+instance ToJSON ChainwebVersion where
+    toEncoding = genericToEncoding defaultOptions
+instance FromJSON ChainwebVersion
 
 versionText :: ChainwebVersion -> Text
 versionText Development = "development"
@@ -109,7 +116,11 @@ versionText Mainnet01 = "mainnet01"
 data ChainwebHost = ChainwebHost
   { chHost :: Host
   , chVersion :: ChainwebVersion
-  } deriving (Eq,Ord,Show)
+  } deriving (Eq,Ord,Show,Read,Generic)
+
+instance ToJSON ChainwebHost where
+    toEncoding = genericToEncoding defaultOptions
+instance FromJSON ChainwebHost
 
 apiBaseUrl :: ChainwebHost -> Text
 apiBaseUrl (ChainwebHost h cver) =
@@ -233,7 +244,7 @@ decodeXhr = eitherDecode . BL.fromStrict . T.encodeUtf8 <=<
 
 combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
 combineBlockTables bt Nothing = bt
-combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx 0 b)) bt0 $ rights $
+combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b 0 "" "")) bt0 $ rights $
   map (parseEither parseJSON) $ getItems v
 
 mkHeaderRequest :: ChainwebHost -> ServerInfo -> [XhrRequest ()]
@@ -265,14 +276,18 @@ hashB64U :: Hash -> Text
 hashB64U = T.decodeUtf8 . B64U.encode . unHash
 
 data BlockHeaderTx = BlockHeaderTx
-  { _blockHeaderTx_txCount :: Int
-  , _blockHeaderTx_header :: BlockHeader
+  { _blockHeaderTx_header :: BlockHeader
+  , _blockHeaderTx_txCount :: Int
+  , _blockHeaderTx_powHash :: Text
+  , _blockHeaderTx_target :: Text
   } deriving (Eq,Ord,Show)
 
 instance FromJSON BlockHeaderTx where
   parseJSON = withObject "BlockHeaderTx" $ \o -> BlockHeaderTx
-    <$> o .: "txCount"
-    <*> o .: "header"
+    <$> o .: "header"
+    <*> o .: "txCount"
+    <*> o .: "powHash"
+    <*> o .: "target"
 
 data BlockHeader = BlockHeader
   { _blockHeader_creationTime :: POSIXTime
@@ -351,12 +366,6 @@ data Transaction = Transaction
   , _transaction_sigs :: [Sig]
   , _transaction_cmd :: PactCommand
   } deriving (Eq,Show)
-
---instance FromJSON Transaction where
---  parseJSON = withText "Transaction" $ \t ->
---    case decodeB64UrlNoPaddingText t of
---      Left e -> fail e
---      Right bs -> pure $ Transaction $ T.decodeUtf8 bs
 
 instance FromJSON Transaction where
   parseJSON = withObject "Transaction" $ \o -> Transaction

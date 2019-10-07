@@ -18,8 +18,6 @@ import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Ord
-import           Data.Readable
-import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time
@@ -40,7 +38,6 @@ import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Nav
 import           Frontend.Page.Block
-import           Frontend.Page.Transaction
 ------------------------------------------------------------------------------
 
 
@@ -49,15 +46,25 @@ frontend = Frontend
   { _frontend_head = appHead
   , _frontend_body = do
       route <- getAppRoute
-      --let h = Host "us1.testnet.chainweb.com" 443
-      --let h = Host "localhost" 60651
-      let h = Host "us3.tn1.chainweb.com" 443
-          ch = ChainwebHost h Development
-      void $ prerender blank $ do
-        dsi <- getServerInfo ch
-        void $ networkView (appWithServer route ch <$> dsi)
-      --void $ prerender blank $ runApp route ch (chainScan ch)
+      curNet <- divClass "ui fixed inverted menu" nav
+      _ <- networkView (appWithNetwork route <$> curNet)
+      footer
   }
+
+appWithNetwork
+  :: (SetRoute t (R FrontendRoute) (Client (Client m)),
+      Routed t (R FrontendRoute) (Client m),
+      RouteToUrl (R FrontendRoute) (Client (Client m)),
+      Prerender js t m, Monad m)
+  => Text
+  -> Network
+  -> m ()
+appWithNetwork route curNet = do
+  let ch = networkHost curNet
+  _ <- prerender blank $ do
+    dsi <- getServerInfo ch
+    void $ networkView (appWithServer route ch <$> dsi)
+  return ()
 
 appWithServer
   :: (DomBuilder t m, Routed t (R FrontendRoute) m, MonadHold t m, MonadFix m,
@@ -86,45 +93,44 @@ chainScan
   :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
   => ChainwebHost
   -> RoutedT t (R FrontendRoute) m ()
-chainScan ch = do
-    dsi <- fmap join $ prerender (text "prerendering server info" >> return (constDyn Nothing)) $ getServerInfo ch
-    void $ networkView (mainApp ch <$> dsi)
+chainScan _ = do
+    mainApp
+    --dsi <- fmap join $ prerender (text "prerendering server info" >> return (constDyn Nothing)) $ getServerInfo ch
+    --void $ networkView (mainApp <$> dsi)
 
 
 mainApp
   :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
-  => ChainwebHost
-  -> Maybe ServerInfo
-  -> App (R FrontendRoute) t m ()
-mainApp _ Nothing = text "Loading server data..."
-mainApp ch (Just si) = do
-    divClass "ui fixed inverted menu" nav
+  => App (R FrontendRoute) t m ()
+--  => Maybe ServerInfo
+--  -> App (R FrontendRoute) t m ()
+--mainApp Nothing = text "Loading server data..."
+--mainApp (Just si) = do
+mainApp = do
     elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1127;") $ do
       subRoute_ $ \case
         FR_Main -> blockTableWidget
         FR_Block -> blockPage
-    footer
-  where
-    lnk nm url = elAttr "a" ("class" =: "item" <> "href" =: url) $ text nm
 
 footer
-  :: (MonadApp r t m)
+  :: (DomBuilder t m)
   => m ()
 footer = do
     divClass "ui inverted vertical footer segment" $ do
+      el "div" $
+        elAttr "img" ("src" =: static @"kadena-full-logo.png" <>
+                    "class" =: "ui centered small image" <>
+                    "alt" =: "Kadena" ) blank
+      divClass "ui divider" blank
       divClass "ui center aligned container" $ do
         divClass "ui stackable inverted divided grid" $ do
           divClass "eight wide column" $ do
-            elAttr "img" ("src" =: static @"kadena-full-logo.png" <>
-                          "class" =: "ui centered small image" <>
-                          "alt" =: "Kadena" ) blank
-          divClass "four wide column" $ do
             elClass "h4" "ui inverted header" $ text "Company"
             divClass "ui inverted link list" $ do
               lnk "Kadena Website" "https://kadena.io"
               lnk "White Papers" "https://kadena.io/en/whitepapers/"
               lnk "Contact Us" "mailto:info@kadena.io"
-          divClass "four wide column" $ do
+          divClass "eight wide column" $ do
             elClass "h4" "ui inverted header" $ text "Social Media"
             divClass "ui inverted link list" $ do
               lnk "Discord" "https://discordapp.com/invite/bsUcWmX"
@@ -185,7 +191,7 @@ blockTableWidget = do
         t <- liftIO getCurrentTime
         clockLossy 1 t
       dbt <- asks _as_blockTable
-      listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt) (rowsWidget (join ti))
+      _ <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt) (rowsWidget (join ti))
       return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
@@ -231,21 +237,23 @@ blockWidget0
   -> ChainId
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe ChainId))
-blockWidget0 ti height cid hs = do
+blockWidget0 ti _ cid hs = do
   (e,_) <- elAttr' "td" ("class" =: "blocksummary"
                       <> "style" =: ("width: " <> tshow blockWidth)) $ do
     let mbh = M.lookup cid <$> hs
-    el "div" $ do
-      --elClass "span" "blockshape" $ text (tshow $ unChainId cid) --"Bk"
-      let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
-      elClass "span" "blockheight" $ elDynAttr "a" (maybe mempty mkUrl <$> mbh) $
-        dynText $ maybe "" (T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header) <$> mbh
-    --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
-    divClass "blockdiv" $ do --elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
-      dynText $ maybe "" ((<> " txs") . tshow . _blockHeaderTx_txCount) <$> mbh
-    let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
-    prerender blank $ divClass "blockdiv" $
-      pastTimeWidget ti (fmap getCreationTime <$> mbh)
+    viewIntoMaybe mbh blank $ \bh -> do
+      divClass "summary-details" $ do
+        el "div" $ do
+          --elClass "span" "blockshape" $ text (tshow $ unChainId cid) --"Bk"
+          let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
+          elClass "span" "blockheight" $ elDynAttr "a" (mkUrl <$> bh) $
+            dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
+        --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
+        divClass "blockdiv" $ do --elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
+          dynText $ (<> " txs") . tshow . _blockHeaderTx_txCount <$> bh
+        let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
+        void $ prerender blank $ divClass "blockdiv" $
+          pastTimeWidget ti (Just . getCreationTime <$> bh)
 
   return $ leftmost [Just cid <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
 
@@ -303,7 +311,7 @@ spacerRow
   => Dynamic t (Maybe ChainId)
   -> m ()
 spacerRow hoveredBlock = do
-  elClass "tr" "spacer-row" $ do
+  elAttr "tr" ("class" =: "spacer-row" <> "style" =: "transition: background 5s linear;") $ do
     elClass "td" "emptyrowheader" $ text ""
     let sty = "padding: 0; border-left: 0; height: " <> tshow blockSeparation <> "px"
     elAttr "td" ("colspan" =: "10" <> "style" =: sty) $

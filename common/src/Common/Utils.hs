@@ -13,3 +13,6 @@ hush (Right a) = Just a
 note :: e -> Maybe a -> Either e a
 note e Nothing = Left e
 note _ (Just a) = Right a
+
+class Humanizable a where
+  humanize :: a -> Text

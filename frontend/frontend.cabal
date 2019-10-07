@@ -47,6 +47,7 @@ library
     Frontend.Nav
     Frontend.Page.Block
     Frontend.Page.Transaction
+    Frontend.Storage
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign
   ghc-options: -Wall

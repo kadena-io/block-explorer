@@ -22,8 +22,6 @@ import Control.Category
 --import           Control.Category (Category (..))
 import           Control.Lens
 import           Control.Monad.Except
-import           Data.Bifunctor
-import           Data.Dependent.Sum (DSum (..))
 import           Data.Map (Map)
 import           Data.Readable
 import           Data.Some (Some)
@@ -31,7 +29,6 @@ import qualified Data.Some as Some
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding
-import           Data.Functor.Identity
 import           Data.Functor.Sum
 import           Obelisk.Configs
 import           Obelisk.Route

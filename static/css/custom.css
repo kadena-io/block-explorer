@@ -29,6 +29,19 @@ td.blocksummary {
     /*padding-top: 0;*/
     border-left: 1px solid rgba(34,36,38,.1);
     border-right: 1px solid rgba(34,36,38,.1);
+    padding: 0!important;
+}
+
+div.summary-details {
+    padding: 0.8em 0.8em;
+    animation-name: my-block-fade-in;
+    animation-duration: 1.5s;
+    animation-timing-function: ease-in-out;
+}
+
+@keyframes my-block-fade-in {
+    0% { background-color:  #ffffe0; }
+    100% { background-color: white; }
 }
 
 .blockshape {
