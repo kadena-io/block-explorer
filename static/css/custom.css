@@ -86,6 +86,10 @@ span.summary-details {
     margin: 0;
 }
 
+span.hovered-block {
+    background-color: rgba(0,0,0,0.05);
+}
+
 div.summary-inner {
     padding: 5px;
     animation-name: my-block-fade-in;

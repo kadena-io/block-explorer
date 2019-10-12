@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
@@ -55,11 +56,12 @@ appWithNetwork
   :: (SetRoute t (R FrontendRoute) (Client (Client m)),
       Routed t (R FrontendRoute) (Client m),
       RouteToUrl (R FrontendRoute) (Client (Client m)),
-      Prerender js t m, Monad m)
+      DomBuilder t m, Prerender js t m)
   => Text
-  -> Network
+  -> Maybe Network
   -> m ()
-appWithNetwork route curNet = do
+appWithNetwork route Nothing = text "No network selected"
+appWithNetwork route (Just curNet) = do
   let ch = networkHost curNet
   _ <- prerender blank $ do
     dsi <- getServerInfo ch
@@ -93,7 +95,7 @@ mainApp
   :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
   => App (R FrontendRoute) t m ()
 mainApp = do
-    elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1127;") $ do
+    elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
       subRoute_ $ \case
         FR_Main -> blockTableWidget
         FR_Block -> blockPage
@@ -173,7 +175,9 @@ blockTableWidget = do
       t <- liftIO getCurrentTime
       clockLossy 1 t
     dbt <- asks _as_blockTable
-    _ <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt) (rowsWidget (join ti))
+    rec hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
+                                    (rowsWidget (join ti) hoveredBlock)
+        hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
     return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
@@ -181,53 +185,62 @@ blockTableWidget = do
 rowsWidget
   :: (MonadApp r t m, Prerender js t m)
   => Dynamic t TickInfo
+  -> Dynamic t (Maybe BlockRef)
   -> Down BlockHeight
   -> Dynamic t (Map ChainId BlockHeaderTx)
-  -> m ()
-rowsWidget ti (Down bh) cs = do
-  hoverChanges <- blockHeightRow ti bh cs
-  hoveredBlock <- holdDyn Nothing hoverChanges
+  -> m (Event t (Maybe BlockRef))
+rowsWidget ti hoveredBlock (Down bh) cs = mdo
+  hoverChanges <- blockHeightRow ti hoveredBlock bh cs
   chains <- asks (_siChains . _as_serverInfo)
-  spacerRow chains cs hoveredBlock
+  spacerRow chains cs hoveredBlock bh
+  return hoverChanges
 
 blockHeightRow
   :: (MonadApp r t m, Prerender js t m)
   => Dynamic t TickInfo
+  -> Dynamic t (Maybe BlockRef)
   -> BlockHeight
   -> Dynamic t (Map ChainId BlockHeaderTx)
-  -> m (Event t (Maybe ChainId))
-blockHeightRow ti height headers = do
+  -> m (Event t (Maybe BlockRef))
+blockHeightRow ti hoveredBlock height headers = do
   divClass "block-row" $ do
     elClass "span" "block-height" $ text $ tshow height
     chains <- asks (_siChains . _as_serverInfo)
-    es <- forM chains $ \cid ->
-      blockWidget0 ti height cid headers
-    return $ leftmost es
+    es <- forM chains $ blockWidget0 ti hoveredBlock headers height
+    return $ (height,) <$$> leftmost es
 
 blockWidget0
   :: (MonadApp r t m, Prerender js t m)
   => Dynamic t TickInfo
+  -> Dynamic t (Maybe BlockRef)
+  -> Dynamic t (Map ChainId BlockHeaderTx)
   -> BlockHeight
   -> ChainId
-  -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe ChainId))
-blockWidget0 ti _ cid hs = do
-  (e,_) <- elAttr' "span" ("class" =: "summary-details") $ do
-    let mbh = M.lookup cid <$> hs
-    viewIntoMaybe mbh blank $ \bh -> divClass "summary-inner" $ do
-      el "div" $ do
-        let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
-        elClass "span" "blockheight" $ elDynAttr "a" (mkUrl <$> bh) $
-          dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
+blockWidget0 ti hoveredBlock hs height cid = do
+  let mkAttrs = \case
+        Nothing -> "class" =: "summary-details"
+        Just hb -> if isDownstreamFrom hb (height, cid)
+                     then "class" =: "summary-details hovered-block"
+                     else "class" =: "summary-details"
+  let mbh = M.lookup cid <$> hs
+  (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
+    viewIntoMaybe mbh blank $ \bh -> do
+      divClass "summary-inner" $ do
+        el "div" $ do
+          let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
+          elClass "span" "blockheight" $ elDynAttr "a" (mkUrl <$> bh) $
+            dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 
-      let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
-      void $ prerender blank $ divClass "blockdiv" $
-        pastTimeWidget ti (Just . getCreationTime <$> bh)
+        let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
+        void $ prerender blank $ divClass "blockdiv" $
+          pastTimeWidget ti (Just . getCreationTime <$> bh)
 
-      divClass "blockdiv" $ do
-        dynText $ maybe "" (\c -> tshow c <> " txs") . _blockHeaderTx_txCount <$> bh
+        divClass "blockdiv" $ do
+          dynText $ maybe "" (\c -> tshow c <> " txs") . _blockHeaderTx_txCount <$> bh
 
-  return $ leftmost [Just cid <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
+  return $ leftmost [ fmap (const cid) <$> tag (current mbh) (domEvent Mouseenter e)
+                    , Nothing <$ domEvent Mouseleave e]
 
 pastTimeWidget
   :: (DomBuilder t m, PostBuild t m)
@@ -284,14 +297,15 @@ spacerRow
   :: (DomBuilder t m, PostBuild t m)
   => [ChainId]
   -> Dynamic t (Map ChainId BlockHeaderTx)
-  -> Dynamic t (Maybe ChainId)
+  -> Dynamic t (Maybe BlockRef)
+  -> BlockHeight
   -> m ()
-spacerRow chains cs hoveredBlock = do
+spacerRow chains cs hoveredBlock bh = do
   let sty = "margin-left: 102px; height: " <> tshow blockSeparation <> "px; " <>
             "border: 0; padding: 0;"
   elAttr "div" ("class" =: "spacer-row" <>
                 "style" =: sty ) $ do
-    chainweb chains cs hoveredBlock
+    chainweb chains cs hoveredBlock bh
 
 svgElDynAttr
   :: (DomBuilder t m, PostBuild t m)
@@ -313,21 +327,26 @@ chainweb
   :: (DomBuilder t m, PostBuild t m)
   => [ChainId]
   -> Dynamic t (Map ChainId BlockHeaderTx)
-  -> Dynamic t (Maybe ChainId)
+  -> Dynamic t (Maybe BlockRef)
+  -> BlockHeight
   -> m ()
-chainweb chains cs hoveredBlock = do
-  svgElAttr "svg" ("viewBox" =: ("0 0 1100 " <> tshow (blockSeparation + 4)) <>
-                   "style" =: "vertical-align: middle;") $ do
-    forM_ chains (linksFromBlock cs hoveredBlock)
-    void $ networkView $ lastLinesForActiveBlock cs <$> hoveredBlock
+chainweb chains cs hoveredBlock bh = do
+  let mkAttrs bs hb = ("viewBox" =: ("0 0 1100 " <> tshow (blockSeparation + 4)) <>
+                      "style" =: "vertical-align: middle;")
+  svgElDynAttr "svg" (mkAttrs <$> cs <*> hoveredBlock) $ do
+    forM_ chains (\c -> linksFromBlock cs hoveredBlock (bh, c))
+    void $ networkView $ lastLinesForActiveBlock cs hoveredBlock bh <$> hoveredBlock
 
 lastLinesForActiveBlock
   :: (DomBuilder t m, PostBuild t m)
   => Dynamic t (Map ChainId BlockHeaderTx)
-  -> Maybe ChainId
+  -> Dynamic t (Maybe BlockRef)
+  -> BlockHeight
+  -> Maybe BlockRef
   -> m ()
-lastLinesForActiveBlock _ Nothing = blank
-lastLinesForActiveBlock cs mb@(Just b) = linksFromBlock cs (constDyn mb) b
+lastLinesForActiveBlock _ _ _ Nothing = blank
+lastLinesForActiveBlock cs hoveredBlock curBH mb@(Just b) =
+  if curBH > (fst b) then blank else linksFromBlock cs hoveredBlock b
 
 fromPos :: Int -> Int
 fromPos f = blockWidth `div` 2 + f * blockWidth
@@ -338,17 +357,26 @@ toPos t = blockWidth `div` 2 + t * blockWidth
 linksFromBlock
   :: (DomBuilder t m, PostBuild t m)
   => Dynamic t (Map ChainId BlockHeaderTx)
-  -> Dynamic t (Maybe ChainId)
-  -> ChainId
+  -> Dynamic t (Maybe BlockRef)
+  -> BlockRef
   -> m ()
-linksFromBlock cs hoveredBlock f@(ChainId from) = do
+linksFromBlock cs hoveredBlock fromBlock = do
+  let from = unChainId $ snd fromBlock
   let toBlocks = petersonGraph M.! from
-      mkAttrs bs hb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup f bs))
+      mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
         where
-          stroke = if hb == Just f
-                     then "stroke" =: "rgb(0,0,0)" <>
-                          "stroke-width" =: "1.0"
-                     else "stroke" =: "rgb(220,220,220)"
+          heightDiff b = fst b - fst fromBlock
+          stroke =
+            case mhb of
+              Nothing -> "stroke" =: "rgb(220,220,220)"
+              Just hb ->
+                if fst fromBlock > fst hb
+                  then "stroke" =: "rgb(220,220,220)"
+                  else if hb == fromBlock ||
+                          heightDiff hb > 0
+                         then "stroke" =: "rgb(100,100,100)" <>
+                              "stroke-width" =: "1.0"
+                         else "stroke" =: "rgb(220,220,220)"
   svgElDynAttr "g" (mkAttrs <$> cs <*> hoveredBlock) $ do
     linkFromTo from from
     mapM_ (linkFromTo from) toBlocks
@@ -359,6 +387,13 @@ linkFromTo f t =
                       "y1" =: "0" <>
                       "x2" =: (tshow $ toPos t) <>
                       "y2" =: (tshow (blockSeparation + 4)) ) blank
+
+type BlockRef = (BlockHeight, ChainId)
+
+isDownstreamFrom :: BlockRef -> BlockRef -> Bool
+isDownstreamFrom (ph, ChainId pc) (h, ChainId c)
+  | h > ph = False
+  | otherwise = shortestPath pc c <= ph - h
 
 petersonGraph :: M.Map Int [Int]
 petersonGraph = M.fromList
@@ -372,4 +407,21 @@ petersonGraph = M.fromList
     , (7, [2,6,8])
     , (8, [3,7,9])
     , (9, [4,8,5])
+    ]
+
+shortestPath :: Int -> Int -> Int
+shortestPath from to = shortestPaths M.! (from * 10 + to)
+
+shortestPaths :: M.Map Int Int
+shortestPaths = M.fromList $ zip [0..]
+    [ 0, 2, 1, 1, 2, 1, 2, 2, 2, 2
+    , 2, 0, 2, 1, 1, 2, 1, 2, 2, 2
+    , 1, 2, 0, 2, 1, 2, 2, 1, 2, 2
+    , 1, 1, 2, 0, 2, 2, 2, 2, 1, 2
+    , 2, 1, 1, 2, 0, 2, 2, 2, 2, 1
+    , 1, 2, 2, 2, 2, 0, 1, 2, 2, 1
+    , 2, 1, 2, 2, 2, 1, 0, 1, 2, 2
+    , 2, 2, 1, 2, 2, 2, 1, 0, 1, 2
+    , 2, 2, 2, 1, 2, 2, 2, 1, 0, 1
+    , 2, 2, 2, 2, 1, 1, 2, 2, 1, 0
     ]
