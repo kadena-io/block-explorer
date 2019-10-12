@@ -77,7 +77,7 @@ appWithServer
   -> Maybe ServerInfo
   -> m ()
 appWithServer _ _ Nothing = text "Loading server info..."
-appWithServer route ch (Just si) = runApp route ch si (chainScan ch)
+appWithServer route ch (Just si) = runApp route ch si mainApp
 
 getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
@@ -89,23 +89,9 @@ getServerInfo h = do
   ese <- cutToServerInfo <$$$> getCut (h <$ pb)
   holdDyn Nothing ese
 
-chainScan
-  :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
-  => ChainwebHost
-  -> RoutedT t (R FrontendRoute) m ()
-chainScan _ = do
-    mainApp
-    --dsi <- fmap join $ prerender (text "prerendering server info" >> return (constDyn Nothing)) $ getServerInfo ch
-    --void $ networkView (mainApp <$> dsi)
-
-
 mainApp
   :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
   => App (R FrontendRoute) t m ()
---  => Maybe ServerInfo
---  -> App (R FrontendRoute) t m ()
---mainApp Nothing = text "Loading server data..."
---mainApp (Just si) = do
 mainApp = do
     elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1127;") $ do
       subRoute_ $ \case
@@ -176,23 +162,19 @@ blockTableWidget
 blockTableWidget = do
   pb <- getPostBuild
   void $ prerender blank $ performEvent_ $ liftIO (putStrLn "In blockTableWidget") <$ pb
-  elAttr "table" ("id" =: "blockheaders" <>
-                  "class" =: "ui definition table" <>
-                  "style" =: "border-left: 0; border-right: 0; border-collapse: collapse;") $ do
-    el "thead" $ do
-      el "tr" $ do
-        el "th" $ text "Height"
-        chains <- asks (_siChains . _as_serverInfo)
-        --let sty = "width: " <> tshow blockWidth <> "px;"
-        forM_ chains $ \cid -> el "th" $
-          text $ "Chain " <> tshow cid
-    elClass "tbody" "chainwebtable" $ do
-      ti <- prerender (return $ constDyn dummy) $ do
-        t <- liftIO getCurrentTime
-        clockLossy 1 t
-      dbt <- asks _as_blockTable
-      _ <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt) (rowsWidget (join ti))
-      return ()
+  divClass "block-table" $ do
+    divClass "header-row" $ do
+      elClass "span" "table-header" $ text "Height"
+      chains <- asks (_siChains . _as_serverInfo)
+      forM_ chains $ \cid -> elClass "span" "table-header" $
+        text $ "Chain " <> tshow cid
+
+    ti <- prerender (return $ constDyn dummy) $ do
+      t <- liftIO getCurrentTime
+      clockLossy 1 t
+    dbt <- asks _as_blockTable
+    _ <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt) (rowsWidget (join ti))
+    return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
 
@@ -205,15 +187,8 @@ rowsWidget
 rowsWidget ti (Down bh) cs = do
   hoverChanges <- blockHeightRow ti bh cs
   hoveredBlock <- holdDyn Nothing hoverChanges
-  spacerRow hoveredBlock
-
---getRecentBlocks
---  :: (MonadAppIO r t m)
---  => m (Dynamic t (Remote BlockTable))
---getRecentBlocks = do
---  pb <- getPostBuild
---  es <- mapM (\c -> fmapMaybe id <$> getChainBlocks c) (map ChainId [0..9])
---  foldDyn ($) InFlight $ mappend . Landed 1 <$> leftmost es
+  chains <- asks (_siChains . _as_serverInfo)
+  spacerRow chains hoveredBlock
 
 blockHeightRow
   :: (MonadApp r t m, Prerender js t m)
@@ -222,12 +197,11 @@ blockHeightRow
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe ChainId))
 blockHeightRow ti height headers = do
-  elAttr "tr" ("style" =: "margin: 0;") $ do
-    el "td" $ text $ tshow height
+  divClass "block-row" $ do
+    elClass "span" "block-height" $ text $ tshow height
     chains <- asks (_siChains . _as_serverInfo)
     es <- forM chains $ \cid ->
       blockWidget0 ti height cid headers
-      --maybe (el "td" $ return never) (blockWidget ti) $ M.lookup cid <$> header
     return $ leftmost es
 
 blockWidget0
@@ -238,51 +212,51 @@ blockWidget0
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe ChainId))
 blockWidget0 ti _ cid hs = do
-  (e,_) <- elAttr' "td" ("class" =: "blocksummary"
-                      <> "style" =: ("width: " <> tshow blockWidth)) $ do
+  (e,_) <- elAttr' "span" ("class" =: "summary-details") $ do
     let mbh = M.lookup cid <$> hs
-    viewIntoMaybe mbh blank $ \bh -> do
-      divClass "summary-details" $ do
-        el "div" $ do
-          --elClass "span" "blockshape" $ text (tshow $ unChainId cid) --"Bk"
-          let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
-          elClass "span" "blockheight" $ elDynAttr "a" (mkUrl <$> bh) $
-            dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
-        --divClass "blockdiv" $ elAttr "a" ("href" =: ("chain/" <> tshow chainId <> "/blockHeight/" <> tshow blockHeight)) $
-        divClass "blockdiv" $ do --elAttr "a" ("href" =: ("/blockHash/" <> hashB64U hash)) $
-          dynText $ (<> " txs") . tshow . _blockHeaderTx_txCount <$> bh
-        let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
-        void $ prerender blank $ divClass "blockdiv" $
-          pastTimeWidget ti (Just . getCreationTime <$> bh)
+    viewIntoMaybe mbh blank $ \bh -> divClass "summary-inner" $ do
+      el "div" $ do
+        let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
+        elClass "span" "blockheight" $ elDynAttr "a" (mkUrl <$> bh) $
+          dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
+
+      let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
+      void $ prerender blank $ divClass "blockdiv" $
+        pastTimeWidget ti (Just . getCreationTime <$> bh)
+
+      divClass "blockdiv" $ do
+        dynText $ maybe "" (\c -> tshow c <> " txs") . _blockHeaderTx_txCount <$> bh
 
   return $ leftmost [Just cid <$ domEvent Mouseenter e, Nothing <$ domEvent Mouseleave e]
 
 pastTimeWidget
-  -- :: (DomBuilder t m, PostBuild t m, MonadHold t m, PerformEvent t m, TriggerEvent t m, MonadFix m, MonadIO m, MonadIO (Performable m))
   :: (DomBuilder t m, PostBuild t m)
   => Dynamic t TickInfo
   -> Dynamic t (Maybe UTCTime)
   -> m ()
 pastTimeWidget ti dt = do
-  --text $ T.pack $ formatTime defaultTimeLocale "%H:%M:%S" t
-  let calcDiff lastTick t = maybe "" (diffTimeToRelativeEnglish . diffUTCTime (_tickInfo_lastUTC lastTick)) t
+  let calcDiff lastTick t = maybe "" (diffTimeToSecsAgo . diffUTCTime (_tickInfo_lastUTC lastTick)) t
   dynText (calcDiff <$> ti <*> dt)
 
-diffTimeToRelativeEnglish :: NominalDiffTime -> Text
-diffTimeToRelativeEnglish delta
-  | delta < 5 = "Just now"
-  | delta < oneMinute * 2 = tshow (roundInt delta) <> " secs ago"
-  | delta < oneHour = tshow (roundInt $ delta / oneMinute) <> " min ago"
-  | delta < oneHour * 2 = "an hour ago"
-  | delta < oneDay = tshow (roundInt $ delta / oneHour) <> " hours ago"
-  | delta < oneDay * 2 = "1 day ago"
-  | delta < oneWeek = tshow (roundInt $ delta / oneDay) <> " days ago"
-  | delta < oneWeek * 2 = "1 week ago"
-  | delta < oneMonth = tshow (roundInt $ delta / oneWeek) <> " weeks ago"
-  | delta < oneMonth * 2 = "1 month ago"
-  | delta < oneYear = tshow (roundInt $ delta / oneMonth) <> " months ago"
-  | delta < oneYear * 2 = "a year ago"
-  | otherwise = tshow (roundInt $ delta / oneYear) <> " years ago"
+
+diffTimeToSecsAgo :: NominalDiffTime -> Text
+diffTimeToSecsAgo delta = tshow (roundInt delta) <> " secs ago"
+
+--diffTimeToRelativeEnglish :: NominalDiffTime -> Text
+--diffTimeToRelativeEnglish delta
+--  | delta < 5 = "Just now"
+--  | delta < oneMinute * 2 = tshow (roundInt delta) <> " secs ago"
+--  | delta < oneHour = tshow (roundInt $ delta / oneMinute) <> " min ago"
+--  | delta < oneHour * 2 = "an hour ago"
+--  | delta < oneDay = tshow (roundInt $ delta / oneHour) <> " hours ago"
+--  | delta < oneDay * 2 = "1 day ago"
+--  | delta < oneWeek = tshow (roundInt $ delta / oneDay) <> " days ago"
+--  | delta < oneWeek * 2 = "1 week ago"
+--  | delta < oneMonth = tshow (roundInt $ delta / oneWeek) <> " weeks ago"
+--  | delta < oneMonth * 2 = "1 month ago"
+--  | delta < oneYear = tshow (roundInt $ delta / oneMonth) <> " months ago"
+--  | delta < oneYear * 2 = "a year ago"
+--  | otherwise = tshow (roundInt $ delta / oneYear) <> " years ago"
 
 roundInt :: NominalDiffTime -> Int
 roundInt = round
@@ -307,15 +281,16 @@ blockSeparation :: Int
 blockSeparation = 50
 
 spacerRow
-  :: (MonadApp r t m)
-  => Dynamic t (Maybe ChainId)
+  :: (DomBuilder t m, PostBuild t m)
+  => [ChainId]
+  -> Dynamic t (Maybe ChainId)
   -> m ()
-spacerRow hoveredBlock = do
-  elAttr "tr" ("class" =: "spacer-row" <> "style" =: "transition: background 5s linear;") $ do
-    elClass "td" "emptyrowheader" $ text ""
-    let sty = "padding: 0; border-left: 0; height: " <> tshow blockSeparation <> "px"
-    elAttr "td" ("colspan" =: "10" <> "style" =: sty) $
-      chainweb hoveredBlock
+spacerRow chains hoveredBlock = do
+  let sty = "margin-left: 102px; height: " <> tshow blockSeparation <> "px; " <>
+            "border: 0; padding: 0;"
+  elAttr "div" ("class" =: "spacer-row" <>
+                "style" =: sty ) $ do
+    chainweb chains hoveredBlock
 
 svgElDynAttr
   :: (DomBuilder t m, PostBuild t m)
@@ -334,13 +309,13 @@ svgElAttr
 svgElAttr elTag attrs child = svgElDynAttr elTag (constDyn attrs) child
 
 chainweb
-  :: (MonadApp r t m)
-  => Dynamic t (Maybe ChainId)
+  :: (DomBuilder t m, PostBuild t m)
+  => [ChainId]
+  -> Dynamic t (Maybe ChainId)
   -> m ()
-chainweb hoveredBlock = do
-  svgElAttr "svg" ("viewBox" =: ("0 0 1100 " <> tshow blockSeparation) <>
+chainweb chains hoveredBlock = do
+  svgElAttr "svg" ("viewBox" =: ("0 0 1100 " <> tshow (blockSeparation + 4)) <>
                    "style" =: "vertical-align: middle;") $ do
-    chains <- asks (_siChains . _as_serverInfo)
     forM_ chains (linksFromBlock hoveredBlock)
     void $ networkView $ lastLinesForActiveBlock <$> hoveredBlock
 
@@ -374,7 +349,7 @@ linkFromTo f t =
     svgElAttr "line" ("x1" =: (tshow $ fromPos f) <>
                       "y1" =: "0" <>
                       "x2" =: (tshow $ toPos t) <>
-                      "y2" =: (tshow blockSeparation) ) blank
+                      "y2" =: (tshow (blockSeparation + 4)) ) blank
 
 petersonGraph :: M.Map Int [Int]
 petersonGraph = M.fromList

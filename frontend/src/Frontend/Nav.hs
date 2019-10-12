@@ -15,8 +15,10 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.Trans
 import           Data.Aeson
+import qualified Data.ByteString.Lazy as BL
 import           Data.Maybe
 import           GHC.Generics
+import           Obelisk.Configs
 import           Obelisk.Generated.Static
 import           Reflex.Dom
 ------------------------------------------------------------------------------
@@ -55,11 +57,14 @@ data NetworkState a where
 deriving instance Show (NetworkState a)
 
 nav
-  :: ( DomBuilder t m, PostBuild t m, Prerender js t m
-     , MonadHold t m , MonadFix m
-     )
+  :: (DomBuilder t m, MonadHold t m, HasConfigs m, PostBuild t m,
+      MonadFix m, Prerender js t m)
   => m (Dynamic t Network)
 nav = do
+  mnode <- getConfig "frontend/default-node"
+  let host = case decode . BL.fromStrict =<< mnode of
+               Nothing -> DevNet
+               Just n -> n
   divClass "ui container" $ do
     elAttr "a" ("class" =: "header item" <>
                 "href" =: "/" <>
@@ -73,29 +78,29 @@ nav = do
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Miners"
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Developers"
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Resources"
-      -- (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
-      --   dynText $ humanize <$> curNet
-      --   elClass "i" "dropdown icon" blank
-      --   let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
-      --   (dev,prod) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      --     d <- networkItem DevNet
-      --     p <- networkItem ProdNet
-      --     return (d,p)
-      --   let netChange = leftmost [prod, dev]
-      --   curNet <- fmap join $ prerender (return $ constDyn ProdNet) $ do
-      --     mLastNet <- getItemStorage browserStorage localStorage NetworkState_LastUsed
-      --     pb <- getPostBuild
-      --     performEvent_ (liftIO (print mLastNet) <$ pb)
-      --     performEvent_ $ setItemStorage browserStorage localStorage NetworkState_LastUsed <$> netChange
-      --     holdDyn (fromMaybe ProdNet mLastNet) netChange
-      --   return curNet
-      -- dropdownVisible <- holdDyn False $ leftmost
-      --   [ True <$ domEvent Mouseenter e
-      --   , False <$ domEvent Mouseleave e
-      --   , False <$ updated net
-      --   ]
-      -- return net
-      holdDyn DevNet never
+      (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
+        dynText $ humanize <$> curNet
+        elClass "i" "dropdown icon" blank
+        let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
+        (dev,prod) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
+          d <- networkItem DevNet
+          p <- networkItem ProdNet
+          return (d,p)
+        let netChange = leftmost [prod, dev]
+        curNet <- fmap join $ prerender (return $ constDyn ProdNet) $ do
+          mLastNet <- getItemStorage browserStorage localStorage NetworkState_LastUsed
+          pb <- getPostBuild
+          performEvent_ (liftIO (print mLastNet) <$ pb)
+          performEvent_ $ setItemStorage browserStorage localStorage NetworkState_LastUsed <$> netChange
+          holdDyn (fromMaybe ProdNet mLastNet) netChange
+        return curNet
+      dropdownVisible <- holdDyn False $ leftmost
+        [ True <$ domEvent Mouseenter e
+        , False <$ domEvent Mouseleave e
+        , False <$ updated net
+        ]
+      holdUniqDyn net
+
 
 networkItem
   :: (DomBuilder t1 m, Humanizable a,

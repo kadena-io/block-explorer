@@ -244,7 +244,7 @@ decodeXhr = eitherDecode . BL.fromStrict . T.encodeUtf8 <=<
 
 combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
 combineBlockTables bt Nothing = bt
-combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b 0 "" "")) bt0 $ rights $
+combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b Nothing Nothing Nothing)) bt0 $ rights $
   map (parseEither parseJSON) $ getItems v
 
 mkHeaderRequest :: ChainwebHost -> ServerInfo -> [XhrRequest ()]
@@ -277,17 +277,17 @@ hashB64U = T.decodeUtf8 . B64U.encode . unHash
 
 data BlockHeaderTx = BlockHeaderTx
   { _blockHeaderTx_header :: BlockHeader
-  , _blockHeaderTx_txCount :: Int
-  , _blockHeaderTx_powHash :: Text
-  , _blockHeaderTx_target :: Text
+  , _blockHeaderTx_txCount :: Maybe Int
+  , _blockHeaderTx_powHash :: Maybe Text
+  , _blockHeaderTx_target :: Maybe Text
   } deriving (Eq,Ord,Show)
 
 instance FromJSON BlockHeaderTx where
   parseJSON = withObject "BlockHeaderTx" $ \o -> BlockHeaderTx
     <$> o .: "header"
     <*> o .: "txCount"
-    <*> o .: "powHash"
-    <*> o .: "target"
+    <*> o .:? "powHash"
+    <*> o .:? "target"
 
 data BlockHeader = BlockHeader
   { _blockHeader_creationTime :: POSIXTime

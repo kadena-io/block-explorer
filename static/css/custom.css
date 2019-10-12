@@ -17,7 +17,7 @@ table#blockheaders th {
     text-align: center;
 }
 
-tbody.chainwebtable tr:last-child {
+div.block-table div.spacer-row:last-child {
     display: none;
 }
 
@@ -25,15 +25,69 @@ td {
     vertical-align: middle;
 }
 
-td.blocksummary {
-    /*padding-top: 0;*/
-    border-left: 1px solid rgba(34,36,38,.1);
-    border-right: 1px solid rgba(34,36,38,.1);
-    padding: 0!important;
+div.header-row {
+    border-top: 1px solid rgba(34, 36, 38, 0.1);
+    border-bottom: 1px solid rgba(34, 36, 38, 0.1);
+    border-left: 1px solid rgba(34, 36, 38, 0.1);
+    border-right: 1px solid rgba(34, 36, 38, 0.1);
+    display: flex;
 }
 
-div.summary-details {
-    padding: 0.8em 0.8em;
+div.block-row {
+    border-top: 1px solid rgba(34, 36, 38, 0.1);
+    border-bottom: 1px solid rgba(34, 36, 38, 0.1);
+    border-left: 1px solid rgba(34, 36, 38, 0.1);
+    border-right: 1px solid rgba(34, 36, 38, 0.1);
+    display: flex;
+    animation-name: row-slide-in;
+    animation-duration: 2s;
+    overflow-y: hidden;
+}
+
+@keyframes row-slide-in {
+    0% { max-height: 0; }
+    100% { max-height: 200px; }
+}
+
+div.block-row:last-child {
+    border-bottom: 1px solid rgba(34, 36, 38, 0.1);
+}
+
+span.block-height {
+    display: flex;
+    justify-content: center;
+    align-content: center;
+    flex-direction: column;
+
+    width: 102px;
+    padding: 5px;
+    background: rgba(0,0,0,.03);
+    font-weight: bold;
+}
+
+span.table-header {
+    display: flex;
+    justify-content: center;
+    align-content: center;
+    flex-direction: column;
+
+    width: 102px;
+    border-left: 1px solid rgba(34, 36, 38, 0.1);
+    padding: 5px;
+    font-weight: bold;
+    text-align: center;
+}
+
+span.summary-details {
+    display: inline-block;
+    width: 102px;
+    border-left: 1px solid rgba(34, 36, 38, 0.1);
+    padding: 0;
+    margin: 0;
+}
+
+div.summary-inner {
+    padding: 5px;
     animation-name: my-block-fade-in;
     animation-duration: 1.5s;
     animation-timing-function: ease-in-out;
@@ -47,12 +101,4 @@ div.summary-details {
 .blockshape {
     background: #e0e1e2 none;
     padding: 5px;
-}
-
-.blockdiv {
-    padding-top: 5px;
-}
-
-td.emptyrowheader {
-    background: white!important;
 }
