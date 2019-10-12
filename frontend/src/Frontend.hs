@@ -105,7 +105,7 @@ footer
   => m ()
 footer = do
     divClass "ui inverted vertical footer segment" $ do
-      el "div" $
+      elAttr "div" ("style" =: "padding-bottom: 50px;") $
         elAttr "img" ("src" =: static @"kadena-full-logo.png" <>
                     "class" =: "ui centered small image" <>
                     "alt" =: "Kadena" ) blank
