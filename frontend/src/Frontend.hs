@@ -188,7 +188,7 @@ rowsWidget ti (Down bh) cs = do
   hoverChanges <- blockHeightRow ti bh cs
   hoveredBlock <- holdDyn Nothing hoverChanges
   chains <- asks (_siChains . _as_serverInfo)
-  spacerRow chains hoveredBlock
+  spacerRow chains cs hoveredBlock
 
 blockHeightRow
   :: (MonadApp r t m, Prerender js t m)
@@ -283,14 +283,15 @@ blockSeparation = 50
 spacerRow
   :: (DomBuilder t m, PostBuild t m)
   => [ChainId]
+  -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe ChainId)
   -> m ()
-spacerRow chains hoveredBlock = do
+spacerRow chains cs hoveredBlock = do
   let sty = "margin-left: 102px; height: " <> tshow blockSeparation <> "px; " <>
             "border: 0; padding: 0;"
   elAttr "div" ("class" =: "spacer-row" <>
                 "style" =: sty ) $ do
-    chainweb chains hoveredBlock
+    chainweb chains cs hoveredBlock
 
 svgElDynAttr
   :: (DomBuilder t m, PostBuild t m)
@@ -311,17 +312,22 @@ svgElAttr elTag attrs child = svgElDynAttr elTag (constDyn attrs) child
 chainweb
   :: (DomBuilder t m, PostBuild t m)
   => [ChainId]
+  -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe ChainId)
   -> m ()
-chainweb chains hoveredBlock = do
+chainweb chains cs hoveredBlock = do
   svgElAttr "svg" ("viewBox" =: ("0 0 1100 " <> tshow (blockSeparation + 4)) <>
                    "style" =: "vertical-align: middle;") $ do
-    forM_ chains (linksFromBlock hoveredBlock)
-    void $ networkView $ lastLinesForActiveBlock <$> hoveredBlock
+    forM_ chains (linksFromBlock cs hoveredBlock)
+    void $ networkView $ lastLinesForActiveBlock cs <$> hoveredBlock
 
-lastLinesForActiveBlock :: (DomBuilder t m, PostBuild t m) => Maybe ChainId -> m ()
-lastLinesForActiveBlock Nothing = blank
-lastLinesForActiveBlock mb@(Just b) = linksFromBlock (constDyn mb) b
+lastLinesForActiveBlock
+  :: (DomBuilder t m, PostBuild t m)
+  => Dynamic t (Map ChainId BlockHeaderTx)
+  -> Maybe ChainId
+  -> m ()
+lastLinesForActiveBlock _ Nothing = blank
+lastLinesForActiveBlock cs mb@(Just b) = linksFromBlock cs (constDyn mb) b
 
 fromPos :: Int -> Int
 fromPos f = blockWidth `div` 2 + f * blockWidth
@@ -331,16 +337,19 @@ toPos t = blockWidth `div` 2 + t * blockWidth
 
 linksFromBlock
   :: (DomBuilder t m, PostBuild t m)
-  => Dynamic t (Maybe ChainId)
+  => Dynamic t (Map ChainId BlockHeaderTx)
+  -> Dynamic t (Maybe ChainId)
   -> ChainId
   -> m ()
-linksFromBlock hoveredBlock f@(ChainId from) = do
+linksFromBlock cs hoveredBlock f@(ChainId from) = do
   let toBlocks = petersonGraph M.! from
-      mkAttrs hb = if hb == Just f
+      mkAttrs bs hb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup f bs))
+        where
+          stroke = if hb == Just f
                      then "stroke" =: "rgb(0,0,0)" <>
                           "stroke-width" =: "1.0"
                      else "stroke" =: "rgb(220,220,220)"
-  svgElDynAttr "g" (mkAttrs <$> hoveredBlock) $ do
+  svgElDynAttr "g" (mkAttrs <$> cs <*> hoveredBlock) $ do
     linkFromTo from from
     mapM_ (linkFromTo from) toBlocks
 
