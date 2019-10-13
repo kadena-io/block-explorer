@@ -1,3 +1,6 @@
+# NOTE: If obelisk is bumped, we may need to remove the below jsaddle-dom
+# patch.
+
 { obelisk ? import ./.obelisk/impl {
     system = builtins.currentSystem;
     iosSdkVersion = "10.2";
