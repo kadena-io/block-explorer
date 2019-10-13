@@ -72,7 +72,8 @@ appWithServer
       Prerender js t m, PostBuild t m, MonadJSM (Performable m),
       HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m,
       RouteToUrl (R FrontendRoute) (Client m), MonadRef m, MonadSample t (Performable m),
-      SetRoute t (R FrontendRoute) (Client m))
+      SetRoute t (R FrontendRoute) (Client m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Text
   -> ChainwebHost
   -> Maybe ServerInfo
@@ -91,7 +92,8 @@ getServerInfo h = do
   holdDyn Nothing ese
 
 mainApp
-  :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => App (R FrontendRoute) t m ()
 mainApp = do
     elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
@@ -158,7 +160,8 @@ showResp :: Maybe Value -> String
 showResp = show
 
 blockTableWidget
-  :: (MonadApp r t m, Prerender js t m)
+  :: (MonadApp r t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => App r t m ()
 blockTableWidget = do
   pb <- getPostBuild
@@ -182,7 +185,8 @@ blockTableWidget = do
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
 
 rowsWidget
-  :: (MonadApp r t m, Prerender js t m)
+  :: (MonadApp r t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> Dynamic t (Maybe BlockRef)
   -> Down BlockHeight
@@ -195,7 +199,8 @@ rowsWidget ti hoveredBlock (Down bh) cs = mdo
   return hoverChanges
 
 blockHeightRow
-  :: (MonadApp r t m, Prerender js t m)
+  :: (MonadApp r t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> Dynamic t (Maybe BlockRef)
   -> BlockHeight
@@ -209,7 +214,8 @@ blockHeightRow ti hoveredBlock height headers = do
     return $ (height,) <$$> leftmost es
 
 blockWidget0
-  :: (MonadApp r t m, Prerender js t m)
+  :: (MonadApp r t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> Dynamic t (Maybe BlockRef)
   -> Dynamic t (Map ChainId BlockHeaderTx)
@@ -227,9 +233,11 @@ blockWidget0 ti hoveredBlock hs height cid = do
     viewIntoMaybe mbh blank $ \bh -> do
       divClass "summary-inner" $ do
         el "div" $ do
-          let mkUrl h = "href" =: ("/block/" <> tshow cid <> "/" <> hashB64U (_blockHeader_hash $ _blockHeaderTx_header h))
-          elClass "span" "blockheight" $ elDynAttr "a" (mkUrl <$> bh) $
-            dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
+          let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
+          let mkRoute h = (FR_Block :/ (unChainId cid, getHash h, Block_Header :/ ()))
+          elClass "span" "blockheight" $ do
+            dynRouteLink (mkRoute <$> bh) $
+              dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 
         let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
         void $ prerender blank $ divClass "blockdiv" $

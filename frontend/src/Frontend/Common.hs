@@ -9,11 +9,15 @@
 module Frontend.Common where
 
 ------------------------------------------------------------------------------
+import           Control.Lens
 import           Control.Monad.Fix
 import           Data.Maybe
+import           Data.Proxy
 import           Data.Text (Text)
 import           Reflex.Dom
 import           Reflex.Network
+import           Obelisk.Route
+import           Obelisk.Route.Frontend
 ------------------------------------------------------------------------------
 
 
@@ -37,24 +41,6 @@ tfield :: DomBuilder t m => Text -> m a -> m a
 tfield nm v = el "tr" $ do
   el "td" $ text nm
   el "td" v
-
-------------------------------------------------------------------------------
---internalLink
---  :: forall r t m a.
---     (Monad m, DomSpace (DomBuilderSpace m), RouteToUrl r m, SetRoute t r m)
---  => r
---  -> (ElementConfig EventResult t (DomBuilderSpace m) ->
---      m (Element EventResult (DomBuilderSpace m) t, a))
---  -- ^ Probably a call to Reflex.Dom.element
---  -> m ()
---internalLink r wrapper = do
---    enc <- askRouteToUrl
---    let cfg = (def :: ElementConfig EventResult t (DomBuilderSpace m))
---          & elementConfig_eventSpec %~ addEventSpecFlags (Proxy :: Proxy (DomBuilderSpace m)) Click (\_ -> preventDefault)
---          & elementConfig_initialAttributes .~ "href" =: enc r
---    (e, _) <- wrapper cfg
---    setRoute $ r <$ domEvent Click e
-
 
 viewIntoMaybe
     :: (DomBuilder t m, PostBuild t m, MonadHold t m, MonadFix m)

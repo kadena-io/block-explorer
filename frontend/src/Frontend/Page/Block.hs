@@ -34,14 +34,16 @@ import           Frontend.Page.Transaction
 
 
 blockPage
-  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m))
+  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => App (Int, Text, R BlockRoute) t m ()
 blockPage = do
     args <- askRoute
     void $ networkView (blockWidget <$> args)
 
 blockWidget
-  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => (Int, Text, R BlockRoute)
   -> m ()
 blockWidget (cid, hash, r) = do
@@ -52,16 +54,18 @@ blockWidget (cid, hash, r) = do
   void $ networkHold (text "Block does not exist") (blockPageNoPayload h c r <$> fmapMaybe id ebh)
 
 blockLink
-  :: (MonadApp r t m)
+  :: (MonadApp r t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => ChainId
   -> Hash
   -> m ()
 blockLink chainId hash =
-  elAttr "a" ("href" =: ("/block/" <> tshow chainId <> "/" <> hashB64U hash)) $ text $ hashHex hash
+  routeLink (FR_Block :/ (unChainId chainId, hashB64U hash, Block_Header :/ ())) $ text $ hashHex hash
 
 
 blockPageNoPayload
-  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => ChainwebHost
   -> ChainId
   -> R BlockRoute
@@ -78,7 +82,8 @@ blockPageNoPayload h c r bh = do
 
 
 blockHeaderPage
-  :: (MonadApp r t m)
+  :: (MonadApp r t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => ChainwebHost
   -> ChainId
   -> BlockHeader
@@ -111,7 +116,8 @@ blockHeaderPage _ c bh bp = do
           blockLink cid nh
 
 blockPayloadWidget
-  :: (MonadApp r t m)
+  :: (MonadApp r t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => ChainId
   -> BlockHeader
   -> BlockPayload
@@ -127,7 +133,7 @@ blockPayloadWidget c bh bp = do
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
         tfield "Outputs Hash" $ text $ hashB64U $ _blockPayload_outputsHash bp
         tfield "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp
-        let hash = hashB64U $ _blockHeader_hash bh
+        let rawHash = _blockHeader_hash bh
+        let hash = hashB64U rawHash
         tfield "Transactions" $
-          elAttr "a" ("href" =: ("/block/" <> tshow c <> "/" <> hash <> "/txs")) $
-            text $ (\ts -> tshow (length ts) <> " transactions") $ _blockPayload_transactions bp
+          routeLink (FR_Block :/ (unChainId c, hash, Block_Transactions :/ ())) $ text $ hashHex rawHash
