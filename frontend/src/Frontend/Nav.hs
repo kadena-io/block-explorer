@@ -63,7 +63,7 @@ nav
 nav = do
   mnode <- getConfig "frontend/default-node"
   let host = case decode . BL.fromStrict =<< mnode of
-               Nothing -> DevNet
+               Nothing -> ProdNet
                Just n -> n
   divClass "ui container" $ do
     elAttr "a" ("class" =: "header item" <>
