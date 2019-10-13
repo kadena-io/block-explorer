@@ -58,10 +58,9 @@ appWithNetwork
       RouteToUrl (R FrontendRoute) (Client (Client m)),
       DomBuilder t m, Prerender js t m)
   => Text
-  -> Maybe Network
+  -> Network
   -> m ()
-appWithNetwork route Nothing = text "No network selected"
-appWithNetwork route (Just curNet) = do
+appWithNetwork route curNet = do
   let ch = networkHost curNet
   _ <- prerender blank $ do
     dsi <- getServerInfo ch
