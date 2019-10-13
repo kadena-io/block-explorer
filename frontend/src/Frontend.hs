@@ -252,7 +252,7 @@ pastTimeWidget ti dt = do
 
 
 diffTimeToSecsAgo :: NominalDiffTime -> Text
-diffTimeToSecsAgo delta = tshow (roundInt delta) <> " secs ago"
+diffTimeToSecsAgo delta = tshow (roundInt delta) <> "s ago"
 
 --diffTimeToRelativeEnglish :: NominalDiffTime -> Text
 --diffTimeToRelativeEnglish delta
