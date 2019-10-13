@@ -38,7 +38,9 @@ library
     , time
     , transformers
     , unordered-containers
+    , vector
   exposed-modules:
+    Blake2Native
     Frontend
     Frontend.App
     Frontend.AppState

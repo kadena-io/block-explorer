@@ -9,6 +9,7 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad
+import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
@@ -218,11 +219,20 @@ getBlockHeader
   => ChainwebHost
   -> ChainId
   -> Text
-  -> m (Event t (Maybe BlockHeader))
+  -> m (Event t (Maybe (BlockHeader, Text)))
 getBlockHeader h c blockHash = do
   pb <- getPostBuild
-  resp <- performRequestAsync $ mkSingleHeaderRequest h c blockHash <$ pb
-  return (decodeXhrResponse <$> resp)
+  --performEvent_ $ (\a -> liftIO $ putStrLn ("getBlockHeader: " <> show a)) <$> pb
+  let reqs = [ mkSingleHeaderRequest h c blockHash
+             , mkSingleHeaderRequestBinary h c blockHash
+             ]
+  resp <- performRequestsAsync $ reqs <$ pb
+  --performEvent_ $ (\a -> liftIO $ putStrLn ("getBlockHeader returned: " <> show (_xhrResponse_responseText a))) <$> resp
+  let decodeResults [bh, bhBin] = do
+        h <- decodeXhrResponse bh
+        hBin <- decodeXhrResponse bhBin
+        return (h, hBin)
+  return (decodeResults <$> resp)
 
 getBlockPayload
   :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
@@ -232,7 +242,7 @@ getBlockPayload
   -> m (Event t (Either String BlockPayload))
 getBlockPayload h c payloadHash = do
     pb <- getPostBuild
-    resp <- performRequestAsync $ req <$ pb
+    resp <- performRequestAsync $ req <$ traceEvent "Getting block payload..." pb
     return (decodeXhr <$> resp)
   where
     req = XhrRequest "GET" (payloadUrl h c payloadHash)
@@ -259,6 +269,11 @@ mkSingleHeaderRequest :: ChainwebHost -> ChainId -> Text -> XhrRequest ()
 mkSingleHeaderRequest h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
+
+mkSingleHeaderRequestBinary :: ChainwebHost -> ChainId -> Text -> XhrRequest ()
+mkSingleHeaderRequestBinary h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
+  where
+    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json" }
 
 newtype Hash = Hash { unHash :: ByteString }
   deriving (Eq,Ord,Show,Read)

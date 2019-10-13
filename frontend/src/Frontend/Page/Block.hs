@@ -13,9 +13,13 @@ module Frontend.Page.Block where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Base16 as B16
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Route
@@ -23,6 +27,7 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 ------------------------------------------------------------------------------
+import           Blake2Native
 import           Common.Route
 import           Common.Utils
 import           Frontend.App
@@ -69,7 +74,7 @@ blockPageNoPayload
   => ChainwebHost
   -> ChainId
   -> R BlockRoute
-  -> BlockHeader
+  -> (BlockHeader, Text)
   -> m ()
 blockPageNoPayload h c r bh = do
   let choose ep = case ep of
@@ -77,7 +82,7 @@ blockPageNoPayload h c r bh = do
         Right payload -> case r of
           Block_Header :/ _ -> blockHeaderPage h c bh payload
           Block_Transactions :/ _ -> transactionPage payload
-  pEvt <- getBlockPayload h c (_blockHeader_payloadHash bh)
+  pEvt <- getBlockPayload h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (text "Retrieving payload...") (choose <$> pEvt)
 
 
@@ -86,10 +91,10 @@ blockHeaderPage
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => ChainwebHost
   -> ChainId
-  -> BlockHeader
+  -> (BlockHeader, Text)
   -> BlockPayload
   -> m ()
-blockHeaderPage _ c bh bp = do
+blockHeaderPage _ c (bh, bhBinBase64) bp = do
     el "h2" $ text "Block Header"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
@@ -97,6 +102,7 @@ blockHeaderPage _ c bh bp = do
         tfield "Chain" $ text $ tshow $ _blockHeader_chainId bh
         tfield "Block Height" $ text $ tshow $ _blockHeader_height bh
         tfield "Parent" $ parent $ _blockHeader_parent bh
+        tfield "POW Hash" $ text $ either (const "") id (calcPowHash =<< decodeB64UrlNoPaddingText bhBinBase64)
         tfield "Hash" $ text $ hashHex $ _blockHeader_hash bh
         tfield "Weight" $ text $ _blockHeader_weight bh
         tfield "Epoch Start" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_epochStart bh
@@ -114,6 +120,11 @@ blockHeaderPage _ c bh bp = do
         el "div" $ do
           text $ "Chain " <> tshow cid <> ": "
           blockLink cid nh
+
+calcPowHash :: ByteString -> Either String Text
+calcPowHash bs = do
+  hash <- blake2s 32 "" $ B.take (B.length bs - 32) bs
+  return $ T.decodeUtf8 $ B16.encode $ B.reverse hash
 
 blockPayloadWidget
   :: (MonadApp r t m,
