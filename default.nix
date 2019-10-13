@@ -28,6 +28,11 @@ project ./. ({ pkgs, hackGet, ... }: {
         ver = "0.1.1";
         sha256 = "0ddr9ksqkl9ncvih54yzr3p6rs08r5wk0yf7aj3ijlk30dg7sdwf";
       }));
+      jsaddle-dom = overrideCabal super.jsaddle-dom (drv: {
+        preConfigure = (drv.preConfigure or "") + ''
+          sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
+        '';
+      });
   };
 
   packages = {
