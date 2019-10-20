@@ -37,9 +37,11 @@ import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex
 import           Reflex.Dom
 import           Reflex.Dom.EventSource
+import           Reflex.Network
 ------------------------------------------------------------------------------
 import           Common.Utils
 import           Frontend.ChainwebApi
+import           Frontend.Common
 ------------------------------------------------------------------------------
 
 -- TODO Move into common later
@@ -76,7 +78,7 @@ triggerBatch l e = tellEvent $ (\as -> set l as mempty) <$> e
 
 data HashrateData = HashrateData
     { _hd_deltaT :: NominalDiffTime
-    , _hd_impliedDiff :: Integer
+    , _hd_difficulty :: Integer
     } deriving (Eq,Ord,Show)
 
 data GlobalStats = GlobalStats
@@ -92,7 +94,7 @@ calcNetworkHashrate :: GlobalStats -> Maybe Double
 calcNetworkHashrate gs =
     if null hrs
       then Nothing
-      else Just (sum hrs / fromIntegral (length hrs))
+      else Just (10 * sum hrs / fromIntegral (length hrs))
   where
     hrs = map calcHashrate $ M.elems (_gs_hashrates gs)
 
@@ -103,7 +105,10 @@ getNewHashrateData
 getNewHashrateData bt bhtx = do
     bhtxPrev <- note "Error getting previous block" $ getBlock height cid bt
     powHash <- note "Error getting powHash" $ _blockHeaderTx_powHash bhtx
-    let difficulty = targetToDifficulty $ leToInteger $ fst $ B16.decode $ encodeUtf8 powHash
+
+    -- We calculate difficulty based on the target because this results
+    -- in a smoother aggregate difficulty / hashrate estimate.
+    let difficulty = targetToDifficulty $ leToInteger $ unBytesLE $ _blockHeader_target $ _blockHeaderTx_header bhtx
     let hrd = HashrateData (delta bhtxPrev bhtx) difficulty
     return (cid, hrd)
   where
@@ -134,9 +139,8 @@ data AppState t = AppState
     } deriving Generic
 
 getMissing :: BlockTable -> BlockHeaderTx -> [(ChainId, Hash)]
-getMissing bt bhtx = catMaybes $ map (\p -> p <$ getBlock (height-1) (fst p) bt) cids
+getMissing bt bhtx = filter (\p -> getBlock (height-1) (fst p) bt == Nothing) cids
   where
-    --getPair b = (_blockHeader_chainId $ _blockHeaderTx_header b, _blockHeader_hash $ _blockHeaderTx_header b)
     h = _blockHeaderTx_header bhtx
     height = _blockHeader_height h
     cids = (_blockHeader_chainId h, _blockHeader_parent h) :
@@ -161,15 +165,18 @@ stateManager _ h si _ = do
 
     ebt <- getBlockTable h si
 
-    blockTable <- foldDyn ($) mempty $ leftmost
-      [ (<>) <$> ebt
-      , (\mbtx bt -> maybe bt (insertBlockTable bt) mbtx) <$> downEvent
-      ]
+    rec blockTable <- foldDyn ($) mempty $ mergeWith (.)
+          [ (<>) <$> ebt
+          , (\mbtx bt -> maybe bt (insertBlockTable bt) mbtx) <$> downEvent
+          , (\pair bt -> maybe bt (insertBlockTable bt . pairToBhtx) pair) <$> newMissing
+          ]
 
-    -- TODO WIP to avoid missing blocks
-    --let missingBlocks = ffilter (not . null) $ attachWith getMissing (current blockTable) (fmapMaybe id downEvent)
-    --    blockGetter (cid, hash) = getBlockHeader h cid (hashB64U hash)
-    --performEvent (sequence . fmap (\(cid,hash) -> getBlockHeader h cid (hashB64U hash)) <$> missingBlocks)
+        -- TODO WIP to avoid missing blocks
+        let missingBlocks = traceEvent "missing blocks" $ getMissingBlocks blockTable downEvent
+            getHeader (cid,hash) = getBlockHeader h cid (hashB64U hash)
+            eme = sequence . fmap getHeader <$> missingBlocks
+        ee <- networkHold (return []) eme
+        let newMissing = switch (current (leftmost <$> ee))
 
 
     let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
@@ -185,6 +192,20 @@ stateManager _ h si _ = do
     return $ AppState h si blockTable stats
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
+
+pairToBhtx :: (BlockHeader, Text) -> BlockHeaderTx
+pairToBhtx (h, bhBinBase64) =
+    BlockHeaderTx h Nothing mPowHash Nothing
+  where
+    mPowHash = either (const Nothing) Just (calcPowHash =<< decodeB64UrlNoPaddingText bhBinBase64)
+
+getMissingBlocks
+  :: Reflex t
+  => Dynamic t BlockTable
+  -> Event t (Maybe BlockHeaderTx)
+  -> Event t [(ChainId, Hash)]
+getMissingBlocks blockTable downEvent = ffilter (not . null) $
+  attachWith getMissing (current blockTable) (fmapMaybe id downEvent)
 
 startEventSource
   :: (DomBuilder t m, Prerender js t m)

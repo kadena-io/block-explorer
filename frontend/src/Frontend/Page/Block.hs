@@ -27,7 +27,6 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 ------------------------------------------------------------------------------
-import           Blake2Native
 import           Common.Route
 import           Common.Utils
 import           Frontend.App
@@ -120,11 +119,6 @@ blockHeaderPage _ c (bh, bhBinBase64) bp = do
         el "div" $ do
           text $ "Chain " <> tshow cid <> ": "
           blockLink cid nh
-
-calcPowHash :: ByteString -> Either String Text
-calcPowHash bs = do
-  hash <- blake2s 32 "" $ B.take (B.length bs - 32) bs
-  return $ T.decodeUtf8 $ B16.encode $ B.reverse hash
 
 blockPayloadWidget
   :: (MonadApp r t m,
