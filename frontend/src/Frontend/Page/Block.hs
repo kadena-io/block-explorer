@@ -103,13 +103,13 @@ blockHeaderPage _ c (bh, bhBinBase64) bp = do
         tfield "Block Height" $ text $ tshow $ _blockHeader_height bh
         tfield "Parent" $ parent $ _blockHeader_parent bh
         tfield "POW Hash" $ text $ either (const "") id (calcPowHash =<< decodeB64UrlNoPaddingText bhBinBase64)
+        tfield "Target" $ text $ hexBytesLE $ _blockHeader_target bh
         tfield "Hash" $ text $ hashHex $ _blockHeader_hash bh
-        tfield "Weight" $ text $ _blockHeader_weight bh
+        tfield "Weight" $ text $ hexBytesLE $ _blockHeader_weight bh
         tfield "Epoch Start" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_epochStart bh
         tfield "Neighbors" $ neighbors $ _blockHeader_neighbors bh
         tfield "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash bh
         tfield "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
-        tfield "Target" $ text $ _blockHeader_target bh
         tfield "Nonce" $ text $ _blockHeader_nonce bh
         return ()
     blockPayloadWidget c bh bp

@@ -9,11 +9,11 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad
-import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64.URL as B64U
 import qualified Data.ByteString.Lazy as BL
@@ -220,19 +220,21 @@ getBlockHeader
   -> ChainId
   -> Text
   -> m (Event t (Maybe (BlockHeader, Text)))
+  -- ^ Returns the block header and the base64url-encoded binary serialization
 getBlockHeader h c blockHash = do
   pb <- getPostBuild
-  --performEvent_ $ (\a -> liftIO $ putStrLn ("getBlockHeader: " <> show a)) <$> pb
   let reqs = [ mkSingleHeaderRequest h c blockHash
              , mkSingleHeaderRequestBinary h c blockHash
              ]
   resp <- performRequestsAsync $ reqs <$ pb
-  --performEvent_ $ (\a -> liftIO $ putStrLn ("getBlockHeader returned: " <> show (_xhrResponse_responseText a))) <$> resp
-  let decodeResults [bh, bhBin] = do
-        h <- decodeXhrResponse bh
-        hBin <- decodeXhrResponse bhBin
-        return (h, hBin)
   return (decodeResults <$> resp)
+
+decodeResults :: [XhrResponse] -> Maybe (BlockHeader, Text)
+decodeResults [bh, bhBin] = do
+  h <- decodeXhrResponse bh
+  hBin <- decodeXhrResponse bhBin
+  return (h, hBin)
+decodeResults _ = Nothing
 
 getBlockPayload
   :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
@@ -242,7 +244,7 @@ getBlockPayload
   -> m (Event t (Either String BlockPayload))
 getBlockPayload h c payloadHash = do
     pb <- getPostBuild
-    resp <- performRequestAsync $ req <$ traceEvent "Getting block payload..." pb
+    resp <- performRequestAsync $ req <$ pb
     return (decodeXhr <$> resp)
   where
     req = XhrRequest "GET" (payloadUrl h c payloadHash)
@@ -304,20 +306,41 @@ instance FromJSON BlockHeaderTx where
     <*> o .:? "powHash"
     <*> o .:? "target"
 
+newtype BytesLE = BytesLE
+  { unBytesLE :: ByteString
+  } deriving (Eq,Ord,Show)
+
+hexBytesLE :: BytesLE -> Text
+hexBytesLE = T.decodeUtf8 . B16.encode . unBytesLE
+
+leToInteger :: ByteString -> Integer
+leToInteger bs = B.foldl' (\a b -> a * 256 + fromIntegral b) 0 bs
+
+instance FromJSON BytesLE where
+  parseJSON = withText "BytesLE" $
+    either fail (return . BytesLE . B.reverse) . decodeB64UrlNoPaddingText
+
 data BlockHeader = BlockHeader
   { _blockHeader_creationTime :: POSIXTime
   , _blockHeader_parent :: Hash
   , _blockHeader_height :: BlockHeight
   , _blockHeader_hash :: Hash
   , _blockHeader_chainId :: ChainId
-  , _blockHeader_weight :: Text
+  , _blockHeader_weight :: BytesLE
   , _blockHeader_epochStart :: POSIXTime
   , _blockHeader_neighbors :: Map ChainId Hash
   , _blockHeader_payloadHash :: Hash
   , _blockHeader_chainwebVer :: Text
-  , _blockHeader_target :: Text
+  , _blockHeader_target :: BytesLE
   , _blockHeader_nonce :: Text
   } deriving (Eq,Ord,Show)
+
+blockDifficulty :: BlockHeader -> Double
+blockDifficulty =
+  fromIntegral . targetToDifficulty . leToInteger . unBytesLE . _blockHeader_target
+
+targetToDifficulty :: Integer -> Integer
+targetToDifficulty target = (2 ^ (256 :: Int) - 1) `div` target
 
 instance FromJSON BlockHeader where
   parseJSON = withObject "BlockHeader" $ \o -> BlockHeader
@@ -336,27 +359,35 @@ instance FromJSON BlockHeader where
 
 data BlockTable = BlockTable
   { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
+  , _blockTable_cut :: Map ChainId BlockHeaderTx
   } deriving (Eq,Ord)
 
 instance Show BlockTable where
-  show (BlockTable bs) = unlines $ map show $ M.keys bs
+  show (BlockTable bs _) = unlines $ map show $ M.keys bs
 
 instance Semigroup BlockTable where
-  (BlockTable b1) <> (BlockTable b2) = BlockTable (M.unionWith M.union b1 b2)
+  (BlockTable b1 c1) <> (BlockTable b2 c2) =
+      BlockTable (M.unionWith M.union b1 b2) (M.unionWith f c1 c2)
+    where
+      height = _blockHeader_height . _blockHeaderTx_header
+      f bh1 bh2 = if height bh1 > height bh2 then bh1 else bh2
 
 instance Monoid BlockTable where
-  mempty = BlockTable mempty
+  mempty = BlockTable mempty mempty
 
 blockTableNumRows :: Int
 blockTableNumRows = 6
 
 insertBlockTable :: BlockTable -> BlockHeaderTx -> BlockTable
-insertBlockTable (BlockTable bs) btx = BlockTable bs2
+insertBlockTable (BlockTable bs cut) btx = BlockTable bs2 cut2
   where
     b = _blockHeaderTx_header btx
     h = _blockHeader_height b
     c = _blockHeader_chainId b
     bs2 = M.delete (h - blockTableNumRows) $ M.alter f h bs
+    cut2 = M.insertWith g c btx cut
+    height = _blockHeader_height . _blockHeaderTx_header
+    g b1 b2 = if height b1 > height b2 then b1 else b2
 
     f Nothing = Just $ M.singleton c btx
     f (Just m) = Just $ M.insert c btx m

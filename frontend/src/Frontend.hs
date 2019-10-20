@@ -30,6 +30,7 @@ import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
+import           Text.Printf
 ------------------------------------------------------------------------------
 import           Common.Route
 import           Common.Utils
@@ -159,30 +160,63 @@ leftAndRightBorder = "border-left: 1px solid rgba(34,36,38,.1); border-right: 1p
 showResp :: Maybe Value -> String
 showResp = show
 
+statistic :: (DomBuilder t m) => Text -> m () -> m ()
+statistic label val = do
+  divClass "statistic" $ do
+    divClass "value" $ val
+    divClass "label" $ text label
+
+calcTps :: GlobalStats -> NominalDiffTime -> Double
+calcTps gs elapsed = fromIntegral (_gs_txCount gs) / realToFrac elapsed
+
+showTps :: Double -> Text
+showTps = T.pack . printf "%.2f"
+
 blockTableWidget
   :: (MonadApp r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => App r t m ()
 blockTableWidget = do
   pb <- getPostBuild
-  void $ prerender blank $ performEvent_ $ liftIO (putStrLn "In blockTableWidget") <$ pb
+  as <- ask
+  let stats = _as_stats as
+      dbt = _as_blockTable as
+
+  dti <- fmap join $ prerender (return $ constDyn dummy) $ do
+    t <- liftIO getCurrentTime
+    clockLossy 1 t
+
+  let elapsedTime gs ti = diffUTCTime (_tickInfo_lastUTC ti) (_gs_startTime gs)
+      elapsed = elapsedTime <$> stats <*> dti
+      tps = calcTps <$> stats <*> elapsed
+      hashrate = calcNetworkHashrate <$> stats
+
+  divClass "ui segment" $ divClass "ui three statistics" $ do
+    statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+    statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
+    statistic "Current TPS" (dynText $ showTps <$> tps)
+
   divClass "block-table" $ do
     divClass "header-row" $ do
       elClass "span" "table-header" $ text "Height"
       chains <- asks (_siChains . _as_serverInfo)
-      forM_ chains $ \cid -> elClass "span" "table-header" $
-        text $ "Chain " <> tshow cid
+      forM_ chains $ \cid -> elClass "span" "table-header" $ do
+        el "div" $ text $ "Chain " <> tshow cid
+        elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
+                      "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
 
-    ti <- prerender (return $ constDyn dummy) $ do
-      t <- liftIO getCurrentTime
-      clockLossy 1 t
     dbt <- asks _as_blockTable
     rec hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
-                                    (rowsWidget (join ti) hoveredBlock)
+                                    (rowsWidget dti hoveredBlock)
         hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
     return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
+
+chainDifficulty :: ChainId -> BlockTable -> Text
+chainDifficulty cid bt =
+  maybe "" (\b -> diffStr (blockDifficulty $ _blockHeaderTx_header b)) $
+    M.lookup cid $ _blockTable_cut bt
 
 rowsWidget
   :: (MonadApp r t m, Prerender js t m,
@@ -246,8 +280,22 @@ blockWidget0 ti hoveredBlock hs height cid = do
         divClass "blockdiv" $ do
           dynText $ maybe "" (\c -> tshow c <> " txs") . _blockHeaderTx_txCount <$> bh
 
+        --divClass "blockdiv" $ do
+        --  dynText $ diffStr . fromIntegral . targetToDifficulty . leToInteger .
+        --            unBytesLE . _blockHeader_target . _blockHeaderTx_header <$> bh
+
   return $ leftmost [ fmap (const cid) <$> tag (current mbh) (domEvent Mouseenter e)
                     , Nothing <$ domEvent Mouseleave e]
+
+diffStr :: Double -> Text
+diffStr d = T.pack $ printf "%.2f %s" (d / divisor) units
+  where
+    (divisor, units :: String)
+      | d >= 1e12 = (1e12, "TH")
+      | d >= 1e9 = (1e9, "GH")
+      | d >= 1e6 = (1e6, "MH")
+      | d >= 1e3 = (1e3, "KH")
+      | otherwise = (1, "H")
 
 pastTimeWidget
   :: (DomBuilder t m, PostBuild t m)
@@ -338,9 +386,9 @@ chainweb
   -> BlockHeight
   -> m ()
 chainweb chains cs hoveredBlock bh = do
-  let mkAttrs bs hb = ("viewBox" =: ("0 0 1100 " <> tshow (blockSeparation + 4)) <>
-                      "style" =: "vertical-align: middle;")
-  svgElDynAttr "svg" (mkAttrs <$> cs <*> hoveredBlock) $ do
+  let attrs = ("viewBox" =: ("0 0 1100 " <> tshow (blockSeparation + 4)) <>
+               "style" =: "vertical-align: middle;")
+  svgElAttr "svg" attrs $ do
     forM_ chains (\c -> linksFromBlock cs hoveredBlock (bh, c))
     void $ networkView $ lastLinesForActiveBlock cs hoveredBlock bh <$> hoveredBlock
 
@@ -352,7 +400,7 @@ lastLinesForActiveBlock
   -> Maybe BlockRef
   -> m ()
 lastLinesForActiveBlock _ _ _ Nothing = blank
-lastLinesForActiveBlock cs hoveredBlock curBH mb@(Just b) =
+lastLinesForActiveBlock cs hoveredBlock curBH (Just b) =
   if curBH > (fst b) then blank else linksFromBlock cs hoveredBlock b
 
 fromPos :: Int -> Int

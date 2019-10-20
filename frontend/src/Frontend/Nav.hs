@@ -61,10 +61,6 @@ nav
       MonadFix m, Prerender js t m)
   => m (Dynamic t Network)
 nav = do
-  mnode <- getConfig "frontend/default-node"
-  let host = case decode . BL.fromStrict =<< mnode of
-               Nothing -> ProdNet
-               Just n -> n
   divClass "ui container" $ do
     elAttr "a" ("class" =: "header item" <>
                 "href" =: "/" <>
@@ -74,32 +70,43 @@ nav = do
                     "src" =: static @"kadena-k-logo.png") $
         text "Chainscan"
     elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Chainscan"
-    divClass "right menu" $ mdo
+    divClass "right menu" $ do
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Miners"
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Developers"
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Resources"
-      (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
-        dynText $ humanize <$> curNet
-        elClass "i" "dropdown icon" blank
-        let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
-        (dev,prod) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-          d <- networkItem DevNet
-          p <- networkItem ProdNet
-          return (d,p)
-        let netChange = leftmost [prod, dev]
-        curNet <- fmap join $ prerender (return $ constDyn host) $ do
-          mLastNet <- getItemStorage browserStorage localStorage NetworkState_LastUsed
-          pb <- getPostBuild
-          performEvent_ (liftIO (print mLastNet) <$ pb)
-          performEvent_ $ setItemStorage browserStorage localStorage NetworkState_LastUsed <$> netChange
-          holdDyn (fromMaybe host mLastNet) netChange
-        return curNet
-      dropdownVisible <- holdDyn False $ leftmost
-        [ True <$ domEvent Mouseenter e
-        , False <$ domEvent Mouseleave e
-        , False <$ updated net
-        ]
-      holdUniqDyn net
+    networkWidget
+    --return $ constDyn DevNet
+
+networkWidget
+  :: (DomBuilder t m, MonadHold t m, HasConfigs m, PostBuild t m,
+      MonadFix m, Prerender js t m)
+  => m (Dynamic t Network)
+networkWidget = mdo
+  mnode <- getConfig "frontend/default-node"
+  let host = case decode . BL.fromStrict =<< mnode of
+               Nothing -> ProdNet
+               Just n -> n
+
+  (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
+    dynText $ humanize <$> curNet
+    elClass "i" "dropdown icon" blank
+    let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
+    (dev,prod) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
+      d <- networkItem DevNet
+      p <- networkItem ProdNet
+      return (d,p)
+    let netChange = leftmost [prod, dev]
+    curNet <- fmap join $ prerender (return $ constDyn host) $ do
+      mLastNet <- getItemStorage browserStorage localStorage NetworkState_LastUsed
+      performEvent_ $ setItemStorage browserStorage localStorage NetworkState_LastUsed <$> netChange
+      holdDyn (fromMaybe host mLastNet) netChange
+    return curNet
+  dropdownVisible <- holdDyn False $ leftmost
+    [ True <$ domEvent Mouseenter e
+    , False <$ domEvent Mouseleave e
+    , False <$ updated net
+    ]
+  holdUniqDyn net
 
 
 networkItem

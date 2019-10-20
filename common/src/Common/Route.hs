@@ -106,14 +106,14 @@ pathOnlyEncoderIgnoringQuery = unsafeMkEncoder $ EncoderImpl
 
 
 backendRouteEncoder
-  :: Encoder (Either Text) Identity (R (Sum BackendRoute (ObeliskRoute FrontendRoute))) PageName
-backendRouteEncoder = handleEncoder (const (InL BackendRoute_Missing :/ ())) $
+  :: Encoder (Either Text) Identity (R (FullRoute BackendRoute FrontendRoute)) PageName
+backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missing :/ ())) $
   pathComponentEncoder $ \case
-    InL backendRoute -> case backendRoute of
+    FullRoute_Backend backendRoute -> case backendRoute of
       BackendRoute_Missing -> PathSegment "missing" $ unitEncoder mempty
       --BackendRoute_Hashes -> PathSegment "hash" singlePathSegmentEncoder
       BackendRoute_Hashes -> PathSegment "hash" queryOnlyEncoder -- (pathOnlyEncoderIgnoringQuery . singletonListEncoder)
-    InR obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
+    FullRoute_Frontend obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
       -- The encoder given to PathEnd determines how to parse query parameters,
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty

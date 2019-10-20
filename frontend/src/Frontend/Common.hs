@@ -9,15 +9,11 @@
 module Frontend.Common where
 
 ------------------------------------------------------------------------------
-import           Control.Lens
 import           Control.Monad.Fix
 import           Data.Maybe
-import           Data.Proxy
 import           Data.Text (Text)
 import           Reflex.Dom
 import           Reflex.Network
-import           Obelisk.Route
-import           Obelisk.Route.Frontend
 ------------------------------------------------------------------------------
 
 
@@ -28,7 +24,6 @@ infixl 4 <$$>
 (<$$$>) :: (Functor f1, Functor f2, Functor f3) => (a -> b) -> f1 (f2 (f3 a)) -> f1 (f2 (f3 b))
 f <$$$> a = fmap f <$$> a
 infixl 4 <$$$>
-
 
 data ListState = EmptyPlaceholder | AddForm | ListTable
   deriving (Eq,Ord,Show,Read)
