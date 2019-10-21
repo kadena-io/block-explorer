@@ -13,13 +13,9 @@ module Frontend.Page.Block where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Base16 as B16
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Route

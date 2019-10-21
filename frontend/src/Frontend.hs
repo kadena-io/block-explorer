@@ -177,7 +177,6 @@ blockTableWidget
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => App r t m ()
 blockTableWidget = do
-  pb <- getPostBuild
   as <- ask
   let stats = _as_stats as
       dbt = _as_blockTable as
@@ -189,7 +188,7 @@ blockTableWidget = do
   let elapsedTime gs ti = diffUTCTime (_tickInfo_lastUTC ti) (_gs_startTime gs)
       elapsed = elapsedTime <$> stats <*> dti
       tps = calcTps <$> stats <*> elapsed
-      hashrate = calcNetworkHashrate <$> stats
+      hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
 
   divClass "ui segment" $ divClass "ui three statistics" $ do
     statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
@@ -205,7 +204,6 @@ blockTableWidget = do
         elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
                       "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
 
-    dbt <- asks _as_blockTable
     rec hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
                                     (rowsWidget dti hoveredBlock)
         hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)

@@ -13,7 +13,6 @@ module Frontend.Nav where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Fix
-import           Control.Monad.Trans
 import           Data.Aeson
 import qualified Data.ByteString.Lazy as BL
 import           Data.Maybe

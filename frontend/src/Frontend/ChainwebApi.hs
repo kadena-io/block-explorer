@@ -295,8 +295,8 @@ hashB64U = T.decodeUtf8 . B64U.encode . unHash
 
 calcPowHash :: ByteString -> Either String Text
 calcPowHash bs = do
-  hash <- blake2s 32 "" $ B.take (B.length bs - 32) bs
-  return $ T.decodeUtf8 $ B16.encode $ B.reverse hash
+  h <- blake2s 32 "" $ B.take (B.length bs - 32) bs
+  return $ T.decodeUtf8 $ B16.encode $ B.reverse h
 
 data BlockHeaderTx = BlockHeaderTx
   { _blockHeaderTx_header :: BlockHeader

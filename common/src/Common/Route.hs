@@ -29,7 +29,6 @@ import qualified Data.Some as Some
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding
-import           Data.Functor.Sum
 import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH

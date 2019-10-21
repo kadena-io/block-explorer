@@ -24,13 +24,11 @@ module Frontend.AppState where
 import           Control.Lens
 import           Control.Monad.Fix
 import           Control.Monad.Trans
-import qualified Data.ByteString.Base16 as B16
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Maybe
 import           Data.Text (Text)
-import           Data.Text.Encoding
 import           Data.Time
+import           Data.Time.Clock.POSIX
 import           Data.Word
 import           GHC.Generics
 import           GHCJS.DOM.Types (MonadJSM)
@@ -41,7 +39,6 @@ import           Reflex.Network
 ------------------------------------------------------------------------------
 import           Common.Utils
 import           Frontend.ChainwebApi
-import           Frontend.Common
 ------------------------------------------------------------------------------
 
 -- TODO Move into common later
@@ -87,16 +84,30 @@ data GlobalStats = GlobalStats
     , _gs_hashrates :: Map ChainId HashrateData
     } deriving (Eq,Ord,Show)
 
-calcHashrate :: HashrateData -> Double
-calcHashrate (HashrateData dt diff) = fromIntegral diff / realToFrac dt
+-- Not used right now because calculating it over the whole blockTable is
+-- more stable.
+--calcHashrate :: HashrateData -> Double
+--calcHashrate (HashrateData dt diff) = fromIntegral diff / realToFrac dt
+--
+--calcNetworkHashrate :: GlobalStats -> Maybe Double
+--calcNetworkHashrate gs =
+--    if null hrs
+--      then Nothing
+--      else Just (10 * sum hrs / fromIntegral (length hrs))
+--  where
+--    hrs = map calcHashrate $ M.elems (_gs_hashrates gs)
 
-calcNetworkHashrate :: GlobalStats -> Maybe Double
-calcNetworkHashrate gs =
-    if null hrs
-      then Nothing
-      else Just (10 * sum hrs / fromIntegral (length hrs))
+calcNetworkHashrate :: POSIXTime -> BlockTable -> Maybe Double
+calcNetworkHashrate now bt =
+    Just (totalDifficulty / (realToFrac $ now - earliestTime))
   where
-    hrs = map calcHashrate $ M.elems (_gs_hashrates gs)
+    (earliestTime, totalDifficulty) = M.foldl' f (now,0) (_blockTable_blocks bt)
+    f (et, td) next =
+      let (etNew, tdNew) = M.foldl' g (now,0) next
+       in (min et etNew, td + tdNew)
+    g (et, td) next =
+      (min et (_blockHeader_creationTime $ _blockHeaderTx_header next),
+       td + blockDifficulty (_blockHeaderTx_header next))
 
 getNewHashrateData
   :: BlockTable
@@ -104,7 +115,6 @@ getNewHashrateData
   -> Either String (ChainId, HashrateData)
 getNewHashrateData bt bhtx = do
     bhtxPrev <- note "Error getting previous block" $ getBlock height cid bt
-    powHash <- note "Error getting powHash" $ _blockHeaderTx_powHash bhtx
 
     -- We calculate difficulty based on the target because this results
     -- in a smoother aggregate difficulty / hashrate estimate.
@@ -171,8 +181,7 @@ stateManager _ h si _ = do
           , (\pair bt -> maybe bt (insertBlockTable bt . pairToBhtx) pair) <$> newMissing
           ]
 
-        -- TODO WIP to avoid missing blocks
-        let missingBlocks = traceEvent "missing blocks" $ getMissingBlocks blockTable downEvent
+        let missingBlocks = getMissingBlocks blockTable downEvent
             getHeader (cid,hash) = getBlockHeader h cid (hashB64U hash)
             eme = sequence . fmap getHeader <$> missingBlocks
         ee <- networkHold (return []) eme
