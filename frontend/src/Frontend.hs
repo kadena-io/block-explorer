@@ -49,7 +49,8 @@ frontend = Frontend
   , _frontend_body = do
       route <- getAppRoute
       curNet <- divClass "ui fixed inverted menu" nav
-      _ <- networkView (appWithNetwork route <$> curNet)
+      _ <- elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $
+        networkView (appWithNetwork route <$> curNet)
       footer
   }
 
@@ -59,9 +60,16 @@ appWithNetwork
       RouteToUrl (R FrontendRoute) (Client (Client m)),
       DomBuilder t m, Prerender js t m)
   => Text
-  -> Network
+  -> Maybe Network
   -> m ()
-appWithNetwork route curNet = do
+appWithNetwork route Nothing = do
+  divClass "ui segment" $ do
+    divClass "ui active dimmer" $ do
+      divClass "ui text loader" $ text "Loading"
+    el "p" $ text " "
+    el "p" $ text " "
+    el "p" $ text " "
+appWithNetwork route (Just curNet) = do
   let ch = networkHost curNet
   _ <- prerender blank $ do
     dsi <- getServerInfo ch
@@ -97,10 +105,9 @@ mainApp
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => App (R FrontendRoute) t m ()
 mainApp = do
-    elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
-      subRoute_ $ \case
-        FR_Main -> blockTableWidget
-        FR_Block -> blockPage
+    subRoute_ $ \case
+      FR_Main -> blockTableWidget
+      FR_Block -> blockPage
 
 footer
   :: (DomBuilder t m)
@@ -133,7 +140,7 @@ footer = do
 
 appHead :: DomBuilder t m => m ()
 appHead = do
-  el "title" $ text "ChainScan"
+  el "title" $ text "Kadena Block Explorer"
   elAttr "link" ("rel" =: "shortcut icon" <>
                  "href" =: "/static/favicon.svg" <>
                  "type" =: "image/svg+xml"

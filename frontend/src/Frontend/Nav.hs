@@ -58,17 +58,16 @@ deriving instance Show (NetworkState a)
 nav
   :: (DomBuilder t m, MonadHold t m, HasConfigs m, PostBuild t m,
       MonadFix m, Prerender js t m)
-  => m (Dynamic t Network)
+  => m (Dynamic t (Maybe Network))
 nav = do
   divClass "ui container" $ do
     elAttr "a" ("class" =: "header item" <>
                 "href" =: "/" <>
                 "style" =: "color: #e8098f;") $
-      --text "Chainscan"
       elAttr "img" ("class" =: "logo" <>
                     "src" =: static @"kadena-k-logo.png") $
-        text "Chainscan"
-    elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Chainscan"
+        text "Kadena Block Explorer"
+    elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Kadena Block Explorer"
     divClass "right menu" $ do
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Miners"
       elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Developers"
@@ -79,26 +78,27 @@ nav = do
 networkWidget
   :: (DomBuilder t m, MonadHold t m, HasConfigs m, PostBuild t m,
       MonadFix m, Prerender js t m)
-  => m (Dynamic t Network)
+  => m (Dynamic t (Maybe Network))
 networkWidget = mdo
   mnode <- getConfig "frontend/default-node"
-  let host = case decode . BL.fromStrict =<< mnode of
-               Nothing -> ProdNet
-               Just n -> n
+  let host = decode . BL.fromStrict =<< mnode
 
   (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
-    dynText $ humanize <$> curNet
+    dynText $ maybe "" humanize <$> curNet
     elClass "i" "dropdown icon" blank
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     (dev,prod) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
       d <- networkItem DevNet
       p <- networkItem ProdNet
       return (d,p)
-    let netChange = leftmost [prod, dev]
-    curNet <- fmap join $ prerender (return $ constDyn host) $ do
-      mLastNet <- getItemStorage browserStorage localStorage NetworkState_LastUsed
-      performEvent_ $ setItemStorage browserStorage localStorage NetworkState_LastUsed <$> netChange
-      holdDyn (fromMaybe host mLastNet) netChange
+    let netChange = Just <$> leftmost [prod, dev]
+        chooseDefault cur = maybe (Just ProdNet) Just cur
+    rec
+        curNet <- fmap join $ prerender (return $ constDyn host) $ do
+          pb <- getPostBuild
+          mLastNet <- getItemStorage browserStorage localStorage NetworkState_LastUsed
+          performEvent_ $ setItemStorage browserStorage localStorage NetworkState_LastUsed <$> fmapMaybe id netChange
+          holdDyn mLastNet $ leftmost [netChange, chooseDefault <$> traceEvent "initial network override" (tag (current curNet) pb)]
     return curNet
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e

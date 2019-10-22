@@ -9,6 +9,7 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad
+import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
@@ -224,18 +225,22 @@ getBlockHeader
   -- ^ Returns the block header and the base64url-encoded binary serialization
 getBlockHeader h c blockHash = do
   pb <- getPostBuild
-  let reqs = [ mkSingleHeaderRequest h c blockHash
-             , mkSingleHeaderRequestBinary h c blockHash
+  let reqs = [ mkSingleHeaderRequestBinary h c blockHash
+             , mkSingleHeaderRequest h c blockHash
              ]
+      showReq r = T.unlines [_xhrRequest_method r, _xhrRequest_url r, T.pack $ show $ _xhrRequestConfig_headers $ _xhrRequest_config r]
+      showReqs = T.unlines . map showReq
   resp <- performRequestsAsync $ reqs <$ pb
-  return (decodeResults <$> resp)
+  let respText r = show (_xhrResponse_status r) <> " " <> maybe "" T.unpack (_xhrResponse_responseText r)
+  let eRes = decodeResults <$> resp
+  return (hush <$> eRes)
 
-decodeResults :: [XhrResponse] -> Maybe (BlockHeader, Text)
+decodeResults :: [XhrResponse] -> Either String (BlockHeader, Text)
 decodeResults [bh, bhBin] = do
-  h <- decodeXhrResponse bh
-  hBin <- decodeXhrResponse bhBin
+  h <- note "Error decoding block header" $ decodeXhrResponse bh
+  hBin <- note "Error decoding binary block header" $ decodeXhrResponse bhBin
   return (h, hBin)
-decodeResults _ = Nothing
+decodeResults _ = Left "Invalid number of results"
 
 getBlockPayload
   :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
@@ -532,10 +537,6 @@ instance FromJSON BlockPayload where
     <*> o .: "outputsHash"
     <*> o .: "payloadHash"
     <*> (fmap fromBase64Url <$> o .: "transactions")
-
-hush :: Either e a -> Maybe a
-hush (Left _) = Nothing
-hush (Right a) = Just a
 
 newtype Base64Url a = Base64Url { fromBase64Url :: a }
   deriving (Eq,Ord,Show)
