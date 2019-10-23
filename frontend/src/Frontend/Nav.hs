@@ -16,6 +16,7 @@ import           Control.Monad.Fix
 import           Data.Aeson
 import qualified Data.ByteString.Lazy as BL
 import           Data.Maybe
+import           Data.Text (Text)
 import           GHC.Generics
 import           Obelisk.Configs
 import           Obelisk.Generated.Static
@@ -69,11 +70,53 @@ nav = do
         text "Kadena Block Explorer"
     elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Kadena Block Explorer"
     divClass "right menu" $ do
-      elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Miners"
-      elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Developers"
-      elAttr "a" ("class" =: "item" <> "href" =: "#") $ text "Resources"
-    networkWidget
+      getStarted
+      learnMore
+      networkWidget
     --return $ constDyn DevNet
+
+getStarted
+  :: (DomBuilder t m, PostBuild t m, MonadFix m, MonadHold t m)
+  => m ()
+getStarted = mdo
+  (e,_) <- elAttr' "div" ("class" =: "ui dropdown item") $ do
+    text "Get Started"
+    let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
+    elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
+      linkItem "Start Mining" "https://github.com/kadena-io/chainweb-node/blob/master/miner/README.org"
+      linkItem "Download Wallet" "https://testnet.chainweb.com"
+      linkItem "Play Testnet Games" "https://testnet.chainweb.com/"
+      linkItem "See Chains in 3D (experimental)" "/chains3d.html"
+  dropdownVisible <- holdDyn False $ leftmost
+    [ True <$ domEvent Mouseenter e
+    , False <$ domEvent Mouseleave e
+    ]
+  return ()
+
+learnMore
+  :: (DomBuilder t m, PostBuild t m, MonadFix m, MonadHold t m)
+  => m ()
+learnMore = mdo
+  (e,_) <- elAttr' "div" ("class" =: "ui dropdown item") $ do
+    text "Learn More"
+    let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
+    elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
+      linkItem "About Kadena Block Explorer" "/about"
+      linkItem "Pact Smart Contract Tutorials" "https://pactlang.org"
+      linkItem "Kadena Whitepapers" "https://kadena.io/en/whitepapers/"
+  dropdownVisible <- holdDyn False $ leftmost
+    [ True <$ domEvent Mouseenter e
+    , False <$ domEvent Mouseleave e
+    ]
+  return ()
+
+linkItem
+  :: DomBuilder t m
+  => Text
+  -> Text
+  -> m ()
+linkItem nm url = do
+    elAttr "a" ("href" =: url <> "class" =: "item") $ text nm
 
 networkWidget
   :: (DomBuilder t m, MonadHold t m, HasConfigs m, PostBuild t m,
@@ -85,7 +128,6 @@ networkWidget = mdo
 
   (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
     dynText $ maybe "" humanize <$> curNet
-    elClass "i" "dropdown icon" blank
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     (dev,prod) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
       d <- networkItem DevNet

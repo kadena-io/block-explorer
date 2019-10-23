@@ -114,21 +114,17 @@ footer
   => m ()
 footer = do
     divClass "ui inverted vertical footer segment" $ do
-      elAttr "div" ("style" =: "padding-bottom: 50px;") $
-        elAttr "img" ("src" =: static @"kadena-full-logo.png" <>
-                    "class" =: "ui centered small image" <>
-                    "alt" =: "Kadena" ) blank
-      divClass "ui divider" blank
-      divClass "ui center aligned container" $ do
-        divClass "ui stackable inverted divided grid" $ do
+      divClass "ui aligned container" $ do
+        divClass "ui inverted divided grid" $ do
           divClass "eight wide column" $ do
-            elClass "h4" "ui inverted header" $ text "Company"
-            divClass "ui inverted link list" $ do
-              lnk "Kadena Website" "https://kadena.io"
-              lnk "White Papers" "https://kadena.io/en/whitepapers/"
-              lnk "Contact Us" "mailto:info@kadena.io"
+            elAttr "div" ("style" =: "padding-bottom: 50px;") $ do
+              elAttr "img" ("src" =: static @"kadena-full-logo.png" <>
+                          "class" =: "ui small image" <>
+                          "alt" =: "Kadena" ) blank
+              el "p" $ text "Powered by Kadena"
+              el "p" $ text "This is a Block Explorer and Analytics Platform for Kadena, a decentralized smart contracts platform."
           divClass "eight wide column" $ do
-            elClass "h4" "ui inverted header" $ text "Social Media"
+            elClass "h4" "ui inverted header" $ text "Connect"
             divClass "ui inverted link list" $ do
               lnk "Discord" "https://discordapp.com/invite/bsUcWmX"
               lnk "Twitter" "https://twitter.com/kadena_io"
@@ -137,6 +133,7 @@ footer = do
               lnk "YouTube" "https://www.youtube.com/KadenaBlockchain"
   where
     lnk nm url = elAttr "a" ("class" =: "item" <> "href" =: url) $ text nm
+
 
 appHead :: DomBuilder t m => m ()
 appHead = do
