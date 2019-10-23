@@ -99,7 +99,9 @@ data GlobalStats = GlobalStats
 
 calcNetworkHashrate :: POSIXTime -> BlockTable -> Maybe Double
 calcNetworkHashrate now bt =
-    Just (totalDifficulty / (realToFrac $ now - earliestTime))
+    if now - earliestTime < 1
+      then Nothing
+      else Just (totalDifficulty / (realToFrac $ now - earliestTime))
   where
     (earliestTime, totalDifficulty) = M.foldl' f (now,0) (_blockTable_blocks bt)
     f (et, td) next =

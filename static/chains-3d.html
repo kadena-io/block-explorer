@@ -1,0 +1,269 @@
+<head>
+  <style> 
+    body { margin: 0; } 
+  </style>
+  <script src="http://unpkg.com/three"></script>
+  <script src="http://unpkg.com/3d-force-graph"></script>
+</head>
+
+<body>
+  <div id="3d-graph"></div>
+
+  <script>
+    /* ---------------------------------------------------------------------- */
+    /* Config */
+
+    const graphSize = 100;
+
+    const headerStreamHost = "us3.tn1.chainweb.com";
+    const apiHost = "us1.tn1.chainweb.com";
+
+    /* ---------------------------------------------------------------------- */
+    /* Chainweb API */
+
+    const headerStreamUrl = `https://${headerStreamHost}/chainweb/0.0/development/header/updates`;
+
+    function getHeaderRequest (cid, hash) {
+      const url = `https://${apiHost}/chainweb/0.0/development/chain/${cid}/header/${hash}`;
+      return new Request(url, { headers: new Headers({ accept: "application/json;blockheader-encoding=object" })});
+    }
+
+    function getPayloadRequest (cid, hash) {
+      const url = `https://${apiHost}/chainweb/0.0/development/chain/${cid}/payload/${hash}`;
+      return new Request(url);
+    }
+
+    /* Fetch header */
+    function fetchHeader (cid, hash, f) {
+      fetch(getHeaderRequest(cid, hash))
+        .then(r => r.json())
+        .then(hdr =>
+          fetch(getPayloadRequest(cid, hdr.payloadHash))
+            .then(r => r.json())
+            .then(p => f({ header: hdr, txCount: p.transactions.length }))
+        );
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Graph */
+
+    /* If a node is in this map than it also is in the graph. The values are links to 
+     * the node data.
+     */
+    hashes = {};
+    var opacity = 0.8;
+    
+    var gridHelper = new THREE.GridHelper(50000, 500);
+
+
+    const elem = document.getElementById("3d-graph");
+    const Graph = ForceGraph3D({controlType: 'orbit'})(elem)
+        .enableNodeDrag(false)
+        /* .nodeId(x => x.header.hash) */
+
+        /* Arrow heads */
+        .linkDirectionalArrowLength(3.5)
+        .linkDirectionalArrowRelPos(1)
+
+        /* DAG mode */
+        .dagMode('lr')
+        .dagLevelDistance(100)
+
+        /* Color by ChainId */
+        .nodeAutoColorBy(x => x.header.chainId)
+        .linkAutoColorBy(x => x.sourceNode.header.chainId)
+        .linkOpacity(0.5)
+        .linkWidth(0.5)
+
+        /* Node size by tx count */
+        .nodeVal(x => x.txCount * 0.1 + 1)
+        .nodeRelSize(3)
+        .linkDirectionalParticles(x => {
+          if (x.sourceNode.header.chainId == x.targetNode.header.chainId) {
+            return Math.max(0, Math.ceil(x.sourceNode.txCount / 10));
+          } else {
+            return 0;
+          }
+        })
+        .linkDirectionalParticleSpeed(x => {
+          if (x.sourceNode.header.chainId == x.targetNode.header.chainId) {
+            return Math.max(0, x.sourceNode.txCount * 0.001);
+          } else {
+            return 0;
+          }
+        })
+        .linkDirectionalParticleWidth(2.5)
+
+
+        /* Label */
+        .nodeLabel(x => {
+          return `<div>
+            <div>hash: ${x.header.hash}</div>
+            <div>chainId: ${x.header.chainId}</div>
+            <div>height: ${x.header.height}</div>
+            <div>txCount: ${x.txCount}</div>
+          </div>`
+        })
+
+        .onNodeClick(node => {
+          // Aim at node from outside it
+          const distance = 40;
+          const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+          Graph.cameraPosition(
+            { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
+            node, // lookAt ({ x, y, z })
+            3000  // ms transition duration
+          );
+        })
+
+      /* TODO: should we stop the animation instead? Or just fix the location of the node? */
+      .nodeOpacity(opacity)
+      .onNodeHover(n => {
+        if (!n) {
+          Graph.cooldownTicks(Infinity);
+          // dimGraph(0.8);
+        } else {
+          elem.style.cursor = n ? 'pointer' : null;
+          // dimGraph(0.1);
+          Graph.cooldownTicks(0);
+        }
+      })
+
+      // Graph.scene().add( gridHelper )
+
+        // .graphData(initData);
+
+   /* TODO: fix the x-position (or maybe all coordinates?) of the first say. 30% of nodes */
+   /* Provide camera modus that follows the x-coordinate of the max Node */
+   /* experiment with fixed x positions */
+
+   function dimGraph(op) {
+     opacity = op;
+     Graph.nodeOpacity(opacity);
+   }
+
+    var maxHeight = 0;
+    var minHeight = Infinity;
+    var maxNode = { header: {height: 0} };
+
+    /* assumes that the node for the given data, if it exists, doesn't have any links */
+    function updateGraph (data, b) {
+
+      /* collect node data */
+      const hdr = data.header;
+      const hash = hdr.hash;
+      const parents = { ...data.header.adjacents };
+      parents[hdr.chainId.toString()] = hdr['parent'];
+      data.id = hash;
+
+      /* Create new nodes and links */
+      const newNodes = [];
+      const newLinks = [];
+
+      /* Create new node or update node as needed */
+      if (! (hash in hashes)) {
+        newNodes.push(data);
+        hashes[hash] = data;
+      } else {
+        hashes[hash].header = data.header;
+        hashes[hash].txCount = data.txCount;
+      }
+
+      /* Create links for all parents */
+      Object.entries(parents).forEach(([cidText, phash]) => {
+
+        /* Create link target as needed */
+        const pcid = parseInt(cidText, 10);
+        if (! (phash in hashes)) {
+          const pheight = hdr.height - 1;
+          const phdr = {chainId: pcid, hash: phash, height: pheight };
+          const pdata = {id: phash, header: phdr, txCount: -1};
+          newNodes.push(pdata);
+          hashes[phash] = pdata;
+          updateNode(pdata, b);
+        }
+
+        /* Create link */
+        const link = {source: phash, target: hash, sourceNode: hashes[phash], targetNode: hashes[hash]}
+        newLinks.push(link);
+      });
+
+      /* Check if maxHeight changed */
+      const maxHeight_ = Math.max(maxHeight, hdr.height);
+      const updatedMaxHeight = maxHeight !== maxHeight_;
+      maxHeight = maxHeight_;
+
+      /* Check if minHeight changed */
+      const lower = getLower(b)
+      const minHeight_ = Math.max(lower, Math.min(minHeight, hdr.height));
+      const updatedMinHeight = minHeight !== minHeight_;
+      minHeight = minHeight_;
+
+
+      /* Prune existing nodes and links */
+      let { nodes, links } = Graph.graphData();
+      if (updatedMaxHeight) {
+        links = links.filter(l => l.sourceNode.header.height >= lower);
+        nodes = nodes.filter(n => n.header.height >= lower);
+      }
+
+      /* Fix positions */
+      nodes.forEach(n => {
+        // n.fx = n.header.height;
+        maxNode = (n.header.height > maxNode.header.height) ? n : maxNode;
+        if (n.header.height == minHeight) {
+          n.fx = n.header.height
+          n.fy = n.y
+          n.fz = n.z
+        }
+
+      });
+
+      /* Apply Updates */
+      Graph.graphData({
+          nodes: [...nodes, ...newNodes ],
+          links: [...links, ...newLinks ]
+      });
+      /* FIXME: is this asynchronous? I hope not. Otherwise we'd have to be more careful
+       * in particular when updating hashes
+       */
+    }
+
+    function last(a) {
+      return a[a.length - 1];
+    }
+
+    function updateNode (data, b) {
+      if (getLower(b) < data.header.height) {
+        fetchHeader(data.header.chainId, data.header.hash, function(newData) {
+          updateGraph(newData, b);
+        });
+      }
+    }
+
+    function getLower(b) {
+      return typeof b === 'number' ? b : b(maxHeight);
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Main */
+
+    /* Event Source */
+    const headerStream = new EventSource(headerStreamUrl);
+    headerStream.addEventListener("BlockHeader", function(event) {
+        var jdata = JSON.parse(event.data);
+        updateGraph(jdata, h => Math.max(0, h - graphSize));
+    });
+
+    /* move camera, if needed */
+    setInterval(function() {
+      Graph.cameraPosition(
+        {}, /* move to position */
+        { x: maxNode.x, y: maxNode.y, z: maxNode.z }, /* point in direction */
+        0 /* 100 ms */
+      );
+    }, 500);
+
+  </script>
+</body>
+

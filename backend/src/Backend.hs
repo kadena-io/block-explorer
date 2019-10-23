@@ -22,12 +22,11 @@ backend = Backend
   , _backend_routeEncoder = backendRouteEncoder
   }
 
+
 serveBackendRoute :: R BackendRoute -> Snap ()
 serveBackendRoute br = do
   liftIO $ putStrLn "Incoming request"
   case br of
-    BackendRoute_Hashes :=> _
-      -> do
-      liftIO $ putStrLn "Serving file"
-      serveFile "static/test/hashes.json"
+    BackendRoute_About :=> _
+      -> serveFile "static/about.html"
     _ -> pure ()

@@ -40,7 +40,7 @@ import           Common.Utils
 data BackendRoute :: * -> * where
   -- | Used to handle unparseable routes.
   BackendRoute_Missing :: BackendRoute ()
-  BackendRoute_Hashes :: BackendRoute (Map Text (Maybe Text))
+  BackendRoute_About :: BackendRoute ()
 
 data BlockRoute :: * -> * where
   Block_Header :: BlockRoute ()
@@ -111,7 +111,7 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
     FullRoute_Backend backendRoute -> case backendRoute of
       BackendRoute_Missing -> PathSegment "missing" $ unitEncoder mempty
       --BackendRoute_Hashes -> PathSegment "hash" singlePathSegmentEncoder
-      BackendRoute_Hashes -> PathSegment "hash" queryOnlyEncoder -- (pathOnlyEncoderIgnoringQuery . singletonListEncoder)
+      BackendRoute_About -> PathSegment "about" $ unitEncoder mempty
     FullRoute_Frontend obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
       -- The encoder given to PathEnd determines how to parse query parameters,
       -- in this example, we have none, so we insist on it.
