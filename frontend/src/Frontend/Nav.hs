@@ -15,7 +15,6 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Data.Aeson
 import qualified Data.ByteString.Lazy as BL
-import           Data.Maybe
 import           Data.Text (Text)
 import           GHC.Generics
 import           Obelisk.Configs

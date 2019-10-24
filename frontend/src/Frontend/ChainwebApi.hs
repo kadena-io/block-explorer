@@ -9,7 +9,6 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad
-import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
@@ -186,10 +185,7 @@ getBlockHeader h c blockHash = do
              , mkSingleHeaderRequestBinary h c blockHash
              -- NOTE: Order of this list must match the order of the argument to decodeResults
              ]
-      showReq r = T.unlines [_xhrRequest_method r, _xhrRequest_url r, T.pack $ show $ _xhrRequestConfig_headers $ _xhrRequest_config r]
-      showReqs = T.unlines . map showReq
   resp <- performRequestsAsync $ reqs <$ pb
-  let respText r = show (_xhrResponse_status r) <> " " <> maybe "" T.unpack (_xhrResponse_responseText r)
   let eRes = decodeResults <$> resp
   return (hush <$> eRes)
 

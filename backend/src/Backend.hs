@@ -10,11 +10,9 @@ module Backend where
 
 ------------------------------------------------------------------------------
 import           Control.Monad.Trans
-import           Data.Dependent.Sum (DSum ((:=>)))
 import           Obelisk.Backend
 import           Obelisk.Route
 import           Snap.Core
-import           Snap.Util.FileServe
 ------------------------------------------------------------------------------
 import           Common.Route
 ------------------------------------------------------------------------------

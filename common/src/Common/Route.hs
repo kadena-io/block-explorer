@@ -22,7 +22,6 @@ import Control.Category
 --import           Control.Category (Category (..))
 import           Control.Lens
 import           Control.Monad.Except
-import           Data.Map (Map)
 import           Data.Readable
 import           Data.Some (Some)
 import qualified Data.Some as Some
@@ -133,12 +132,11 @@ getAppRoute = do
 
 -- | Provide a human-readable name for a given section
 tabTitle :: DomBuilder t m => Some FrontendRoute -> m ()
-tabTitle sfr@(Some.Some sec) = case sec of
-  FR_Main -> text $ frToText sfr
-  FR_Block -> text $ frToText sfr
+tabTitle sfr@(Some.Some sec) = text $ frToText sfr
 
 -- | Provide a human-readable name for a given section
 frToText :: Some FrontendRoute -> Text
 frToText (Some.Some sec) = case sec of
   FR_Main -> "Home"
+  FR_About -> "About"
   FR_Block -> "Block"
