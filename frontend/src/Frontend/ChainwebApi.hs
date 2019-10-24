@@ -13,6 +13,7 @@ import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
+import           Data.Bifunctor
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
@@ -37,50 +38,6 @@ import           Text.Printf
 import           Blake2Native
 import           Common.Utils
 ------------------------------------------------------------------------------
-
---data Remote a = InFlight | Crashed [String] | Landed a
---
---instance Show a => Show (Remote a) where
---  show InFlight = "Request in flight"
---  show (Landed _) = "Request landed"
---  show (Crashed es) = unlines $
---    "Request crashed with the following errors:" : es
---
---instance Functor Remote where
---  fmap f (Landed a) = Landed (f a)
---  fmap _ (Crashed es) = Crashed es
---  fmap _ InFlight = InFlight
---
---instance Semigroup a => Semigroup (Remote a) where
---  InFlight <> InFlight = InFlight
---  InFlight <> Crashed es = Crashed es
---  Crashed es <> InFlight = Crashed es
---  Crashed es1 <> Crashed es2 = Crashed (es1 <> es2)
---  InFlight <> Landed a = Landed a
---  Crashed es <> Landed a = Crashed es
---  Landed a <> InFlight = Landed a
---  Landed a <> Crashed es = Crashed es
---  Landed a1 <> Landed a2 = Landed (a1 <> a2)
---
---instance Semigroup a => Monoid (Remote a) where
---  mempty = InFlight
-
---instance Applicative Remote where
---  pure a = Landed a
---  Landed f <*> Landed a = Landed (f a)
---  Crashed s1 <*> Crashed s2 = Crashed (s1 <> s2)
---  _ <*> Crashed s = Crashed s
---  Crashed s <*> _ = Crashed s
---  _ <*> InFlight = InFlight
-
---remoteToMaybe :: Remote a -> Maybe a
---remoteToMaybe (Landed a) = Just a
---remoteToMaybe _ = Nothing
---
---remoteToEither :: Remote a -> Either [String] a
---remoteToEither InFlight = Left ["In flight"]
---remoteToEither (Crashed s) = Left s
---remoteToEither (Landed a) = Right a
 
 type BlockHeight = Int
 --newtype BlockHeight = BlockHeight { unBlockHeight :: Int }
@@ -225,8 +182,9 @@ getBlockHeader
   -- ^ Returns the block header and the base64url-encoded binary serialization
 getBlockHeader h c blockHash = do
   pb <- getPostBuild
-  let reqs = [ mkSingleHeaderRequestBinary h c blockHash
-             , mkSingleHeaderRequest h c blockHash
+  let reqs = [ mkSingleHeaderRequest h c blockHash
+             , mkSingleHeaderRequestBinary h c blockHash
+             -- NOTE: Order of this list must match the order of the argument to decodeResults
              ]
       showReq r = T.unlines [_xhrRequest_method r, _xhrRequest_url r, T.pack $ show $ _xhrRequestConfig_headers $ _xhrRequest_config r]
       showReqs = T.unlines . map showReq
@@ -237,8 +195,8 @@ getBlockHeader h c blockHash = do
 
 decodeResults :: [XhrResponse] -> Either String (BlockHeader, Text)
 decodeResults [bh, bhBin] = do
-  h <- note "Error decoding block header" $ decodeXhrResponse bh
-  hBin <- note "Error decoding binary block header" $ decodeXhrResponse bhBin
+  h <- first ("Error decoding block header: " <>) $ decodeXhr bh
+  hBin <- first ("Error decoding binary block header: " <>) $ decodeXhr bhBin
   return (h, hBin)
 decodeResults _ = Left "Invalid number of results"
 
