@@ -70,10 +70,12 @@ nav = do
         text "Kadena Block Explorer"
     elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Kadena Block Explorer"
     divClass "right menu" $ do
+      linkItem "About" "/about"
       getStarted
       learnMore
-      networkWidget
-    --return $ constDyn DevNet
+      divClass "item" $ text "Kadena Testnet"
+      --networkWidget
+      return $ constDyn (Just ProdNet)
 
 getStarted
   :: (DomBuilder t m, PostBuild t m, MonadFix m, MonadHold t m)
@@ -101,7 +103,6 @@ learnMore = mdo
     text "Learn More"
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      linkItem "About Kadena Block Explorer" "/about"
       linkItem "Pact Smart Contract Tutorials" "https://pactlang.org"
       linkItem "Kadena Whitepapers" "https://kadena.io/en/whitepapers/"
   dropdownVisible <- holdDyn False $ leftmost

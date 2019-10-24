@@ -1,14 +1,19 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 module Backend where
 
 ------------------------------------------------------------------------------
 import           Control.Monad.Trans
 import           Data.Dependent.Sum (DSum ((:=>)))
+import qualified Data.Text as T
 import           Obelisk.Backend
+import           Obelisk.Generated.Static
 import           Obelisk.Route
 import           Snap.Core
 import           Snap.Util.FileServe
@@ -28,5 +33,5 @@ serveBackendRoute br = do
   liftIO $ putStrLn "Incoming request"
   case br of
     BackendRoute_About :=> _
-      -> serveFile "static/about.html"
+      -> serveFile $ T.unpack (static @"about.html")
     _ -> pure ()
