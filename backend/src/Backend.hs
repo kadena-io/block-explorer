@@ -32,6 +32,4 @@ serveBackendRoute :: R BackendRoute -> Snap ()
 serveBackendRoute br = do
   liftIO $ putStrLn "Incoming request"
   case br of
-    BackendRoute_About :=> _
-      -> serveFile $ T.unpack (static @"about.html")
     _ -> pure ()

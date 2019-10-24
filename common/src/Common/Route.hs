@@ -40,7 +40,6 @@ import           Common.Utils
 data BackendRoute :: * -> * where
   -- | Used to handle unparseable routes.
   BackendRoute_Missing :: BackendRoute ()
-  BackendRoute_About :: BackendRoute ()
 
 data BlockRoute :: * -> * where
   Block_Header :: BlockRoute ()
@@ -86,6 +85,7 @@ blockRouteEncoder2 = unsafeMkEncoder $ EncoderImpl
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
+  FR_About :: FrontendRoute ()
   FR_Block :: FrontendRoute (Int, Text, R BlockRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
@@ -110,12 +110,11 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
   pathComponentEncoder $ \case
     FullRoute_Backend backendRoute -> case backendRoute of
       BackendRoute_Missing -> PathSegment "missing" $ unitEncoder mempty
-      --BackendRoute_Hashes -> PathSegment "hash" singlePathSegmentEncoder
-      BackendRoute_About -> PathSegment "about" $ unitEncoder mempty
     FullRoute_Frontend obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
       -- The encoder given to PathEnd determines how to parse query parameters,
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty
+      FR_About -> PathSegment "about" $ unitEncoder mempty
       FR_Block -> PathSegment "block" blockRouteEncoder2
         --pathSegmentEncoder . bimap unwrappedEncoder (maybeEncoder (unitEncoder mempty) blockRouteEncoder)
 
