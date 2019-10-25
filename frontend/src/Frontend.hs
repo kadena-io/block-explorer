@@ -34,6 +34,7 @@ import           Text.Printf
 ------------------------------------------------------------------------------
 import           Common.Route
 import           Common.Utils
+import           Frontend.About
 import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
@@ -109,14 +110,6 @@ mainApp = do
       FR_Main -> blockTableWidget
       FR_About -> aboutWidget
       FR_Block -> blockPage
-
-aboutWidget
-  :: (MonadApp r t m, Prerender js t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => App r t m ()
-aboutWidget = do
-  el "h1" $ text "About the Kadena Block Explorer"
-  el "p" $ text "Coming soon..."
 
 footer
   :: (DomBuilder t m)

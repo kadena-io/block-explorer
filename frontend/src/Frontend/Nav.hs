@@ -74,7 +74,7 @@ nav = do
       learnMore
       divClass "item" $ text "Kadena Testnet"
       --networkWidget
-      return $ constDyn (Just ProdNet)
+      return $ constDyn (Just DevNet)
 
 getStarted
   :: (DomBuilder t m, PostBuild t m, MonadFix m, MonadHold t m)
