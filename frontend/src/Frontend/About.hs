@@ -23,7 +23,7 @@ aboutWidget = divClass "ui text container" $ do
     el "li" $ text "Block ID is the hash of the block header"
     el "li" $ text "Time that the miner started mining the block"
     el "li" $ text "The number of transactions mined within the block of a given chain"
-  el "p" $ text "The Kadena Public Blockchain runs a protocol called Chainweb, a novel parallel-chain Proof-of-Work architecture comprised of braided chains that all mine the same native currency and transfer liquidity between each other."
+  el "p" $ text "The Kadena Public Blockchain runs a protocol called Chainweb, a novel parallel-chain proof of work architecture comprised of braided chains that all mine the same native currency and transfer liquidity between each other."
   el "p" $ text "In Chainweb, the braided chains incorporate Merkle proofs from adjacent chains in a fixed graph layout that ensures that proofs quickly propagate to every other chain in the system within some maximum block depth."
   el "p" $ text "Hover your cursor over any block to highlight the neighbor chains that are cryptographically linked to it. In this 10 chain configuration, notice that all 10 chains become braided together within the height of two blocks."
   el "p" $ text "By linking multiple chains together in this manner, Kadena offers massive throughput and enhanced security."
