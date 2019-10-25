@@ -42,6 +42,7 @@ library
   exposed-modules:
     Blake2Native
     Frontend
+    Frontend.About
     Frontend.App
     Frontend.AppState
     Frontend.Common
