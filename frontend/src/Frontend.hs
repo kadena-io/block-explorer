@@ -121,7 +121,7 @@ mainApp
 mainApp = do
     pb <- getPostBuild
     subRoute_ $ \case
-      FR_Main -> setRoute ((FR_Testnet :/ ) <$ pb) >> blank
+      FR_Main -> setRoute (FR_Testnet <$ pb)
       FR_About -> aboutWidget
       FR_Mainnet -> blockTableWidget
       FR_Testnet -> blockTableWidget
