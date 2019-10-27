@@ -105,8 +105,12 @@ blockRouteEncoder = pathComponentEncoder $ \case
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
   FR_About :: FrontendRoute ()
-  FR_Block :: FrontendRoute (Int :. Text :. R BlockRoute)
+  FR_Mainnet :: FrontendRoute BlockIdRoute
+  FR_Testnet :: FrontendRoute BlockIdRoute
+  FR_Customnet :: FrontendRoute (Domain :. BlockIdRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
+
+type BlockIdRoute = Int :. Text :. R BlockRoute
 
 pathOnlyEncoderIgnoringQuery :: (Applicative check, MonadError Text parse) => Encoder check parse [Text] PageName
 pathOnlyEncoderIgnoringQuery = unsafeMkEncoder $ EncoderImpl
@@ -134,7 +138,26 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty
       FR_About -> PathSegment "about" $ unitEncoder mempty
-      FR_Block -> PathSegment "chain" $ pathParamEncoder unsafeTshowEncoder $ pathLiteralEncoder "block" $ pathParamEncoder id blockRouteEncoder
+      FR_Mainnet -> PathSegment "mainnet" $ blockIdRouteEncoder
+      FR_Testnet -> PathSegment "testnet" $ blockIdRouteEncoder
+      FR_Customnet -> PathSegment "custom" $ pathParamEncoder id blockIdRouteEncoder
+
+blockIdRouteEncoder :: Encoder (Either Text) (Either Text) BlockIdRoute PageName
+blockIdRouteEncoder = pathLiteralEncoder "chain" $ pathParamEncoder unsafeTshowEncoder $ pathLiteralEncoder "block" $ pathParamEncoder id blockRouteEncoder
+
+--TODO: Ensure it's really a valid domain name
+type Domain = Text
+
+data NetId
+   = NetId_Mainnet
+   | NetId_Testnet
+   | NetId_Custom Domain
+
+addNetRoute :: NetId -> BlockIdRoute -> R FrontendRoute
+addNetRoute netId r = case netId of
+  NetId_Mainnet -> FR_Mainnet :/ r
+  NetId_Testnet -> FR_Testnet :/ r
+  NetId_Custom domain -> FR_Customnet :/ domain :. r
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
@@ -158,4 +181,6 @@ frToText :: Some FrontendRoute -> Text
 frToText (Some.Some sec) = case sec of
   FR_Main -> "Home"
   FR_About -> "About"
-  FR_Block -> "Block"
+  FR_Mainnet -> "Block"
+  FR_Testnet -> "Block"
+  FR_Customnet -> "Block"

@@ -43,6 +43,16 @@ import           Frontend.Nav
 import           Frontend.Page.Block
 ------------------------------------------------------------------------------
 
+------------------------------------------------------------------------------
+-- BEGIN: Move to Obelisk.Route.Frontend
+
+import Data.Functor.Misc
+
+subPairRoute_ :: (MonadFix m, MonadHold t m, Eq a, Adjustable t m) => (a -> RoutedT t b m ()) -> RoutedT t (a, b) m ()
+subPairRoute_ f = withRoutedT (fmap (\(a, b) -> Const2 a :/ b)) $ subRoute_ (\(Const2 a) -> f a)
+
+-- END: Move to Obelisk.Route.Frontend
+------------------------------------------------------------------------------
 
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
@@ -53,6 +63,7 @@ frontend = Frontend
       _ <- elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $
         networkView (appWithNetwork route <$> curNet)
       footer
+      display =<< askRoute
   }
 
 appWithNetwork
@@ -109,7 +120,10 @@ mainApp = do
     subRoute_ $ \case
       FR_Main -> blockTableWidget
       FR_About -> aboutWidget
-      FR_Block -> blockPage
+      FR_Mainnet -> blockPage NetId_Mainnet
+      FR_Testnet -> blockPage NetId_Testnet
+      FR_Customnet -> subPairRoute_ $ \domain -> do
+        blockPage $ NetId_Custom domain
 
 footer
   :: (DomBuilder t m)
@@ -265,7 +279,7 @@ blockWidget0 ti hoveredBlock hs height cid = do
       divClass "summary-inner" $ do
         el "div" $ do
           let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
-          let mkRoute h = FR_Block :/ unChainId cid :. getHash h :. Block_Header :/ ()
+          let mkRoute h = addNetRoute NetId_Testnet $ unChainId cid :. getHash h :. Block_Header :/ () --TODO: Which NetId should it be?
           elClass "span" "blockheight" $ do
             dynRouteLink (mkRoute <$> bh) $
               dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
