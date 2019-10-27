@@ -8,6 +8,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 module Frontend.Page.Block where
 
 ------------------------------------------------------------------------------
@@ -36,7 +37,7 @@ import           Frontend.Page.Transaction
 blockPage
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => App (Int, Text, R BlockRoute) t m ()
+  => App (Int :. Text :. R BlockRoute) t m ()
 blockPage = do
     args <- askRoute
     void $ networkView (blockWidget <$> args)
@@ -44,9 +45,9 @@ blockPage = do
 blockWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => (Int, Text, R BlockRoute)
+  => Int :. Text :. R BlockRoute
   -> m ()
-blockWidget (cid, hash, r) = do
+blockWidget (cid :. hash :. r) = do
   as <- ask
   let h = _as_host as
       c = ChainId cid
@@ -60,7 +61,7 @@ blockLink
   -> Hash
   -> m ()
 blockLink chainId hash =
-  routeLink (FR_Block :/ (unChainId chainId, hashB64U hash, Block_Header :/ ())) $ text $ hashHex hash
+  routeLink (FR_Block :/ unChainId chainId :. hashB64U hash :. Block_Header :/ ()) $ text $ hashHex hash
 
 
 blockPageNoPayload
@@ -137,4 +138,4 @@ blockPayloadWidget c bh bp = do
         let rawHash = _blockHeader_hash bh
         let hash = hashB64U rawHash
         tfield "Transactions" $
-          routeLink (FR_Block :/ (unChainId c, hash, Block_Transactions :/ ())) $ text $ hashHex rawHash
+          routeLink (FR_Block :/ unChainId c :. hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash

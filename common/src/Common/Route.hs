@@ -9,31 +9,61 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Common.Route where
 
-{- -- You will probably want these imports for composing Encoders.
-import Prelude hiding (id, (.))
-import Control.Category
--}
-
 ------------------------------------------------------------------------------
---import           Prelude hiding ((.), id)
---import           Control.Category (Category (..))
-import           Control.Lens
+import           Prelude hiding ((.), id)
+import           Control.Category (Category (..))
+import           Control.Categorical.Bifunctor
 import           Control.Monad.Except
-import           Data.Readable
+import           Data.Functor.Identity
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Data.Text.Encoding
+import           Data.Text.Encoding hiding (Some)
 import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
 ------------------------------------------------------------------------------
-import           Common.Utils
+
+------------------------------------------------------------------------------
+-- START: Move to Obelisk.Route
+
+infixr 5 :.
+type (:.) = (,)
+
+{-# COMPLETE (:.) #-}
+pattern (:.) :: a -> b -> a :. b
+pattern a :. b = (a, b)
+
+addPathSegmentEncoder
+  :: ( Applicative check
+     , MonadError Text parse
+     )
+  => Encoder check parse (Text, PageName) PageName
+addPathSegmentEncoder = unsafeMkEncoder $ EncoderImpl
+  { _encoderImpl_encode = \(ph, (pt, q)) -> (ph : pt, q)
+  , _encoderImpl_decode = \(p, q) -> case p of
+      [] -> throwError "Expected a path segment"
+      ph : pt -> pure (ph, (pt, q))
+  }
+
+pathParamEncoder
+  :: forall check parse item rest.
+     ( Applicative check
+     , MonadError Text parse
+     )
+  => Encoder check parse item Text
+  -> Encoder check parse rest PageName
+  -> Encoder check parse (item :. rest) PageName
+pathParamEncoder itemUnchecked restUnchecked = addPathSegmentEncoder . bimap itemUnchecked restUnchecked
+
+-- END: Move to Obelisk.Route
 ------------------------------------------------------------------------------
 
 data BackendRoute :: * -> * where
@@ -50,26 +80,6 @@ blockRouteEncoder = pathComponentEncoder $ \case
   Block_Header -> PathEnd $ unitEncoder mempty
   Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
 
-
-blockRouteEncoder2
-  :: Encoder (Either Text) (Either Text) (Int, Text, R BlockRoute) PageName
-blockRouteEncoder2 = unsafeMkEncoder $ EncoderImpl
-  { _encoderImpl_decode = \(path, _query) ->
-      case path of
-        (cidStr : hash : rest) -> do
-          cid <- maybe (Left "Could not parse chain id") Right $ fromText cidStr
-          br <- case rest of
-                  [] -> Right Block_Header
-                  ["txs"] -> Right Block_Transactions
-                  _ -> throwError $ "blockRouteEncoder: Invalid path " <> tshow path
-          pure (cid, hash, br :/ ())
-        l -> throwError $ "singletonListEncoderImpl: expected one item, got " <> tshow (length l)
-  , _encoderImpl_encode = \(cid, hash, br :/ _) ->
-      case br of
-        Block_Header -> ([tshow cid, hash], mempty)
-        Block_Transactions -> ([tshow cid, hash, "txs"], mempty)
-  }
-
 --blockRouteToPath :: BlockRoute () -> [Text]
 --blockRouteToPath Block_Header = []
 --blockRouteToPath Block_Transactions = ["txs"]
@@ -85,7 +95,7 @@ blockRouteEncoder2 = unsafeMkEncoder $ EncoderImpl
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
   FR_About :: FrontendRoute ()
-  FR_Block :: FrontendRoute (Int, Text, R BlockRoute)
+  FR_Block :: FrontendRoute (Int :. Text :. R BlockRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 pathOnlyEncoderIgnoringQuery :: (Applicative check, MonadError Text parse) => Encoder check parse [Text] PageName
@@ -114,8 +124,7 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty
       FR_About -> PathSegment "about" $ unitEncoder mempty
-      FR_Block -> PathSegment "block" blockRouteEncoder2
-        --pathSegmentEncoder . bimap unwrappedEncoder (maybeEncoder (unitEncoder mempty) blockRouteEncoder)
+      FR_Block -> PathSegment "block" $ pathParamEncoder unsafeTshowEncoder $ pathParamEncoder id blockRouteEncoder
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
