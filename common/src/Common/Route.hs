@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -10,6 +11,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Common.Route where
@@ -19,17 +21,23 @@ import           Prelude hiding ((.), id)
 import           Control.Categorical.Bifunctor
 import           Control.Category (Category (..))
 import           Control.Category.Monoidal
+import           Control.Lens (to, iso)
 import           Control.Monad.Except
+import           Data.Aeson
 import           Data.Functor.Identity
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding hiding (Some)
+import           GHC.Generics (Generic)
 import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
+------------------------------------------------------------------------------
+import           Common.Types
+import           Common.Utils
 ------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------------
@@ -53,6 +61,20 @@ addPathSegmentEncoder = unsafeMkEncoder $ EncoderImpl
       [] -> throwError "Expected a path segment"
       ph : pt -> pure (ph, (pt, q))
   }
+
+--fmapEncoder
+--  :: ( Applicative check
+--     , MonadError Text parse
+--     )
+--  => (a -> b)
+--  -> Encoder check parse a c
+--  -> Encoder check parse b c
+--fmapEncoder f = unsafeMkEncoder $ EncoderImpl
+--  { _encoderImpl_encode = \(ph, (pt, q)) -> (ph : pt, q)
+--  , _encoderImpl_decode = \(p, q) -> case p of
+--      [] -> throwError "Expected a path segment"
+--      ph : pt -> pure (ph, (pt, q))
+--  }
 
 pathParamEncoder
   :: forall check parse item rest.
@@ -105,9 +127,9 @@ blockRouteEncoder = pathComponentEncoder $ \case
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
   FR_About :: FrontendRoute ()
-  FR_Mainnet :: FrontendRoute BlockIdRoute
-  FR_Testnet :: FrontendRoute BlockIdRoute
-  FR_Customnet :: FrontendRoute (Domain :. BlockIdRoute)
+  FR_Mainnet :: FrontendRoute (NetId :. BlockIdRoute)
+  FR_Testnet :: FrontendRoute (NetId :. BlockIdRoute)
+  FR_Customnet :: FrontendRoute (NetId :. BlockIdRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 type BlockIdRoute = Int :. Text :. R BlockRoute
@@ -138,26 +160,21 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty
       FR_About -> PathSegment "about" $ unitEncoder mempty
-      FR_Mainnet -> PathSegment "mainnet" $ blockIdRouteEncoder
-      FR_Testnet -> PathSegment "testnet" $ blockIdRouteEncoder
-      FR_Customnet -> PathSegment "custom" $ pathParamEncoder id blockIdRouteEncoder
+      FR_Mainnet -> PathSegment "mainnet" $ blockIdRouteEncoder . tuplize NetId_Mainnet
+      FR_Testnet -> PathSegment "testnet" $ blockIdRouteEncoder . tuplize NetId_Testnet
+      FR_Customnet -> PathSegment "custom" $ pathParamEncoder (prismEncoder humanReadableTextPrism) blockIdRouteEncoder
+
+tuplize :: (Applicative check, Applicative parse) => b -> Encoder check parse (b, a) a
+tuplize b = isoEncoder (iso snd (b,))
 
 blockIdRouteEncoder :: Encoder (Either Text) (Either Text) BlockIdRoute PageName
 blockIdRouteEncoder = pathLiteralEncoder "chain" $ pathParamEncoder unsafeTshowEncoder $ pathLiteralEncoder "block" $ pathParamEncoder id blockRouteEncoder
 
---TODO: Ensure it's really a valid domain name
-type Domain = Text
-
-data NetId
-   = NetId_Mainnet
-   | NetId_Testnet
-   | NetId_Custom Domain
-
 addNetRoute :: NetId -> BlockIdRoute -> R FrontendRoute
 addNetRoute netId r = case netId of
-  NetId_Mainnet -> FR_Mainnet :/ r
-  NetId_Testnet -> FR_Testnet :/ r
-  NetId_Custom domain -> FR_Customnet :/ domain :. r
+  NetId_Mainnet -> FR_Mainnet :/ netId :. r
+  NetId_Testnet -> FR_Testnet :/ netId :. r
+  NetId_Custom chost -> FR_Customnet :/ netId :. r
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute

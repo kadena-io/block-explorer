@@ -21,6 +21,7 @@ import           Obelisk.Configs
 import           Obelisk.Generated.Static
 import           Reflex.Dom
 ------------------------------------------------------------------------------
+import           Common.Types
 import           Common.Utils
 import           Frontend.ChainwebApi
 import           Frontend.Storage

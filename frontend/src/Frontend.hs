@@ -19,6 +19,7 @@ import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Ord
+import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Time
@@ -33,6 +34,7 @@ import           Reflex.Network
 import           Text.Printf
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Common.Types
 import           Common.Utils
 import           Frontend.About
 import           Frontend.App
@@ -117,13 +119,16 @@ mainApp
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => App (R FrontendRoute) t m ()
 mainApp = do
+    pb <- getPostBuild
     subRoute_ $ \case
-      FR_Main -> blockTableWidget
+      FR_Main -> setRoute ((FR_Testnet :/ ) <$ pb) >> blank
       FR_About -> aboutWidget
-      FR_Mainnet -> blockPage NetId_Mainnet
-      FR_Testnet -> blockPage NetId_Testnet
+      FR_Mainnet -> blockTableWidget
+      FR_Testnet -> blockTableWidget
       FR_Customnet -> subPairRoute_ $ \domain -> do
-        blockPage $ NetId_Custom domain
+        case fromText domain of
+          Nothing -> text "Error in URL"
+          Just h -> blockPage $ NetId_Custom (ChainwebHost h Testnet02)
 
 footer
   :: (DomBuilder t m)

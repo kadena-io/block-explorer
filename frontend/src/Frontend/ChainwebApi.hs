@@ -36,6 +36,7 @@ import           Text.Printf
 ------------------------------------------------------------------------------
 import           Blake2Native
 import           Common.Utils
+import           Common.Types
 ------------------------------------------------------------------------------
 
 type BlockHeight = Int
@@ -50,36 +51,6 @@ newtype ChainId = ChainId { unChainId :: Int }
 
 instance Show ChainId where
   show (ChainId b) = show b
-
-data Host = Host
-  { hostAddress :: Text
-  , hostPort :: Int
-  } deriving (Eq,Ord,Show,Read,Generic)
-
-instance ToJSON Host where
-    toEncoding = genericToEncoding defaultOptions
-instance FromJSON Host
-
-data ChainwebVersion = Development | Testnet02 | Mainnet01
-  deriving (Eq,Ord,Show,Read,Generic)
-
-instance ToJSON ChainwebVersion where
-    toEncoding = genericToEncoding defaultOptions
-instance FromJSON ChainwebVersion
-
-versionText :: ChainwebVersion -> Text
-versionText Development = "development"
-versionText Testnet02 = "testnet02"
-versionText Mainnet01 = "mainnet01"
-
-data ChainwebHost = ChainwebHost
-  { chHost :: Host
-  , chVersion :: ChainwebVersion
-  } deriving (Eq,Ord,Show,Read,Generic)
-
-instance ToJSON ChainwebHost where
-    toEncoding = genericToEncoding defaultOptions
-instance FromJSON ChainwebHost
 
 apiBaseUrl :: ChainwebHost -> Text
 apiBaseUrl (ChainwebHost h cver) =

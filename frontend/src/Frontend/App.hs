@@ -22,6 +22,7 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Common.Types
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 ------------------------------------------------------------------------------

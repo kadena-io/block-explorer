@@ -37,6 +37,7 @@ import           Reflex.Dom
 import           Reflex.Dom.EventSource
 import           Reflex.Network
 ------------------------------------------------------------------------------
+import           Common.Types
 import           Common.Utils
 import           Frontend.ChainwebApi
 ------------------------------------------------------------------------------

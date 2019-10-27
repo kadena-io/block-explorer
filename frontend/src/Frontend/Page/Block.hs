@@ -25,6 +25,7 @@ import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Common.Types
 import           Common.Utils
 import           Frontend.App
 import           Frontend.AppState
