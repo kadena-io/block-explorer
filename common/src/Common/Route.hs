@@ -16,8 +16,9 @@ module Common.Route where
 
 ------------------------------------------------------------------------------
 import           Prelude hiding ((.), id)
-import           Control.Category (Category (..))
 import           Control.Categorical.Bifunctor
+import           Control.Category (Category (..))
+import           Control.Category.Monoidal
 import           Control.Monad.Except
 import           Data.Functor.Identity
 import           Data.Some (Some)
@@ -62,6 +63,15 @@ pathParamEncoder
   -> Encoder check parse rest PageName
   -> Encoder check parse (item :. rest) PageName
 pathParamEncoder itemUnchecked restUnchecked = addPathSegmentEncoder . bimap itemUnchecked restUnchecked
+
+pathLiteralEncoder
+  :: ( Applicative check
+     , MonadError Text parse
+     )
+  => Text
+  -> Encoder check parse a PageName
+  -> Encoder check parse a PageName
+pathLiteralEncoder t e = addPathSegmentEncoder . bimap (unitEncoder t) e . coidl
 
 -- END: Move to Obelisk.Route
 ------------------------------------------------------------------------------
@@ -124,7 +134,7 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty
       FR_About -> PathSegment "about" $ unitEncoder mempty
-      FR_Block -> PathSegment "block" $ pathParamEncoder unsafeTshowEncoder $ pathParamEncoder id blockRouteEncoder
+      FR_Block -> PathSegment "chain" $ pathParamEncoder unsafeTshowEncoder $ pathLiteralEncoder "block" $ pathParamEncoder id blockRouteEncoder
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
