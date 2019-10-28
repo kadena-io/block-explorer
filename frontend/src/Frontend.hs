@@ -121,14 +121,25 @@ mainApp
 mainApp = do
     pb <- getPostBuild
     subRoute_ $ \case
-      FR_Main -> setRoute (FR_Testnet <$ pb)
+      FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
       FR_About -> aboutWidget
       FR_Mainnet -> blockTableWidget
       FR_Testnet -> blockTableWidget
       FR_Customnet -> subPairRoute_ $ \domain -> do
-        case fromText domain of
-          Nothing -> text "Error in URL"
-          Just h -> blockPage $ NetId_Custom (ChainwebHost h Testnet02)
+        blockPage $ NetId_Custom (ChainwebHost h Testnet02)
+        --case fromText domain of
+        --  Nothing -> text "Error in URL"
+        --  Just h -> text $ "got host " <> h --blockPage $ NetId_Custom (ChainwebHost h Testnet02)
+
+networkDispatch
+  :: MonadApp r t m
+  => NetId
+  -> m ()
+networkDispatch net = do
+  subRuote_ $ \case
+    NetRoute_Chainweb -> blockTableWidget
+    NetRoute_Chain -> blockPage
+
 
 footer
   :: (DomBuilder t m)

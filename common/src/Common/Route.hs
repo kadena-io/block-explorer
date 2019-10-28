@@ -130,10 +130,10 @@ data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
   NetRoute_Chain :: NetRoute BlockIdRoute
 
-netRouteEncoder :: Encoder (Either Text) (Either Text) BlockIdRoute PageName
+netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_Chainweb -> PathEnd $ unitEncoder mempty
-  NetRoute_Chain -> blockIdRouteEncoder
+  NetRoute_Chain -> PathSegment "dashboard" blockIdRouteEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
@@ -178,14 +178,15 @@ blockIdRouteEncoder = pathLiteralEncoder "chain" $ pathParamEncoder unsafeTshowE
 
 addNetRoute :: NetId -> BlockIdRoute -> R FrontendRoute
 addNetRoute netId r = case netId of
-  NetId_Mainnet -> FR_Mainnet :/ r
-  NetId_Testnet -> FR_Testnet :/ r
-  NetId_Custom chost -> FR_Customnet :/ chost :. r
+  NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ r
+  NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ r
+  NetId_Custom chost -> FR_Customnet :/ (chost :. (NetRoute_Chain :/ r))
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
   , ''BlockRoute
+  , ''NetRoute
   ]
 
 getAppRoute :: HasConfigs m => m Text
