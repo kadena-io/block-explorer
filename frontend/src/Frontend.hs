@@ -45,17 +45,6 @@ import           Frontend.Nav
 import           Frontend.Page.Block
 ------------------------------------------------------------------------------
 
-------------------------------------------------------------------------------
--- BEGIN: Move to Obelisk.Route.Frontend
-
-import Data.Functor.Misc
-
-subPairRoute_ :: (MonadFix m, MonadHold t m, Eq a, Adjustable t m) => (a -> RoutedT t b m ()) -> RoutedT t (a, b) m ()
-subPairRoute_ f = withRoutedT (fmap (\(a, b) -> Const2 a :/ b)) $ subRoute_ (\(Const2 a) -> f a)
-
--- END: Move to Obelisk.Route.Frontend
-------------------------------------------------------------------------------
-
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = appHead
