@@ -22,9 +22,12 @@ import           Data.Ord
 import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
+import           Obelisk.Configs
 import           Obelisk.Frontend
 import           Obelisk.Generated.Static
 import           Obelisk.Route
@@ -149,7 +152,10 @@ footer = do
     lnk nm url = elAttr "a" ("class" =: "item" <> "href" =: url) $ text nm
 
 
-appHead :: DomBuilder t m => m ()
+getTextCfg :: HasConfigs m => Text -> m (Maybe Text)
+getTextCfg p = fmap (T.strip . T.decodeUtf8With T.lenientDecode) <$> getConfig p
+
+appHead :: (DomBuilder t m, HasConfigs m) => m ()
 appHead = do
   el "title" $ text "Kadena Block Explorer"
   elAttr "link" ("rel" =: "shortcut icon" <>
@@ -157,11 +163,27 @@ appHead = do
                  "type" =: "image/svg+xml"
                 ) blank
 
+  mTrackId <- getTextCfg "frontend/tracking-id"
+  case mTrackId of
+    Nothing -> googleAnalyticsTracker "UA-127512784-5"
+    Just tid -> googleAnalyticsTracker tid
+    Just "no-tracking" -> blank
+
   css (static @"semantic.min.css")
   css (static @"css/custom.css")
   --jsScript "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"
   jsScript (static @"jquery-3.1.1.min.js")
   jsScript (static @"semantic.min.js")
+
+googleAnalyticsTracker gaTrackingId = do
+  let gtagSrc = "https://www.googletagmanager.com/gtag/js?id=" <> gaTrackingId
+  elAttr "script" ("async" =: "" <> "src" =: gtagSrc) blank
+  el "script" $ text $ T.unlines
+    [ "window.dataLayer = window.dataLayer || [];"
+    , "function gtag(){dataLayer.push(arguments);}"
+    , "gtag('js', new Date());"
+    , "gtag('config', '" <> gaTrackingId <> "');"
+    ]
 
 css :: DomBuilder t m => Text -> m ()
 css url = elAttr "link" ("rel" =: "stylesheet" <> "type" =: "text/css" <> "href" =: url) blank
