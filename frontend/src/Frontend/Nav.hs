@@ -26,27 +26,27 @@ import           Frontend.ChainwebApi
 import           Frontend.Storage
 ------------------------------------------------------------------------------
 
-data Network = DevNet | ProdNet | CustomNet ChainwebHost
+data Network = TestNet | MainNet | CustomNet ChainwebHost
   deriving (Eq,Ord,Show,Generic)
 
 instance ToJSON Network where
     toEncoding = genericToEncoding defaultOptions
 instance FromJSON Network
 
-devHost :: ChainwebHost
-devHost = ChainwebHost (Host "us3.tn1.chainweb.com" 443) Development
+testnetHost :: ChainwebHost
+testnetHost = ChainwebHost (Host "us2.testnet.chainweb.com" 443) Testnet02
 
-prodHost :: ChainwebHost
-prodHost = ChainwebHost (Host "eu2.testnet.chainweb.com" 443) Testnet02
+mainnetHost :: ChainwebHost
+mainnetHost = ChainwebHost (Host "us-e3.chainweb.com" 443) Mainnet01
 
 networkHost :: Network -> ChainwebHost
-networkHost DevNet = devHost
-networkHost ProdNet = prodHost
+networkHost TestNet = testnetHost
+networkHost MainNet = mainnetHost
 networkHost (CustomNet ch) = ch
 
 instance Humanizable Network where
-  humanize DevNet = "Kadena Dev Testnet"
-  humanize ProdNet = "Kadena Prod Testnet"
+  humanize TestNet = "Kadena Testnet"
+  humanize MainNet = "Kadena Mainnet"
   humanize (CustomNet ch) = hostAddress $ chHost ch
 
 -- | Storage keys for referencing data to be stored/retrieved.
@@ -72,9 +72,7 @@ nav = do
       linkItem "About" "/about"
       getStarted
       learnMore
-      divClass "item" $ text "Kadena Testnet"
-      --networkWidget
-      return $ constDyn (Just ProdNet)
+      networkWidget
 
 getStarted
   :: (DomBuilder t m, PostBuild t m, MonadFix m, MonadHold t m)
@@ -129,12 +127,12 @@ networkWidget = mdo
   (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
     dynText $ maybe "" humanize <$> curNet
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
-    (dev,prod) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      d <- networkItem DevNet
-      p <- networkItem ProdNet
-      return (d,p)
-    let netChange = Just <$> leftmost [prod, dev]
-        chooseDefault cur = maybe (Just ProdNet) Just cur
+    (tn,mn) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
+      t <- networkItem TestNet
+      m <- networkItem MainNet
+      return (t,m)
+    let netChange = Just <$> leftmost [tn,mn]
+        chooseDefault cur = maybe (Just MainNet) Just cur
     rec
         curNet <- fmap join $ prerender (return $ constDyn host) $ do
           pb <- getPostBuild
