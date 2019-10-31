@@ -210,10 +210,11 @@ blockTableWidget = do
       elapsed = elapsedTime <$> stats <*> dti
       tps = calcTps <$> stats <*> elapsed
       hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
+      coinsLeft = (\st -> (realToFrac $ _gs_blocksCountdown st) * (2.33 :: Double)) <$> stats
 
   divClass "ui segment" $ divClass "ui three statistics" $ do
     statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-    statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
+    statistic "Coins Left to mine" (dynText $ T.pack . (printf "%.2f") <$> coinsLeft)
     statistic "Current TPS" (dynText $ showTps <$> tps)
 
   divClass "block-table" $ do
