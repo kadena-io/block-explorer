@@ -207,7 +207,7 @@ blockTableWidget = do
     t <- liftIO getCurrentTime
     clockLossy 1 t
 
-  let elapsedTime gs ti = max 0 $ diffUTCTime (_tickInfo_lastUTC ti) (_gs_startTime gs)
+  let elapsedTime gs ti = diffUTCTime (_tickInfo_lastUTC ti) (_gs_startTime gs)
       elapsed = elapsedTime <$> stats <*> dti
       tps = calcTps <$> stats <*> elapsed
       hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
@@ -233,8 +233,8 @@ blockTableWidget = do
     return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
-    end = UTCTime (fromGregorian 2019 12 4) 0
-    f a = format $ convertToDHMS $ truncate $ diffUTCTime end (_tickInfo_lastUTC a)
+    endTime = UTCTime (fromGregorian 2019 12 4) 0 -- December 4, 2019
+    f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime endTime (_tickInfo_lastUTC a)
     format :: (Int, Int, Int, Int) -> Text
     format (d, h, m, s) = T.pack $ printf "%d days %02d:%02d:%02d" d h m s
     convertToDHMS t =
