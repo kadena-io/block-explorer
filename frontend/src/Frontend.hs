@@ -284,12 +284,11 @@ blockWidget0 ti hoveredBlock hs height cid = do
   let mbh = M.lookup cid <$> hs
   (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
     viewIntoMaybe mbh blank $ \bh -> do
-      divClass "summary-inner" $ do
+      let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
+      let mkRoute h = (FR_Block :/ (unChainId cid, getHash h, Block_Header :/ ()))
+      dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         el "div" $ do
-          let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
-          let mkRoute h = (FR_Block :/ (unChainId cid, getHash h, Block_Header :/ ()))
           elClass "span" "blockheight" $ do
-            dynRouteLink (mkRoute <$> bh) $
               dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 
         let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
