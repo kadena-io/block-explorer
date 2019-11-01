@@ -18,6 +18,7 @@ import           Control.Monad.Ref
 import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Fixed
 import           Data.Ord
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -211,10 +212,11 @@ blockTableWidget = do
       tps = calcTps <$> stats <*> elapsed
       hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
 
-  divClass "ui segment" $ divClass "ui three statistics" $ do
-    statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-    statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
-    statistic "Current TPS" (dynText $ showTps <$> tps)
+  divClass "ui segment" $ do
+    divClass "ui small three statistics" $ do
+        statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+        statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
+        statistic "Time until transactions are turned on" $ dynText (fmap f dti)
 
   divClass "block-table" $ do
     divClass "header-row" $ do
@@ -231,6 +233,15 @@ blockTableWidget = do
     return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
+    endTime = UTCTime (fromGregorian 2019 12 4) 0 -- December 4, 2019
+    f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime endTime (_tickInfo_lastUTC a)
+    format :: (Int, Int, Int, Int) -> Text
+    format (d, h, m, s) = T.pack $ printf "%d days %02d:%02d:%02d" d h m s
+    convertToDHMS t =
+      let (m', s) = divMod t 60
+          (h', m) = divMod m' 60
+          (d, h) = divMod h' 24
+      in (d, h, m , s)
 
 chainDifficulty :: ChainId -> BlockTable -> Text
 chainDifficulty cid bt =
