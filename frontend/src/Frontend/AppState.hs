@@ -137,7 +137,7 @@ addHashrateData (cid, hrd) gs = gs { _gs_hashrates = M.insert cid hrd hrs }
     hrs = _gs_hashrates gs
 
 blockCountdown :: BlockHeaderTx -> GlobalStats -> GlobalStats
-blockCountdown bhtx gs = gs { _gs_blocksCountdown =  _gs_blocksCountdown gs - 1 }
+blockCountdown _ gs = gs { _gs_blocksCountdown =  _gs_blocksCountdown gs - 1 }
 
 addTxCount :: BlockHeaderTx -> GlobalStats -> GlobalStats
 addTxCount bhtx gs = gs { _gs_txCount = _gs_txCount gs + maybe 0 fromIntegral (_blockHeaderTx_txCount bhtx) }
@@ -160,13 +160,11 @@ getMissing bt bhtx = filter (\p -> getBlock (height-1) (fst p) bt == Nothing) ci
     cids = (_blockHeader_chainId h, _blockHeader_parent h) :
            M.toList (_blockHeader_neighbors h)
 
-
 totalNumberOfBlocks :: Word64
 totalNumberOfBlocks = round (((diffUTCTime endDay startDay) / 30) * 10)
   where
     startDay = UTCTime (fromGregorian 2019 10 30) 0
     endDay = UTCTime (fromGregorian 2019 12 05) 0
-
 
 stateManager
     :: (DomBuilder t m, MonadHold t m, Prerender js t m, MonadFix m,

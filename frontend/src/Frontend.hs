@@ -214,7 +214,7 @@ blockTableWidget = do
 
   divClass "ui segment" $ divClass "ui three statistics" $ do
     statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-    statistic "Coins Left to mine" (dynText $ T.pack . (printf "%.2f") <$> coinsLeft)
+    statistic "Coins Left To be Mined" (dynText $ T.pack . (printf "%.2f") <$> coinsLeft)
     statistic "Current TPS" (dynText $ showTps <$> tps)
 
   divClass "block-table" $ do
