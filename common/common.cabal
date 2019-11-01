@@ -8,6 +8,7 @@ library
   build-depends: base
                , containers
                , dependent-sum
+               , hashable
                , lens
                , obelisk-executable-config-lookup
                , obelisk-route

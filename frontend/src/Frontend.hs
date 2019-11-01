@@ -9,6 +9,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 module Frontend where
 
 ------------------------------------------------------------------------------
@@ -94,43 +95,30 @@ appWithServer
   -> Maybe ServerInfo
   -> m ()
 appWithServer _ _ Nothing = text "Loading server info..."
-appWithServer route ch (Just si) = runApp route ch si mainApp
-
-getServerInfo
-  :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
-      HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
-  => ChainwebHost
-  -> m (Dynamic t (Maybe ServerInfo))
-getServerInfo h = do
+appWithServer route ch (Just si) = do
+  --runApp route ch si mainApp
   pb <- getPostBuild
-  ese <- cutToServerInfo <$$$> getCut (h <$ pb)
-  holdDyn Nothing ese
-
-mainApp
-  :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => App (R FrontendRoute) t m ()
-mainApp = do
-    pb <- getPostBuild
-    subRoute_ $ \case
-      FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
-      FR_About -> aboutWidget
-      FR_Mainnet -> blockTableWidget
-      FR_Testnet -> blockTableWidget
-      FR_Customnet -> subPairRoute_ $ \domain -> do
-        blockPage $ NetId_Custom (ChainwebHost h Testnet02)
-        --case fromText domain of
-        --  Nothing -> text "Error in URL"
-        --  Just h -> text $ "got host " <> h --blockPage $ NetId_Custom (ChainwebHost h Testnet02)
+  subRoute_ $ \case
+    FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
+    FR_About -> aboutWidget
+    FR_Mainnet -> networkDispatch NetId_Mainnet
+    FR_Testnet -> networkDispatch NetId_Testnet
+    FR_Customnet -> subPairRoute_ $ \host ->
+      networkDispatch (NetId_Custom host)
 
 networkDispatch
   :: MonadApp r t m
+  => RouteToUrl (R FrontendRoute) m
+  => SetRoute t (R FrontendRoute) m
+  => Prerender js t m
+  => MonadJSM (Performable m)
+  => HasJSContext (Performable m)
   => NetId
-  -> m ()
+  -> App (R NetRoute) t m ()
 networkDispatch net = do
-  subRuote_ $ \case
+  subRoute_ $ \case
     NetRoute_Chainweb -> blockTableWidget
-    NetRoute_Chain -> blockPage
+    NetRoute_Chain -> blockPage net
 
 
 footer

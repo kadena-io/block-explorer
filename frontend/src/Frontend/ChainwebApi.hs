@@ -37,28 +37,12 @@ import           Text.Printf
 import           Blake2Native
 import           Common.Utils
 import           Common.Types
+import           Frontend.Common
 ------------------------------------------------------------------------------
-
-type BlockHeight = Int
---newtype BlockHeight = BlockHeight { unBlockHeight :: Int }
---  deriving (Eq,Ord,Enum)
---
---instance Show BlockHeight where
---  show (BlockHeight b) = show b
-
-newtype ChainId = ChainId { unChainId :: Int }
-  deriving (Eq,Ord,Hashable,FromJSONKey,FromJSON)
-
-instance Show ChainId where
-  show (ChainId b) = show b
 
 apiBaseUrl :: ChainwebHost -> Text
 apiBaseUrl (ChainwebHost h cver) =
-    T.pack $ printf "https://%s/chainweb/0.0/%s/" (T.unpack host) (T.unpack $ versionText cver)
-  where
-    host = if hostPort h == 443
-             then hostAddress h
-             else hostAddress h <> ":" <> tshow (hostPort h)
+    T.pack $ printf "https://%s/chainweb/0.0/%s/" (T.unpack $ hostToText h) (T.unpack $ versionText cver)
 
 cutUrl :: ChainwebHost -> Text
 cutUrl h = apiBaseUrl h <> "cut"
@@ -83,11 +67,24 @@ headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
 payloadUrl :: ChainwebHost -> ChainId -> Hash -> Text
 payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash
 
-data ServerInfo = ServerInfo
-  { _siApiVer :: Text -- TODO use this properly
-  , _siChains :: [ChainId]
-  , _siNewestBlockHeight :: BlockHeight
-  } deriving (Eq,Ord,Show)
+getServerInfo
+  :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
+      HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
+  => Host
+  -> m (Dynamic t (Maybe ServerInfo))
+getServerInfo h = do
+  pb <- getPostBuild
+  ei <- getInfo (h <$ pb)
+  holdDyn Nothing ei
+
+getInfo
+  :: (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
+  => Event t Host
+  -> m (Event t (Maybe ServerInfo))
+getInfo host = do
+  let mkUrl h = "https://" <> hostToText h <> "/info"
+  resp <- performRequestsAsync $ fmap (\h -> (h, XhrRequest "GET" (mkUrl h) def)) host
+  return (decodeXhrResponse . snd <$> resp)
 
 data ChainTip = ChainTip
   { _tipHeight :: Int
@@ -116,11 +113,11 @@ instance FromJSON Cut where
     <*> o .: "hashes"
     -- <*> (HM.fromList . map (first fromText) . HM.toList <$> (o .: "hashes"))
 
-cutToServerInfo :: Cut -> ServerInfo
-cutToServerInfo c = ServerInfo "0.0" (sort $ HM.keys chains) h
-  where
-    chains = _cutChains c
-    h = maximum $ map _tipHeight $ HM.elems chains
+--cutToServerInfo :: Cut -> ServerInfo
+--cutToServerInfo c = ServerInfo "0.0" (sort $ HM.keys chains) h
+--  where
+--    chains = _cutChains c
+--    h = maximum $ map _tipHeight $ HM.elems chains
 
 getCut
   :: (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
@@ -136,11 +133,11 @@ getItems val = val ^.. key "items" . values
 getBlockTable
   :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
   => ChainwebHost
-  -> ServerInfo
+  -> CServerInfo
   -> m (Event t BlockTable)
-getBlockTable h si = do
+getBlockTable h csi = do
   pb <- getPostBuild
-  resp <- performRequestsAsync $ mkHeaderRequest h si <$ pb
+  resp <- performRequestsAsync $ mkHeaderRequest h csi <$ pb
   return (foldl' (\bt val -> combineBlockTables bt val) mempty <$> (fmap decodeXhrResponse <$> resp))
 
 getBlockHeader
@@ -190,12 +187,12 @@ combineBlockTables bt Nothing = bt
 combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b Nothing Nothing Nothing)) bt0 $ rights $
   map (parseEither parseJSON) $ getItems v
 
-mkHeaderRequest :: ChainwebHost -> ServerInfo -> [XhrRequest ()]
-mkHeaderRequest h si = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
-                         $ _siChains si
+mkHeaderRequest :: ChainwebHost -> CServerInfo -> [XhrRequest ()]
+mkHeaderRequest h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
+                         $ _siChains $ _csiServerInfo csi
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
-    maxh = _siNewestBlockHeight si
+    maxh = _csiNewestBlockHeight csi
     minh = maxh - blockTableNumRows
 
 mkSingleHeaderRequest :: ChainwebHost -> ChainId -> Text -> XhrRequest ()

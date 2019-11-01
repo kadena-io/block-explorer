@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Common.Types where
@@ -7,6 +8,7 @@ module Common.Types where
 import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
+import           Data.Hashable
 import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -14,6 +16,13 @@ import           GHC.Generics (Generic)
 ------------------------------------------------------------------------------
 import           Common.Utils
 ------------------------------------------------------------------------------
+
+type BlockHeight = Int
+--newtype BlockHeight = BlockHeight { unBlockHeight :: Int }
+--  deriving (Eq,Ord,Enum)
+--
+--instance Show BlockHeight where
+--  show (BlockHeight b) = show b
 
 type Domain = Text
 
@@ -38,6 +47,12 @@ instance Readable Host where
           return $ Host a p
     where
       (a,p) = T.span (/= ':') t
+
+hostToText :: Host -> Text
+hostToText h =
+    if hostPort h == 443
+      then hostAddress h
+      else hostAddress h <> ":" <> tshow (hostPort h)
 
 data ChainwebVersion = Development | Testnet02 | Mainnet01
   deriving (Eq,Ord,Show,Read,Generic)
@@ -65,6 +80,11 @@ data NetId
    | NetId_Testnet
    | NetId_Custom Host
 
+netHost :: NetId -> Host
+netHost NetId_Mainnet = Host "mainnet.example.com" 443
+netHost NetId_Testnet = Host "mainnet.example.com" 443
+netHost (NetId_Custom h) = h
+
 instance Humanizable NetId where
   humanize NetId_Mainnet = "mainnet.example.com" -- TODO Change this for mainnet
   humanize NetId_Testnet = "us1.testnet.chainweb.com"
@@ -77,3 +97,33 @@ instance Readable NetId where
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
 humanReadableTextPrism = prism' humanize fromText
+
+newtype ChainId = ChainId { unChainId :: Int }
+  deriving (Eq,Ord,Hashable,FromJSONKey,FromJSON)
+
+instance Show ChainId where
+  show (ChainId b) = show b
+
+data CServerInfo = CServerInfo
+  { _csiServerInfo :: ServerInfo -- TODO use this properly
+  , _csiNewestBlockHeight :: BlockHeight
+  } deriving (Eq,Ord,Show)
+
+data ServerInfo = ServerInfo
+  { _siChainwebVer :: ChainwebVersion
+  , _siApiVer :: Text -- TODO use this properly
+  , _siChains :: [ChainId]
+  , _siNumChains :: Int
+  } deriving (Eq,Ord,Show)
+
+--{"nodeNumberOfChains":10
+--,"nodeApiVersion":"0.0"
+--,"nodeChains":["8","9","4","5","6","7","0","1","2","3"]
+--,"nodeVersion":"mainnet01"}
+
+instance FromJSON ServerInfo where
+  parseJSON = withObject "ServerInfo" $ \o -> ServerInfo
+    <$> o .: "nodeVersion"
+    <*> o .: "nodeApiVersion"
+    <*> o .: "nodeChains"
+    <*> o .: "nodeNumberOfChains"

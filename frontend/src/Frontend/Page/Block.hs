@@ -52,10 +52,10 @@ blockWidget
   -> m ()
 blockWidget netId (cid :. hash :. r) = do
   as <- ask
-  let h = _as_host as
+  let n = _as_network as
       c = ChainId cid
-  ebh <- getBlockHeader h c hash
-  void $ networkHold (text "Block does not exist") (blockPageNoPayload netId h c r <$> fmapMaybe id ebh)
+  ebh <- getBlockHeader (netHost n) c hash
+  void $ networkHold (text "Block does not exist") (blockPageNoPayload netId n c r <$> fmapMaybe id ebh)
 
 blockLink
   :: (MonadApp r t m,

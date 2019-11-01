@@ -57,12 +57,12 @@ type App r t m a = RoutedT t r m a
 runApp
   :: (DomBuilder t m, Routed t (R FrontendRoute) m, MonadHold t m, MonadFix m, Prerender js t m, PostBuild t m, MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
   => Text
-  -> ChainwebHost
+  -> NetId
   -> ServerInfo
   -> RoutedT t (R FrontendRoute) (ReaderT (AppState t) (EventWriterT t AppTriggers m)) a
   -> m a
-runApp publicUrl ch si m = mdo
+runApp publicUrl net si m = mdo
     r <- askRoute
-    as <- stateManager publicUrl ch si triggers
+    as <- stateManager publicUrl net si triggers
     (res, triggers) <- runEventWriterT (runReaderT (runRoutedT m r) as)
     return res
