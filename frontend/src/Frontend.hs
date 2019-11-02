@@ -18,6 +18,7 @@ import           Control.Monad.Ref
 import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Fixed
 import           Data.Ord
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -25,6 +26,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
+import           Formattable.NumFormat
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend
@@ -210,12 +212,13 @@ blockTableWidget = do
       elapsed = elapsedTime <$> stats <*> dti
       tps = calcTps <$> stats <*> elapsed
       hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
-      coinsLeft = (\st -> (realToFrac $ _gs_blocksCountdown st) * (2.33 :: Double)) <$> stats
+      coinsLeft = (\st -> (realToFrac $ _gs_blocksCountdown st) * (2.304523 :: Double)) <$> stats
 
-  divClass "ui segment" $ divClass "ui three statistics" $ do
-    statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-    statistic "Coins Left To be Mined" (dynText $ T.pack . (printf "%.2f") <$> coinsLeft)
-    statistic "Current TPS" (dynText $ showTps <$> tps)
+  divClass "ui segment" $ do
+    divClass "ui small three statistics" $ do
+        statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+        statistic "Est. Pre-launch coins left" (dynText $ formatNum intFmt <$> coinsLeft)
+        statistic "Est. Time to Launch" $ dynText (fmap f dti)
 
   divClass "block-table" $ do
     divClass "header-row" $ do
@@ -232,6 +235,14 @@ blockTableWidget = do
     return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
+    f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
+    format :: (Int, Int, Int, Int) -> Text
+    format (d, h, m, s) = T.pack $ printf "%d days %02d:%02d:%02d" d h m s
+    convertToDHMS t =
+      let (m', s) = divMod t 60
+          (h', m) = divMod m' 60
+          (d, h) = divMod h' 24
+      in (d, h, m , s)
 
 chainDifficulty :: ChainId -> BlockTable -> Text
 chainDifficulty cid bt =
@@ -285,12 +296,11 @@ blockWidget0 ti hoveredBlock hs height cid = do
   let mbh = M.lookup cid <$> hs
   (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
     viewIntoMaybe mbh blank $ \bh -> do
-      divClass "summary-inner" $ do
+      let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
+      let mkRoute h = (FR_Block :/ (unChainId cid, getHash h, Block_Header :/ ()))
+      dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         el "div" $ do
-          let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
-          let mkRoute h = (FR_Block :/ (unChainId cid, getHash h, Block_Header :/ ()))
           elClass "span" "blockheight" $ do
-            dynRouteLink (mkRoute <$> bh) $
               dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 
         let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header

@@ -160,11 +160,13 @@ getMissing bt bhtx = filter (\p -> getBlock (height-1) (fst p) bt == Nothing) ci
     cids = (_blockHeader_chainId h, _blockHeader_parent h) :
            M.toList (_blockHeader_neighbors h)
 
+launchTime :: UTCTime
+launchTime = parseTimeOrError True defaultTimeLocale "%Y-%m-%dT%H:%M:%S" "2019-12-05T17:00:00"
+
 totalNumberOfBlocks :: Word64
-totalNumberOfBlocks = round (((diffUTCTime endDay startDay) / 30) * 10)
+totalNumberOfBlocks = round (((diffUTCTime launchTime startDay) / 30) * 10)
   where
     startDay = UTCTime (fromGregorian 2019 10 30) 0
-    endDay = UTCTime (fromGregorian 2019 12 05) 0
 
 stateManager
     :: (DomBuilder t m, MonadHold t m, Prerender js t m, MonadFix m,
