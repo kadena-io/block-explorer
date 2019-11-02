@@ -80,9 +80,9 @@ networkDispatch route netId = prerender_ blank $ do
   dsi <- getServerInfo $ netHost netId
   dyn_ $ ffor dsi $ \case
     Nothing -> text "Loading"
-    Just si -> runApp route netId si $ subRoute_ $ \case
+    Just csi -> runApp route netId csi $ subRoute_ $ \case
       NetRoute_Chainweb -> blockTableWidget
-      NetRoute_Chain -> blockPage si netId
+      NetRoute_Chain -> blockPage (_csiServerInfo csi) netId
 
 
 footer

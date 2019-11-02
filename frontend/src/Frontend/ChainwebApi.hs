@@ -8,6 +8,7 @@
 module Frontend.ChainwebApi where
 
 ------------------------------------------------------------------------------
+import           Control.Applicative (liftA2)
 import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
@@ -74,11 +75,14 @@ getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
       HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
   => Host
-  -> m (Dynamic t (Maybe ServerInfo))
+  -> m (Dynamic t (Maybe CServerInfo))
 getServerInfo h = do
   pb <- getPostBuild
-  ei <- getInfo (h <$ pb)
-  holdDyn Nothing ei
+  esi <- getInfo (h <$ pb)
+  si <- holdDyn Nothing esi
+  let ch = ChainwebHost h . _siChainwebVer <$> fmapMaybe id esi
+  height <- holdDyn Nothing =<< _cutHeight <$$$> getCut ch
+  pure $ (liftA2 . liftA2) CServerInfo si height
 
 getInfo
   :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
@@ -87,11 +91,6 @@ getInfo
 getInfo host = do
   let mkUrl h = "https://" <> hostToText h <> "/info"
   resp <- performRequestsAsync $ fmap (\h -> (h, XhrRequest "GET" (mkUrl h) def)) host
-  -- let txt = fmapMaybe (_xhrResponse_responseText . snd) resp
-  --     dec :: Event t (Either String ServerInfo)
-  --     dec = Aeson.eitherDecode . BL.fromStrict . T.encodeUtf8 <$> txt
-  -- performEvent_ $ liftIO . putStrLn . T.unpack <$> txt
-  -- performEvent_ $ liftIO . print <$> dec
   return (decodeXhrResponse . snd <$> resp)
 
 data ChainTip = ChainTip
@@ -120,12 +119,6 @@ instance FromJSON Cut where
     <*> o .: "instance"
     <*> o .: "hashes"
     -- <*> (HM.fromList . map (first fromText) . HM.toList <$> (o .: "hashes"))
-
---cutToServerInfo :: Cut -> ServerInfo
---cutToServerInfo c = ServerInfo "0.0" (sort $ HM.keys chains) h
---  where
---    chains = _cutChains c
---    h = maximum $ map _tipHeight $ HM.elems chains
 
 getCut
   :: (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))

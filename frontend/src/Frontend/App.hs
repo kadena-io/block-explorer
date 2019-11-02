@@ -58,11 +58,11 @@ runApp
   :: (DomBuilder t m, Routed t r m, MonadHold t m, MonadFix m, Prerender js t m, PostBuild t m, MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
   => Text
   -> NetId
-  -> ServerInfo
+  -> CServerInfo
   -> RoutedT t r (ReaderT (AppState t) (EventWriterT t AppTriggers m)) a
   -> m a
-runApp publicUrl net si m = mdo
+runApp publicUrl net csi m = mdo
     r <- askRoute
-    as <- stateManager publicUrl net si triggers
+    as <- stateManager publicUrl net csi triggers
     (res, triggers) <- runEventWriterT (runReaderT (runRoutedT m r) as)
     return res

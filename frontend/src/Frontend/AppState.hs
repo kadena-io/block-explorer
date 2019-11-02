@@ -176,17 +176,17 @@ stateManager
     => Text
     -- ^ Application route...not in use yet
     -> NetId
-    -> ServerInfo
+    -> CServerInfo
     -> Event t AppTriggers
     -- ^ Not in use yet
     -> m (AppState t)
-stateManager _ n si _ = do
+stateManager _ n csi _ = do
     let cfg = EventSourceConfig never True
+        si = _csiServerInfo csi
     let ch = ChainwebHost (netHost n) (_siChainwebVer si)
     es <- startEventSource ch cfg
     let downEvent = _eventSource_recv es
 
-    let csi = CServerInfo si undefined
     ebt <- getBlockTable ch csi
 
     rec blockTable <- foldDyn ($) mempty $ mergeWith (.)
