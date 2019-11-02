@@ -5,6 +5,7 @@
 
 module Common.Types where
 
+import Control.Applicative
 ------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad
@@ -92,18 +93,19 @@ netIdPathSegment = \case
   NetId_Testnet -> "testnet"
   NetId_Custom _ -> "custom"
 
+
 netHost :: NetId -> Host
-netHost NetId_Mainnet = Host "mainnet.example.com" 443
+netHost NetId_Mainnet = Host "us-e3.chainweb.com" 443
 netHost NetId_Testnet = Host "us1.testnet.chainweb.com" 443
 netHost (NetId_Custom ch) = ch
 
 instance Humanizable NetId where
-  humanize NetId_Mainnet = "mainnet.example.com" -- TODO Change this for mainnet
+  humanize NetId_Mainnet = "us-e3.chainweb.com" -- TODO Change this for mainnet
   humanize NetId_Testnet = "us1.testnet.chainweb.com"
   humanize (NetId_Custom ch) = humanize ch
 
 instance Readable NetId where
-  fromText "mainnet.example.com" = pure NetId_Mainnet
+  fromText "us-e3.chainweb.com" = pure NetId_Mainnet
   fromText "us1.testnet.chainweb.com" = pure NetId_Testnet
   fromText t = NetId_Custom <$> fromText t
 
@@ -113,10 +115,17 @@ humanReadableTextPrism = prism' humanize fromText
 newtype ChainId = ChainId { unChainId :: Int }
   deriving (Eq,Ord,Hashable)
 
+chainIdFromText :: Monad m => Text -> m ChainId
+chainIdFromText
+  = maybe (fail "ChainId string was not an integer") (pure . ChainId)
+  . readMaybe . T.unpack
+
 instance FromJSON ChainId where
-  parseJSON = withText "ChainId" $ \t -> maybe (fail "Not an integer") (pure . ChainId) $ readMaybe $ T.unpack t
+  parseJSON v = do
+        withText "ChainId" chainIdFromText v
+    <|> withScientific "ChainId" (pure . ChainId . round) v
 instance FromJSONKey ChainId where
-  fromJSONKey = FromJSONKeyTextParser $ \t -> maybe (fail "Not an integer") (pure . ChainId) $ readMaybe $ T.unpack t
+  fromJSONKey = FromJSONKeyTextParser chainIdFromText --FromJSONKeyValue parseJSON
 
 instance Show ChainId where
   show (ChainId b) = show b

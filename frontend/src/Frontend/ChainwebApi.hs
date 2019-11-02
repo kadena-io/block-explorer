@@ -41,8 +41,6 @@ import           Common.Utils
 import           Common.Types
 import           Frontend.Common
 ------------------------------------------------------------------------------
-import Control.Monad.IO.Class
-import qualified Data.Aeson as Aeson
 
 apiBaseUrl :: ChainwebHost -> Text
 apiBaseUrl (ChainwebHost h cver) =
@@ -81,7 +79,8 @@ getServerInfo h = do
   esi <- getInfo (h <$ pb)
   si <- holdDyn Nothing esi
   let ch = ChainwebHost h . _siChainwebVer <$> fmapMaybe id esi
-  height <- holdDyn Nothing =<< _cutHeight <$$$> getCut ch
+      f = maximum . map _tipHeight . HM.elems . _cutChains
+  height <- holdDyn Nothing =<< f <$$$> getCut ch
   pure $ (liftA2 . liftA2) CServerInfo si height
 
 getInfo
