@@ -17,6 +17,7 @@ library
     , containers
     , data-default
     , dependent-sum
+    , formattable
     , ghcjs-dom
     , hashable
     , jsaddle
