@@ -25,6 +25,11 @@ project ./. ({ pkgs, hackGet, ... }: {
              }) {};
     in {
       bytes = dontCheck super.bytes;
+      formattable = doJailbreak (dontCheck (callHackageDirect {
+        pkg = "formattable";
+        ver = "0.1.1";
+        sha256 = "12ivb374zymkqzq3w9a9vhxbri5bpymi1di6kk45hp2f6b8lafpz";
+      }));
       lens-aeson = dontCheck super.lens-aeson;
       perfect-vector-shuffle = doJailbreak (dontCheck (callHackageDirect {
         pkg = "perfect-vector-shuffle";

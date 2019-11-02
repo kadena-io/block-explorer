@@ -80,6 +80,7 @@ data HashrateData = HashrateData
 
 data GlobalStats = GlobalStats
     { _gs_txCount :: Word64
+    , _gs_blocksCountdown :: Word64
     , _gs_startTime :: UTCTime
     , _gs_hashrates :: Map ChainId HashrateData
     } deriving (Eq,Ord,Show)
@@ -135,7 +136,8 @@ addHashrateData (cid, hrd) gs = gs { _gs_hashrates = M.insert cid hrd hrs }
   where
     hrs = _gs_hashrates gs
 
-
+blockCountdown :: BlockHeaderTx -> GlobalStats -> GlobalStats
+blockCountdown _ gs = gs { _gs_blocksCountdown =  _gs_blocksCountdown gs - 1 }
 
 addTxCount :: BlockHeaderTx -> GlobalStats -> GlobalStats
 addTxCount bhtx gs = gs { _gs_txCount = _gs_txCount gs + maybe 0 fromIntegral (_blockHeaderTx_txCount bhtx) }
@@ -158,6 +160,13 @@ getMissing bt bhtx = filter (\p -> getBlock (height-1) (fst p) bt == Nothing) ci
     cids = (_blockHeader_chainId h, _blockHeader_parent h) :
            M.toList (_blockHeader_neighbors h)
 
+launchTime :: UTCTime
+launchTime = parseTimeOrError True defaultTimeLocale "%Y-%m-%dT%H:%M:%S" "2019-12-05T17:00:00"
+
+totalNumberOfBlocks :: Word64
+totalNumberOfBlocks = round (((diffUTCTime launchTime startDay) / 30) * 10)
+  where
+    startDay = UTCTime (fromGregorian 2019 10 30) 0
 
 stateManager
     :: (DomBuilder t m, MonadHold t m, Prerender js t m, MonadFix m,
@@ -194,8 +203,9 @@ stateManager _ h si _ = do
 
     pb <- getPostBuild
     now <- prerender (return t0) (liftIO getCurrentTime)
-    stats <- foldDyn ($) (GlobalStats 0 t0 mempty) $ mergeWith (.)
+    stats <- foldDyn ($) (GlobalStats 0 totalNumberOfBlocks t0 mempty) $ mergeWith (.)
       [ maybe id addTxCount <$> downEvent
+      , maybe id blockCountdown <$> downEvent
       , setStartTime <$> tag (current now) pb
       , addHashrateData <$> filterRight newHrd
       ]

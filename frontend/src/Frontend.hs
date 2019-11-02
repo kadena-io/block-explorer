@@ -26,6 +26,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
+import           Formattable.NumFormat
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend
@@ -211,12 +212,13 @@ blockTableWidget = do
       elapsed = elapsedTime <$> stats <*> dti
       tps = calcTps <$> stats <*> elapsed
       hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
+      coinsLeft = (\st -> (realToFrac $ _gs_blocksCountdown st) * (2.304523 :: Double)) <$> stats
 
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
         statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-        statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
-        statistic "Time until transactions are turned on" $ dynText (fmap f dti)
+        statistic "Est. Pre-launch coins left" (dynText $ formatNum intFmt <$> coinsLeft)
+        statistic "Est. Time to Launch" $ dynText (fmap f dti)
 
   divClass "block-table" $ do
     divClass "header-row" $ do
@@ -233,8 +235,7 @@ blockTableWidget = do
     return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
-    endTime = UTCTime (fromGregorian 2019 12 4) 0 -- December 4, 2019
-    f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime endTime (_tickInfo_lastUTC a)
+    f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
     format :: (Int, Int, Int, Int) -> Text
     format (d, h, m, s) = T.pack $ printf "%d days %02d:%02d:%02d" d h m s
     convertToDHMS t =
