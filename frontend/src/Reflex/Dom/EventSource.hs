@@ -66,7 +66,7 @@ data RawEventSource t a
    = RawEventSource { _eventSource_recv :: Event t a
                     , _eventSource_open :: Event t ()
                     , _eventSource_error :: Event t ()
-                      -- eror event does not carry any data and is always
+                      -- error event does not carry any data and is always
                       -- followed by termination of the connection for details
                       -- see the close event
                     }

@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Common.Types where
@@ -8,11 +9,13 @@ module Common.Types where
 import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
+import qualified Data.Char as Char
 import           Data.Hashable
 import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           GHC.Generics (Generic)
+import           Text.Read (readMaybe)
 ------------------------------------------------------------------------------
 import           Common.Utils
 ------------------------------------------------------------------------------
@@ -43,10 +46,8 @@ instance Readable Host where
       case T.span (/= ':') t of
         ("", _) -> mzero
         (a, rest) -> do
-          p <- fromText (T.drop 1 p)
+          p <- fromText (T.drop 1 rest)
           return $ Host a p
-    where
-      (a,p) = T.span (/= ':') t
 
 hostToText :: Host -> Text
 hostToText h =
@@ -59,7 +60,12 @@ data ChainwebVersion = Development | Testnet02 | Mainnet01
 
 instance ToJSON ChainwebVersion where
     toEncoding = genericToEncoding defaultOptions
-instance FromJSON ChainwebVersion
+      { constructorTagModifier = fmap Char.toLower }
+    toJSON = genericToJSON defaultOptions
+      { constructorTagModifier = fmap Char.toLower }
+instance FromJSON ChainwebVersion where
+    parseJSON = genericParseJSON defaultOptions
+      { constructorTagModifier = fmap Char.toLower }
 
 versionText :: ChainwebVersion -> Text
 versionText Development = "development"
@@ -78,12 +84,18 @@ instance FromJSON ChainwebHost
 data NetId
    = NetId_Mainnet
    | NetId_Testnet
-   | NetId_Custom Host
+   | NetId_Custom Host -- ChainwebHost
+
+netIdPathSegment :: NetId -> Text
+netIdPathSegment = \case
+  NetId_Mainnet -> "mainnet"
+  NetId_Testnet -> "testnet"
+  NetId_Custom _ -> "custom"
 
 netHost :: NetId -> Host
 netHost NetId_Mainnet = Host "mainnet.example.com" 443
-netHost NetId_Testnet = Host "mainnet.example.com" 443
-netHost (NetId_Custom h) = h
+netHost NetId_Testnet = Host "us1.testnet.chainweb.com" 443
+netHost (NetId_Custom ch) = ch
 
 instance Humanizable NetId where
   humanize NetId_Mainnet = "mainnet.example.com" -- TODO Change this for mainnet
@@ -99,7 +111,12 @@ humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
 humanReadableTextPrism = prism' humanize fromText
 
 newtype ChainId = ChainId { unChainId :: Int }
-  deriving (Eq,Ord,Hashable,FromJSONKey,FromJSON)
+  deriving (Eq,Ord,Hashable)
+
+instance FromJSON ChainId where
+  parseJSON = withText "ChainId" $ \t -> maybe (fail "Not an integer") (pure . ChainId) $ readMaybe $ T.unpack t
+instance FromJSONKey ChainId where
+  fromJSONKey = FromJSONKeyTextParser $ \t -> maybe (fail "Not an integer") (pure . ChainId) $ readMaybe $ T.unpack t
 
 instance Show ChainId where
   show (ChainId b) = show b

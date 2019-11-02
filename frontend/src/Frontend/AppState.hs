@@ -182,8 +182,7 @@ stateManager
     -> m (AppState t)
 stateManager _ n si _ = do
     let cfg = EventSourceConfig never True
-    let h = netHost n
-        ch = ChainwebHost h $ _siChainwebVer si
+    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
     es <- startEventSource ch cfg
     let downEvent = _eventSource_recv es
 

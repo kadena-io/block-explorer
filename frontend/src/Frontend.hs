@@ -15,13 +15,10 @@ module Frontend where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
-import           Control.Monad.Ref
 import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Fixed
 import           Data.Ord
-import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -29,7 +26,6 @@ import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Formattable.NumFormat
-import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend
 import           Obelisk.Generated.Static
@@ -56,71 +52,37 @@ frontend = Frontend
   { _frontend_head = appHead
   , _frontend_body = do
       route <- getAppRoute
-      curNet <- divClass "ui fixed inverted menu" nav
-      _ <- elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $
-        networkView (appWithNetwork route <$> curNet)
+      divClass "ui fixed inverted menu" nav
+      elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
+        mainDispatch route
       footer
       display =<< askRoute
   }
 
-appWithNetwork
-  :: (SetRoute t (R FrontendRoute) (Client (Client m)),
-      Routed t (R FrontendRoute) (Client m),
-      RouteToUrl (R FrontendRoute) (Client (Client m)),
-      DomBuilder t m, Prerender js t m)
+mainDispatch
+  :: ObeliskWidget js t (R FrontendRoute) m
   => Text
-  -> Maybe Network
-  -> m ()
-appWithNetwork route Nothing = do
-  divClass "ui segment" $ do
-    divClass "ui active dimmer" $ do
-      divClass "ui text loader" $ text "Loading"
-    el "p" $ text " "
-    el "p" $ text " "
-    el "p" $ text " "
-appWithNetwork route (Just curNet) = do
-  let ch = networkHost curNet
-  _ <- prerender blank $ do
-    dsi <- getServerInfo ch
-    void $ networkView (appWithServer route ch <$> dsi)
-  return ()
-
-appWithServer
-  :: (DomBuilder t m, Routed t (R FrontendRoute) m, MonadHold t m, MonadFix m,
-      Prerender js t m, PostBuild t m, MonadJSM (Performable m),
-      HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m,
-      RouteToUrl (R FrontendRoute) (Client m), MonadRef m, MonadSample t (Performable m),
-      SetRoute t (R FrontendRoute) (Client m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => Text
-  -> ChainwebHost
-  -> Maybe ServerInfo
-  -> m ()
-appWithServer _ _ Nothing = text "Loading server info..."
-appWithServer route ch (Just si) = do
-  --runApp route ch si mainApp
+  -> App (R FrontendRoute) t m ()
+mainDispatch route = do -- runApp route netId si $ do
   pb <- getPostBuild
   subRoute_ $ \case
     FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
     FR_About -> aboutWidget
-    FR_Mainnet -> networkDispatch NetId_Mainnet
-    FR_Testnet -> networkDispatch NetId_Testnet
+    FR_Mainnet -> networkDispatch route NetId_Mainnet
+    FR_Testnet -> networkDispatch route NetId_Testnet
     FR_Customnet -> subPairRoute_ $ \host ->
-      networkDispatch (NetId_Custom host)
+      networkDispatch route (NetId_Custom host)
 
 networkDispatch
-  :: MonadApp r t m
-  => RouteToUrl (R FrontendRoute) m
-  => SetRoute t (R FrontendRoute) m
-  => Prerender js t m
-  => MonadJSM (Performable m)
-  => HasJSContext (Performable m)
-  => NetId
-  -> App (R NetRoute) t m ()
-networkDispatch net = do
-  subRoute_ $ \case
-    NetRoute_Chainweb -> blockTableWidget
-    NetRoute_Chain -> blockPage net
+  :: ObeliskWidget js t (R FrontendRoute) m
+  => Text -> NetId -> App (R NetRoute) t m ()
+networkDispatch route netId = prerender_ blank $ do
+  dsi <- getServerInfo $ netHost netId
+  dyn_ $ ffor dsi $ \case
+    Nothing -> text "Loading"
+    Just si -> runApp route netId si $ subRoute_ $ \case
+      NetRoute_Chainweb -> blockTableWidget
+      NetRoute_Chain -> blockPage si netId
 
 
 footer
@@ -156,8 +118,8 @@ appHead = do
   mTrackId <- getTextCfg "frontend/tracking-id"
   case mTrackId of
     Nothing -> googleAnalyticsTracker "UA-127512784-5"
-    Just tid -> googleAnalyticsTracker tid
     Just "no-tracking" -> blank
+    Just tid -> googleAnalyticsTracker tid
 
   css (static @"semantic.min.css")
   css (static @"css/custom.css")
@@ -165,6 +127,7 @@ appHead = do
   jsScript (static @"jquery-3.1.1.min.js")
   jsScript (static @"semantic.min.js")
 
+googleAnalyticsTracker :: DomBuilder t m => Text -> m ()
 googleAnalyticsTracker gaTrackingId = do
   let gtagSrc = "https://www.googletagmanager.com/gtag/js?id=" <> gaTrackingId
   elAttr "script" ("async" =: "" <> "src" =: gtagSrc) blank
@@ -304,11 +267,9 @@ blockWidget0 ti hoveredBlock hs height cid = do
   (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
     viewIntoMaybe mbh blank $ \bh -> do
       let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
-      let mkRoute h = (FR_Block :/ (unChainId cid, getHash h, Block_Header :/ ()))
+      let mkRoute h = addNetRoute NetId_Testnet $ unChainId cid :. getHash h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         el "div" $ do
-          let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
-          let mkRoute h = addNetRoute NetId_Testnet $ unChainId cid :. getHash h :. Block_Header :/ () --TODO: Which NetId should it be?
           elClass "span" "blockheight" $ do
               dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 

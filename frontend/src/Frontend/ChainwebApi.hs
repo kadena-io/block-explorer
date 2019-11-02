@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell#-}
 
 module Frontend.ChainwebApi where
@@ -39,6 +40,8 @@ import           Common.Utils
 import           Common.Types
 import           Frontend.Common
 ------------------------------------------------------------------------------
+import Control.Monad.IO.Class
+import qualified Data.Aeson as Aeson
 
 apiBaseUrl :: ChainwebHost -> Text
 apiBaseUrl (ChainwebHost h cver) =
@@ -78,12 +81,17 @@ getServerInfo h = do
   holdDyn Nothing ei
 
 getInfo
-  :: (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
+  :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
   => Event t Host
   -> m (Event t (Maybe ServerInfo))
 getInfo host = do
   let mkUrl h = "https://" <> hostToText h <> "/info"
   resp <- performRequestsAsync $ fmap (\h -> (h, XhrRequest "GET" (mkUrl h) def)) host
+  -- let txt = fmapMaybe (_xhrResponse_responseText . snd) resp
+  --     dec :: Event t (Either String ServerInfo)
+  --     dec = Aeson.eitherDecode . BL.fromStrict . T.encodeUtf8 <$> txt
+  -- performEvent_ $ liftIO . putStrLn . T.unpack <$> txt
+  -- performEvent_ $ liftIO . print <$> dec
   return (decodeXhrResponse . snd <$> resp)
 
 data ChainTip = ChainTip

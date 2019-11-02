@@ -18,26 +18,20 @@ module Common.Route where
 
 ------------------------------------------------------------------------------
 import           Prelude hiding ((.), id)
-import           Control.Categorical.Bifunctor
 import           Control.Category (Category (..))
-import           Control.Category.Monoidal
-import           Control.Lens (to, iso)
 import           Control.Monad.Except
-import           Data.Aeson
 import           Data.Functor.Identity
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Encoding hiding (Some)
-import           GHC.Generics (Generic)
 import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
 ------------------------------------------------------------------------------
 import           Common.Types
-import           Common.Utils
 ------------------------------------------------------------------------------
 
 data BackendRoute :: * -> * where
@@ -113,7 +107,10 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       FR_About -> PathSegment "about" $ unitEncoder mempty
       FR_Mainnet -> PathSegment "mainnet" netRouteEncoder
       FR_Testnet -> PathSegment "testnet" netRouteEncoder
-      FR_Customnet -> PathSegment "custom" $ pathParamEncoder (prismEncoder humanReadableTextPrism) netRouteEncoder
+      FR_Customnet -> PathSegment "custom" $ pathParamEncoder hostEncoder netRouteEncoder
+
+hostEncoder :: Encoder (Either Text) (Either Text) Host Text
+hostEncoder = prismEncoder humanReadableTextPrism
 
 blockIdRouteEncoder :: Encoder (Either Text) (Either Text) BlockIdRoute PageName
 blockIdRouteEncoder = pathLiteralEncoder "chain" $ pathParamEncoder unsafeTshowEncoder $ pathLiteralEncoder "block" $ pathParamEncoder id blockRouteEncoder
@@ -122,7 +119,7 @@ addNetRoute :: NetId -> BlockIdRoute -> R FrontendRoute
 addNetRoute netId r = case netId of
   NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ r
   NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ r
-  NetId_Custom chost -> FR_Customnet :/ (chost :. (NetRoute_Chain :/ r))
+  NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_Chain :/ r))
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
@@ -140,7 +137,7 @@ getAppRoute = do
 
 -- | Provide a human-readable name for a given section
 tabTitle :: DomBuilder t m => Some FrontendRoute -> m ()
-tabTitle sfr@(Some.Some sec) = text $ frToText sfr
+tabTitle = text . frToText
 
 -- | Provide a human-readable name for a given section
 frToText :: Some FrontendRoute -> Text

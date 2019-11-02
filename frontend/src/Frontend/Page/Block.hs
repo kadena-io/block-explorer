@@ -38,24 +38,27 @@ import           Frontend.Page.Transaction
 blockPage
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => NetId
+  => ServerInfo
+  -> NetId
   -> App (Int :. Text :. R BlockRoute) t m ()
-blockPage netId = do
+blockPage si netId = do
     args <- askRoute
-    void $ networkView (blockWidget netId <$> args)
+    void $ networkView (blockWidget si netId <$> args)
 
 blockWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => NetId
+  => ServerInfo
+  -> NetId
   -> Int :. Text :. R BlockRoute
   -> m ()
-blockWidget netId (cid :. hash :. r) = do
+blockWidget si netId (cid :. hash :. r) = do
   as <- ask
   let n = _as_network as
+      chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
       c = ChainId cid
-  ebh <- getBlockHeader (netHost n) c hash
-  void $ networkHold (text "Block does not exist") (blockPageNoPayload netId n c r <$> fmapMaybe id ebh)
+  ebh <- getBlockHeader chainwebHost c hash
+  void $ networkHold (text "Block does not exist") (blockPageNoPayload netId chainwebHost c r <$> fmapMaybe id ebh)
 
 blockLink
   :: (MonadApp r t m,

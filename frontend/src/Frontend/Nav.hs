@@ -11,55 +11,19 @@
 module Frontend.Nav where
 
 ------------------------------------------------------------------------------
-import           Control.Monad
 import           Control.Monad.Fix
-import           Data.Aeson
-import qualified Data.ByteString.Lazy as BL
 import           Data.Text (Text)
-import           GHC.Generics
-import           Obelisk.Configs
 import           Obelisk.Generated.Static
+import           Obelisk.Route.Frontend hiding (decode)
 import           Reflex.Dom
 ------------------------------------------------------------------------------
-import           Common.Types
-import           Common.Utils
-import           Frontend.ChainwebApi
-import           Frontend.Storage
+import           Common.Route
 ------------------------------------------------------------------------------
 
-data Network = TestNet | MainNet | CustomNet ChainwebHost
-  deriving (Eq,Ord,Show,Generic)
-
-instance ToJSON Network where
-    toEncoding = genericToEncoding defaultOptions
-instance FromJSON Network
-
-testnetHost :: ChainwebHost
-testnetHost = ChainwebHost (Host "us2.testnet.chainweb.com" 443) Testnet02
-
-mainnetHost :: ChainwebHost
-mainnetHost = ChainwebHost (Host "us-e3.chainweb.com" 443) Mainnet01
-
-networkHost :: Network -> ChainwebHost
-networkHost TestNet = testnetHost
-networkHost MainNet = mainnetHost
-networkHost (CustomNet ch) = ch
-
-instance Humanizable Network where
-  humanize TestNet = "Kadena Testnet"
-  humanize MainNet = "Kadena Mainnet"
-  humanize (CustomNet ch) = hostAddress $ chHost ch
-
--- | Storage keys for referencing data to be stored/retrieved.
-data NetworkState a where
-  NetworkState_LastUsed :: NetworkState Network
-
-deriving instance Show (NetworkState a)
-
 nav
-  :: (DomBuilder t m, MonadHold t m, HasConfigs m, PostBuild t m,
-      MonadFix m, Prerender js t m)
-  => m (Dynamic t (Maybe Network))
+  :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Routed t r m)
+  => m ()
 nav = do
   divClass "ui container" $ do
     elAttr "a" ("class" =: "header item" <>
@@ -118,43 +82,27 @@ linkItem nm url = do
     elAttr "a" ("href" =: url <> "class" =: "item") $ text nm
 
 networkWidget
-  :: (DomBuilder t m, MonadHold t m, HasConfigs m, PostBuild t m,
-      MonadFix m, Prerender js t m)
-  => m (Dynamic t (Maybe Network))
+  :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Routed t r m)
+  => m ()
 networkWidget = mdo
-  mnode <- getConfig "frontend/default-node"
-  let host = decode . BL.fromStrict =<< mnode
-
-  (e,net) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
-    dynText $ maybe "" humanize <$> curNet
+  (e, _) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
+    text "Network"
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
-    (tn,mn) <- elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      t <- networkItem TestNet
-      m <- networkItem MainNet
-      return (t,m)
-    let netChange = Just <$> leftmost [tn,mn]
-        chooseDefault cur = maybe (Just MainNet) Just cur
-    rec
-        curNet <- fmap join $ prerender (return $ constDyn host) $ do
-          pb <- getPostBuild
-          mLastNet <- getItemStorage browserStorage localStorage NetworkState_LastUsed
-          performEvent_ $ setItemStorage browserStorage localStorage NetworkState_LastUsed <$> fmapMaybe id netChange
-          holdDyn mLastNet $ leftmost [netChange, chooseDefault <$> traceEvent "initial network override" (tag (current curNet) pb)]
-    return curNet
+    elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
+      networkItem "Testnet" $ FR_Testnet :/ NetRoute_Chainweb :/ ()
+      networkItem "Mainnet" $ FR_Mainnet :/ NetRoute_Chainweb :/ ()
+  route <- askRoute
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
     , False <$ domEvent Mouseleave e
-    , False <$ updated net
+    , False <$ updated route
     ]
-  holdUniqDyn net
+  pure ()
 
 
 networkItem
-  :: (DomBuilder t1 m, Humanizable a,
-      HasDomEvent t2 (Element EventResult (DomBuilderSpace m) t1) 'ClickTag,
-      Reflex t2)
-  => a
-  -> m (Event t2 a)
-networkItem n = do
-  (e,_) <- elAttr' "div" ("class" =: "item") $ text $ humanize n
-  return (n <$ domEvent Click e)
+  :: (DomBuilder t m, RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+  => Text -> R FrontendRoute -> m ()
+networkItem t r = routeLink r $ do
+  elAttr "div" ("class" =: "item" <> "style" =: "color: black") $ text t
