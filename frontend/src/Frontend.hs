@@ -56,7 +56,6 @@ frontend = Frontend
       elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
         mainDispatch route
       footer
-      display =<< askRoute
   }
 
 mainDispatch
@@ -79,11 +78,13 @@ networkDispatch
 networkDispatch route netId = prerender_ blank $ do
   dsi <- getServerInfo $ netHost netId
   dyn_ $ ffor dsi $ \case
-    Nothing -> text "Loading"
+    Nothing -> inlineLoader
     Just csi -> runApp route netId csi $ subRoute_ $ \case
       NetRoute_Chainweb -> blockTableWidget
       NetRoute_Chain -> blockPage (_csiServerInfo csi) netId
 
+inlineLoader :: DomBuilder t m => m ()
+inlineLoader = divClass "ui active centered inline text loader" $ text "Loading"
 
 footer
   :: (DomBuilder t m)
