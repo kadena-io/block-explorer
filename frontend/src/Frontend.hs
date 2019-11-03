@@ -62,7 +62,7 @@ mainDispatch
   :: ObeliskWidget js t (R FrontendRoute) m
   => Text
   -> App (R FrontendRoute) t m ()
-mainDispatch route = do -- runApp route netId si $ do
+mainDispatch route = do
   pb <- getPostBuild
   subRoute_ $ \case
     FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)

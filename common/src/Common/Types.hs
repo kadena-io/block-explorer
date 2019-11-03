@@ -87,7 +87,7 @@ instance FromJSON ChainwebHost
 data NetId
    = NetId_Mainnet
    | NetId_Testnet
-   | NetId_Custom Host -- ChainwebHost
+   | NetId_Custom Host
 
 netIdPathSegment :: NetId -> Text
 netIdPathSegment = \case
@@ -127,7 +127,7 @@ instance FromJSON ChainId where
         withText "ChainId" chainIdFromText v
     <|> withScientific "ChainId" (pure . ChainId . round) v
 instance FromJSONKey ChainId where
-  fromJSONKey = FromJSONKeyTextParser chainIdFromText --FromJSONKeyValue parseJSON
+  fromJSONKey = FromJSONKeyTextParser chainIdFromText
 
 instance Show ChainId where
   show (ChainId b) = show b
