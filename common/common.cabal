@@ -5,17 +5,19 @@ build-type: Simple
 
 library
   hs-source-dirs: src
-  build-depends: base
-               , containers
-               , dependent-sum
-               , hashable
-               , lens
-               , obelisk-executable-config-lookup
-               , obelisk-route
-               , mtl
-               , readable
-               , reflex-dom
-               , text
+  build-depends:
+      aeson
+    , base
+    , containers
+    , dependent-sum
+    , hashable
+    , lens
+    , obelisk-executable-config-lookup
+    , obelisk-route
+    , mtl
+    , readable
+    , reflex-dom
+    , text
   default-extensions:
     TypeFamilies
     PolyKinds
