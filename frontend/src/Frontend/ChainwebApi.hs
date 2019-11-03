@@ -189,7 +189,7 @@ combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHea
 
 mkHeaderRequest :: ChainwebHost -> CServerInfo -> [XhrRequest ()]
 mkHeaderRequest h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
-                         $ _siChains $ _csiServerInfo csi
+                         $ siChainsList $ _csiServerInfo csi
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
     maxh = _csiNewestBlockHeight csi

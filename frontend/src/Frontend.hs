@@ -229,7 +229,7 @@ rowsWidget
   -> m (Event t (Maybe BlockRef))
 rowsWidget ti hoveredBlock (Down bh) cs = mdo
   hoverChanges <- blockHeightRow ti hoveredBlock bh cs
-  chains <- asks (_siChains . _as_serverInfo)
+  chains <- asks (siChainsList . _as_serverInfo)
   spacerRow chains cs hoveredBlock bh
   return hoverChanges
 
@@ -244,7 +244,7 @@ blockHeightRow
 blockHeightRow ti hoveredBlock height headers = do
   divClass "block-row" $ do
     elClass "span" "block-height" $ text $ tshow height
-    chains <- asks (_siChains . _as_serverInfo)
+    chains <- asks (siChainsList . _as_serverInfo)
     es <- forM chains $ blockWidget0 ti hoveredBlock headers height
     return $ (height,) <$$> leftmost es
 

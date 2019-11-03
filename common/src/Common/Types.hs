@@ -13,6 +13,8 @@ import           Data.Aeson
 import qualified Data.Char as Char
 import           Data.Hashable
 import           Data.Readable
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           GHC.Generics (Generic)
@@ -138,9 +140,12 @@ data CServerInfo = CServerInfo
 data ServerInfo = ServerInfo
   { _siChainwebVer :: ChainwebVersion
   , _siApiVer :: Text -- TODO use this properly
-  , _siChains :: [ChainId]
+  , _siChains :: Set ChainId
   , _siNumChains :: Int
   } deriving (Eq,Ord,Show)
+
+siChainsList :: ServerInfo -> [ChainId]
+siChainsList = S.toAscList . _siChains
 
 --{"nodeNumberOfChains":10
 --,"nodeApiVersion":"0.0"
