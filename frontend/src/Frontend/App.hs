@@ -22,6 +22,7 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Common.Types
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 ------------------------------------------------------------------------------
@@ -54,14 +55,14 @@ type App r t m a = RoutedT t r m a
 --    RoutedT t r (ReaderT (AppState t) (EventWriterT t AppTriggers m)) a
 
 runApp
-  :: (DomBuilder t m, Routed t (R FrontendRoute) m, MonadHold t m, MonadFix m, Prerender js t m, PostBuild t m, MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
+  :: (DomBuilder t m, Routed t r m, MonadHold t m, MonadFix m, Prerender js t m, PostBuild t m, MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
   => Text
-  -> ChainwebHost
-  -> ServerInfo
-  -> RoutedT t (R FrontendRoute) (ReaderT (AppState t) (EventWriterT t AppTriggers m)) a
+  -> NetId
+  -> CServerInfo
+  -> RoutedT t r (ReaderT (AppState t) (EventWriterT t AppTriggers m)) a
   -> m a
-runApp publicUrl ch si m = mdo
+runApp publicUrl net csi m = mdo
     r <- askRoute
-    as <- stateManager publicUrl ch si triggers
+    as <- stateManager publicUrl net csi triggers
     (res, triggers) <- runEventWriterT (runReaderT (runRoutedT m r) as)
     return res

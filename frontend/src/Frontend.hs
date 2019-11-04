@@ -9,16 +9,15 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 module Frontend where
 
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
-import           Control.Monad.Ref
 import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Fixed
 import           Data.Ord
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -27,7 +26,6 @@ import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Formattable.NumFormat
-import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend
 import           Obelisk.Generated.Static
@@ -38,6 +36,7 @@ import           Reflex.Network
 import           Text.Printf
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Common.Types
 import           Common.Utils
 import           Frontend.About
 import           Frontend.App
@@ -48,73 +47,44 @@ import           Frontend.Nav
 import           Frontend.Page.Block
 ------------------------------------------------------------------------------
 
-
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = appHead
   , _frontend_body = do
       route <- getAppRoute
-      curNet <- divClass "ui fixed inverted menu" nav
-      _ <- elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $
-        networkView (appWithNetwork route <$> curNet)
+      mainDispatch route
       footer
   }
 
-appWithNetwork
-  :: (SetRoute t (R FrontendRoute) (Client (Client m)),
-      Routed t (R FrontendRoute) (Client m),
-      RouteToUrl (R FrontendRoute) (Client (Client m)),
-      DomBuilder t m, Prerender js t m)
+mainDispatch
+  :: ObeliskWidget js t (R FrontendRoute) m
   => Text
-  -> Maybe Network
-  -> m ()
-appWithNetwork route Nothing = do
-  divClass "ui segment" $ do
-    divClass "ui active dimmer" $ do
-      divClass "ui text loader" $ text "Loading"
-    el "p" $ text " "
-    el "p" $ text " "
-    el "p" $ text " "
-appWithNetwork route (Just curNet) = do
-  let ch = networkHost curNet
-  _ <- prerender blank $ do
-    dsi <- getServerInfo ch
-    void $ networkView (appWithServer route ch <$> dsi)
-  return ()
-
-appWithServer
-  :: (DomBuilder t m, Routed t (R FrontendRoute) m, MonadHold t m, MonadFix m,
-      Prerender js t m, PostBuild t m, MonadJSM (Performable m),
-      HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m,
-      RouteToUrl (R FrontendRoute) (Client m), MonadRef m, MonadSample t (Performable m),
-      SetRoute t (R FrontendRoute) (Client m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => Text
-  -> ChainwebHost
-  -> Maybe ServerInfo
-  -> m ()
-appWithServer _ _ Nothing = text "Loading server info..."
-appWithServer route ch (Just si) = runApp route ch si mainApp
-
-getServerInfo
-  :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
-      HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
-  => ChainwebHost
-  -> m (Dynamic t (Maybe ServerInfo))
-getServerInfo h = do
+  -> App (R FrontendRoute) t m ()
+mainDispatch route = do
   pb <- getPostBuild
-  ese <- cutToServerInfo <$$$> getCut (h <$ pb)
-  holdDyn Nothing ese
+  subRoute_ $ \case
+    FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
+    FR_About -> aboutWidget
+    FR_Mainnet -> networkDispatch route NetId_Mainnet
+    FR_Testnet -> networkDispatch route NetId_Testnet
+    FR_Customnet -> subPairRoute_ $ \host ->
+      networkDispatch route (NetId_Custom host)
 
-mainApp
-  :: (MonadApp r t m, Prerender js t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => App (R FrontendRoute) t m ()
-mainApp = do
-    subRoute_ $ \case
-      FR_Main -> blockTableWidget
-      FR_About -> aboutWidget
-      FR_Block -> blockPage
+networkDispatch
+  :: ObeliskWidget js t (R FrontendRoute) m
+  => Text -> NetId -> App (R NetRoute) t m ()
+networkDispatch route netId = prerender_ blank $ do
+  divClass "ui fixed inverted menu" $ nav netId
+  elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
+    dsi <- getServerInfo $ netHost netId
+    dyn_ $ ffor dsi $ \case
+      Nothing -> inlineLoader
+      Just csi -> runApp route netId csi $ subRoute_ $ \case
+        NetRoute_Chainweb -> blockTableWidget
+        NetRoute_Chain -> blockPage (_csiServerInfo csi) netId
+
+inlineLoader :: DomBuilder t m => m ()
+inlineLoader = divClass "ui active centered inline text loader" $ text "Loading"
 
 footer
   :: (DomBuilder t m)
@@ -149,8 +119,8 @@ appHead = do
   mTrackId <- getTextCfg "frontend/tracking-id"
   case mTrackId of
     Nothing -> googleAnalyticsTracker "UA-127512784-5"
-    Just tid -> googleAnalyticsTracker tid
     Just "no-tracking" -> blank
+    Just tid -> googleAnalyticsTracker tid
 
   css (static @"semantic.min.css")
   css (static @"css/custom.css")
@@ -158,6 +128,7 @@ appHead = do
   jsScript (static @"jquery-3.1.1.min.js")
   jsScript (static @"semantic.min.js")
 
+googleAnalyticsTracker :: DomBuilder t m => Text -> m ()
 googleAnalyticsTracker gaTrackingId = do
   let gtagSrc = "https://www.googletagmanager.com/gtag/js?id=" <> gaTrackingId
   elAttr "script" ("async" =: "" <> "src" =: gtagSrc) blank
@@ -259,7 +230,7 @@ rowsWidget
   -> m (Event t (Maybe BlockRef))
 rowsWidget ti hoveredBlock (Down bh) cs = mdo
   hoverChanges <- blockHeightRow ti hoveredBlock bh cs
-  chains <- asks (_siChains . _as_serverInfo)
+  chains <- asks (siChainsList . _as_serverInfo)
   spacerRow chains cs hoveredBlock bh
   return hoverChanges
 
@@ -274,7 +245,7 @@ blockHeightRow
 blockHeightRow ti hoveredBlock height headers = do
   divClass "block-row" $ do
     elClass "span" "block-height" $ text $ tshow height
-    chains <- asks (_siChains . _as_serverInfo)
+    chains <- asks (siChainsList . _as_serverInfo)
     es <- forM chains $ blockWidget0 ti hoveredBlock headers height
     return $ (height,) <$$> leftmost es
 
@@ -288,6 +259,7 @@ blockWidget0
   -> ChainId
   -> m (Event t (Maybe ChainId))
 blockWidget0 ti hoveredBlock hs height cid = do
+  net <- asks _as_network
   let mkAttrs = \case
         Nothing -> "class" =: "summary-details"
         Just hb -> if isDownstreamFrom hb (height, cid)
@@ -297,7 +269,7 @@ blockWidget0 ti hoveredBlock hs height cid = do
   (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
     viewIntoMaybe mbh blank $ \bh -> do
       let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
-      let mkRoute h = (FR_Block :/ (unChainId cid, getHash h, Block_Header :/ ()))
+      let mkRoute h = addNetRoute net $ unChainId cid :. getHash h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         el "div" $ do
           elClass "span" "blockheight" $ do

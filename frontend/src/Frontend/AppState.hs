@@ -37,6 +37,7 @@ import           Reflex.Dom
 import           Reflex.Dom.EventSource
 import           Reflex.Network
 ------------------------------------------------------------------------------
+import           Common.Types
 import           Common.Utils
 import           Frontend.ChainwebApi
 ------------------------------------------------------------------------------
@@ -146,7 +147,7 @@ setStartTime :: UTCTime -> GlobalStats -> GlobalStats
 setStartTime t gs = gs { _gs_startTime = t }
 
 data AppState t = AppState
-    { _as_host :: ChainwebHost
+    { _as_network :: NetId
     , _as_serverInfo :: ServerInfo
     , _as_blockTable :: Dynamic t BlockTable
     , _as_stats :: Dynamic t GlobalStats
@@ -174,17 +175,19 @@ stateManager
         PerformEvent t m, TriggerEvent t m)
     => Text
     -- ^ Application route...not in use yet
-    -> ChainwebHost
-    -> ServerInfo
+    -> NetId
+    -> CServerInfo
     -> Event t AppTriggers
     -- ^ Not in use yet
     -> m (AppState t)
-stateManager _ h si _ = do
+stateManager _ n csi _ = do
     let cfg = EventSourceConfig never True
-    es <- startEventSource h cfg
+        si = _csiServerInfo csi
+    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
+    es <- startEventSource ch cfg
     let downEvent = _eventSource_recv es
 
-    ebt <- getBlockTable h si
+    ebt <- getBlockTable ch csi
 
     rec blockTable <- foldDyn ($) mempty $ mergeWith (.)
           [ (<>) <$> ebt
@@ -193,7 +196,7 @@ stateManager _ h si _ = do
           ]
 
         let missingBlocks = getMissingBlocks blockTable downEvent
-            getHeader (cid,hash) = getBlockHeader h cid (hashB64U hash)
+            getHeader (cid,hash) = getBlockHeader ch cid (hashB64U hash)
             eme = sequence . fmap getHeader <$> missingBlocks
         ee <- networkHold (return []) eme
         let newMissing = switch (current (leftmost <$> ee))
@@ -210,7 +213,7 @@ stateManager _ h si _ = do
       , addHashrateData <$> filterRight newHrd
       ]
 
-    return $ AppState h si blockTable stats
+    return $ AppState n si blockTable stats
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
 

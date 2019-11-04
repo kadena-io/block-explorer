@@ -1,5 +1,11 @@
+body {
+    display: flex;
+    flex-direction: column;
+}
+
 .main.container {
     margin-top: 7em;
+    flex-grow: 1;
 }
 
 .ui.footer.segment {

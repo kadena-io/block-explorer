@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -9,31 +10,28 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Common.Route where
 
-{- -- You will probably want these imports for composing Encoders.
-import Prelude hiding (id, (.))
-import Control.Category
--}
-
 ------------------------------------------------------------------------------
---import           Prelude hiding ((.), id)
---import           Control.Category (Category (..))
-import           Control.Lens
+import           Prelude hiding ((.), id)
+import           Control.Category (Category (..))
 import           Control.Monad.Except
-import           Data.Readable
+import           Data.Functor.Identity
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Data.Text.Encoding
+import           Data.Text.Encoding hiding (Some)
 import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
 ------------------------------------------------------------------------------
-import           Common.Utils
+import           Common.Types
 ------------------------------------------------------------------------------
 
 data BackendRoute :: * -> * where
@@ -50,26 +48,6 @@ blockRouteEncoder = pathComponentEncoder $ \case
   Block_Header -> PathEnd $ unitEncoder mempty
   Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
 
-
-blockRouteEncoder2
-  :: Encoder (Either Text) (Either Text) (Int, Text, R BlockRoute) PageName
-blockRouteEncoder2 = unsafeMkEncoder $ EncoderImpl
-  { _encoderImpl_decode = \(path, _query) ->
-      case path of
-        (cidStr : hash : rest) -> do
-          cid <- maybe (Left "Could not parse chain id") Right $ fromText cidStr
-          br <- case rest of
-                  [] -> Right Block_Header
-                  ["txs"] -> Right Block_Transactions
-                  _ -> throwError $ "blockRouteEncoder: Invalid path " <> tshow path
-          pure (cid, hash, br :/ ())
-        l -> throwError $ "singletonListEncoderImpl: expected one item, got " <> tshow (length l)
-  , _encoderImpl_encode = \(cid, hash, br :/ _) ->
-      case br of
-        Block_Header -> ([tshow cid, hash], mempty)
-        Block_Transactions -> ([tshow cid, hash, "txs"], mempty)
-  }
-
 --blockRouteToPath :: BlockRoute () -> [Text]
 --blockRouteToPath Block_Header = []
 --blockRouteToPath Block_Transactions = ["txs"]
@@ -82,10 +60,23 @@ blockRouteEncoder2 = unsafeMkEncoder $ EncoderImpl
 --  Block_Header -> PathEnd $ unitEncoder mempty
 --  Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
 
+type BlockIdRoute = Int :. Text :. R BlockRoute
+
+data NetRoute :: * -> * where
+  NetRoute_Chainweb :: NetRoute ()
+  NetRoute_Chain :: NetRoute BlockIdRoute
+
+netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
+netRouteEncoder = pathComponentEncoder $ \case
+  NetRoute_Chainweb -> PathEnd $ unitEncoder mempty
+  NetRoute_Chain -> PathSegment "dashboard" blockIdRouteEncoder
+
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
   FR_About :: FrontendRoute ()
-  FR_Block :: FrontendRoute (Int, Text, R BlockRoute)
+  FR_Mainnet :: FrontendRoute (R NetRoute)
+  FR_Testnet :: FrontendRoute (R NetRoute)
+  FR_Customnet :: FrontendRoute (Host :. R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 pathOnlyEncoderIgnoringQuery :: (Applicative check, MonadError Text parse) => Encoder check parse [Text] PageName
@@ -114,13 +105,27 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       -- in this example, we have none, so we insist on it.
       FR_Main -> PathEnd $ unitEncoder mempty
       FR_About -> PathSegment "about" $ unitEncoder mempty
-      FR_Block -> PathSegment "block" blockRouteEncoder2
-        --pathSegmentEncoder . bimap unwrappedEncoder (maybeEncoder (unitEncoder mempty) blockRouteEncoder)
+      FR_Mainnet -> PathSegment "mainnet" netRouteEncoder
+      FR_Testnet -> PathSegment "testnet" netRouteEncoder
+      FR_Customnet -> PathSegment "custom" $ pathParamEncoder hostEncoder netRouteEncoder
+
+hostEncoder :: Encoder (Either Text) (Either Text) Host Text
+hostEncoder = prismEncoder humanReadableTextPrism
+
+blockIdRouteEncoder :: Encoder (Either Text) (Either Text) BlockIdRoute PageName
+blockIdRouteEncoder = pathLiteralEncoder "chain" $ pathParamEncoder unsafeTshowEncoder $ pathLiteralEncoder "block" $ pathParamEncoder id blockRouteEncoder
+
+addNetRoute :: NetId -> BlockIdRoute -> R FrontendRoute
+addNetRoute netId r = case netId of
+  NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ r
+  NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ r
+  NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_Chain :/ r))
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
   , ''BlockRoute
+  , ''NetRoute
   ]
 
 getAppRoute :: HasConfigs m => m Text
@@ -132,11 +137,13 @@ getAppRoute = do
 
 -- | Provide a human-readable name for a given section
 tabTitle :: DomBuilder t m => Some FrontendRoute -> m ()
-tabTitle sfr@(Some.Some sec) = text $ frToText sfr
+tabTitle = text . frToText
 
 -- | Provide a human-readable name for a given section
 frToText :: Some FrontendRoute -> Text
 frToText (Some.Some sec) = case sec of
   FR_Main -> "Home"
   FR_About -> "About"
-  FR_Block -> "Block"
+  FR_Mainnet -> "Block"
+  FR_Testnet -> "Block"
+  FR_Customnet -> "Block"

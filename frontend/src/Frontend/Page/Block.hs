@@ -8,6 +8,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 module Frontend.Page.Block where
 
 ------------------------------------------------------------------------------
@@ -24,6 +25,7 @@ import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Common.Types
 import           Common.Utils
 import           Frontend.App
 import           Frontend.AppState
@@ -36,46 +38,52 @@ import           Frontend.Page.Transaction
 blockPage
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => App (Int, Text, R BlockRoute) t m ()
-blockPage = do
+  => ServerInfo
+  -> NetId
+  -> App (Int :. Text :. R BlockRoute) t m ()
+blockPage si netId = do
     args <- askRoute
-    void $ networkView (blockWidget <$> args)
+    void $ networkView (blockWidget si netId <$> args)
 
 blockWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => (Int, Text, R BlockRoute)
+  => ServerInfo
+  -> NetId
+  -> Int :. Text :. R BlockRoute
   -> m ()
-blockWidget (cid, hash, r) = do
+blockWidget si netId (cid :. hash :. r) = do
   as <- ask
-  let h = _as_host as
+  let n = _as_network as
+      chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
       c = ChainId cid
-  ebh <- getBlockHeader h c hash
-  void $ networkHold (text "Block does not exist") (blockPageNoPayload h c r <$> fmapMaybe id ebh)
+  ebh <- getBlockHeader chainwebHost c hash
+  void $ networkHold (text "Block does not exist") (blockPageNoPayload netId chainwebHost c r <$> fmapMaybe id ebh)
 
 blockLink
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => ChainId
+  => NetId
+  -> ChainId
   -> Hash
   -> m ()
-blockLink chainId hash =
-  routeLink (FR_Block :/ (unChainId chainId, hashB64U hash, Block_Header :/ ())) $ text $ hashHex hash
-
+blockLink netId chainId hash =
+  routeLink (addNetRoute netId $ unChainId chainId :. hashB64U hash :. Block_Header :/ ()) $ text $ hashHex hash
 
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => ChainwebHost
+  => NetId
+  -> ChainwebHost
   -> ChainId
   -> R BlockRoute
   -> (BlockHeader, Text)
   -> m ()
-blockPageNoPayload h c r bh = do
+blockPageNoPayload netId h c r bh = do
   let choose ep = case ep of
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> case r of
-          Block_Header :/ _ -> blockHeaderPage h c bh payload
+          Block_Header :/ _ -> blockHeaderPage netId h c bh payload
           Block_Transactions :/ _ -> transactionPage payload
   pEvt <- getBlockPayload h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (text "Retrieving payload...") (choose <$> pEvt)
@@ -84,12 +92,13 @@ blockPageNoPayload h c r bh = do
 blockHeaderPage
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => ChainwebHost
+  => NetId
+  -> ChainwebHost
   -> ChainId
   -> (BlockHeader, Text)
   -> BlockPayload
   -> m ()
-blockHeaderPage _ c (bh, bhBinBase64) bp = do
+blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
     el "h2" $ text "Block Header"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
@@ -107,23 +116,24 @@ blockHeaderPage _ c (bh, bhBinBase64) bp = do
         tfield "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
         tfield "Nonce" $ text $ _blockHeader_nonce bh
         return ()
-    blockPayloadWidget c bh bp
+    blockPayloadWidget netId c bh bp
   where
-    parent p = blockLink (_blockHeader_chainId bh) p
+    parent p = blockLink netId (_blockHeader_chainId bh) p
     neighbors ns = do
       forM_ (M.toList ns) $ \(cid,nh) -> do
         el "div" $ do
           text $ "Chain " <> tshow cid <> ": "
-          blockLink cid nh
+          blockLink netId cid nh
 
 blockPayloadWidget
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => ChainId
+  => NetId
+  -> ChainId
   -> BlockHeader
   -> BlockPayload
   -> m ()
-blockPayloadWidget c bh bp = do
+blockPayloadWidget netId c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
@@ -137,4 +147,4 @@ blockPayloadWidget c bh bp = do
         let rawHash = _blockHeader_hash bh
         let hash = hashB64U rawHash
         tfield "Transactions" $
-          routeLink (FR_Block :/ (unChainId c, hash, Block_Transactions :/ ())) $ text $ hashHex rawHash
+          routeLink (addNetRoute netId $ unChainId c :. hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
