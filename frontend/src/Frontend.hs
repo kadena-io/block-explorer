@@ -64,7 +64,9 @@ mainDispatch route = do
   pb <- getPostBuild
   subRoute_ $ \case
     FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
-    FR_About -> aboutWidget
+    FR_About -> do
+      divClass "ui fixed inverted menu" $ nav NetId_Mainnet
+      aboutWidget
     FR_Mainnet -> networkDispatch route NetId_Mainnet
     FR_Testnet -> networkDispatch route NetId_Testnet
     FR_Customnet -> subPairRoute_ $ \host ->
@@ -110,23 +112,24 @@ getTextCfg p = fmap (T.strip . T.decodeUtf8With T.lenientDecode) <$> getConfig p
 
 appHead :: (DomBuilder t m, HasConfigs m) => m ()
 appHead = do
-  el "title" $ text "Kadena Block Explorer"
-  elAttr "link" ("rel" =: "shortcut icon" <>
-                 "href" =: "/static/favicon.svg" <>
-                 "type" =: "image/svg+xml"
-                ) blank
+    el "title" $ text "Kadena Block Explorer"
+    elAttr "link" ("rel" =: "icon" <> "type" =: "image/png" <> "href" =: static @"img/favicon/favicon-96x96.png") blank
+    meta ("name" =: "description" <> "content" =: "Block Explorer is an analytics tool for the Kadena platform which visualizes the mining, propagation and braiding of blocks across multiple Kadena chains in real time.")
+    meta ("name" =: "keywords" <> "content" =: "kadena, block explorer, mining, propagation, smart contracts, blockchain, chainweb")
+    mTrackId <- getTextCfg "frontend/tracking-id"
+    case mTrackId of
+      Nothing -> googleAnalyticsTracker "UA-127512784-5"
+      Just "no-tracking" -> blank
+      Just tid -> googleAnalyticsTracker tid
 
-  mTrackId <- getTextCfg "frontend/tracking-id"
-  case mTrackId of
-    Nothing -> googleAnalyticsTracker "UA-127512784-5"
-    Just "no-tracking" -> blank
-    Just tid -> googleAnalyticsTracker tid
+    css (static @"semantic.min.css")
+    css (static @"css/custom.css")
+    --jsScript "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"
+    jsScript (static @"jquery-3.1.1.min.js")
+    jsScript (static @"semantic.min.js")
+  where
+    meta attrs = elAttr "meta" attrs blank
 
-  css (static @"semantic.min.css")
-  css (static @"css/custom.css")
-  --jsScript "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"
-  jsScript (static @"jquery-3.1.1.min.js")
-  jsScript (static @"semantic.min.js")
 
 googleAnalyticsTracker :: DomBuilder t m => Text -> m ()
 googleAnalyticsTracker gaTrackingId = do
