@@ -63,7 +63,7 @@ mainDispatch
 mainDispatch route = do
   pb <- getPostBuild
   subRoute_ $ \case
-    FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
+    FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
     FR_About -> aboutWidget
     FR_Mainnet -> networkDispatch route NetId_Mainnet
     FR_Testnet -> networkDispatch route NetId_Testnet
@@ -188,8 +188,14 @@ blockTableWidget = do
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
         statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-        statistic "Est. Pre-launch coins left" (dynText $ formatNum intFmt <$> coinsLeft)
-        statistic "Est. Time to Launch" $ dynText (fmap f dti)
+
+        if _as_network as == NetId_Testnet
+          then do
+            statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
+            statistic "Current TPS" (dynText $ showTps <$> tps)
+          else do
+            statistic "Est. Pre-launch coins left" (dynText $ formatNum intFmt <$> coinsLeft)
+            statistic "Est. Time to Launch" $ dynText (fmap f dti)
 
   divClass "block-table" $ do
     divClass "header-row" $ do

@@ -88,6 +88,7 @@ data NetId
    = NetId_Mainnet
    | NetId_Testnet
    | NetId_Custom Host
+   deriving (Eq,Ord)
 
 netIdPathSegment :: NetId -> Text
 netIdPathSegment = \case
@@ -97,12 +98,12 @@ netIdPathSegment = \case
 
 
 netHost :: NetId -> Host
-netHost NetId_Mainnet = Host "us-e3.chainweb.com" 443
+netHost NetId_Mainnet = Host "us-e1.chainweb.com" 443
 netHost NetId_Testnet = Host "us1.testnet.chainweb.com" 443
 netHost (NetId_Custom h) = h
 
 instance Humanizable NetId where
-  humanize NetId_Mainnet = "us-e3.chainweb.com" -- TODO Change this for mainnet
+  humanize NetId_Mainnet = "us-e1.chainweb.com"
   humanize NetId_Testnet = "us1.testnet.chainweb.com"
   humanize (NetId_Custom h) = humanize h
 
