@@ -52,9 +52,7 @@ frontend = Frontend
   { _frontend_head = appHead
   , _frontend_body = do
       route <- getAppRoute
-      divClass "ui fixed inverted menu" nav
-      elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
-        mainDispatch route
+      mainDispatch route
       footer
   }
 
@@ -76,12 +74,14 @@ networkDispatch
   :: ObeliskWidget js t (R FrontendRoute) m
   => Text -> NetId -> App (R NetRoute) t m ()
 networkDispatch route netId = prerender_ blank $ do
-  dsi <- getServerInfo $ netHost netId
-  dyn_ $ ffor dsi $ \case
-    Nothing -> inlineLoader
-    Just csi -> runApp route netId csi $ subRoute_ $ \case
-      NetRoute_Chainweb -> blockTableWidget
-      NetRoute_Chain -> blockPage (_csiServerInfo csi) netId
+  divClass "ui fixed inverted menu" $ nav netId
+  elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
+    dsi <- getServerInfo $ netHost netId
+    dyn_ $ ffor dsi $ \case
+      Nothing -> inlineLoader
+      Just csi -> runApp route netId csi $ subRoute_ $ \case
+        NetRoute_Chainweb -> blockTableWidget
+        NetRoute_Chain -> blockPage (_csiServerInfo csi) netId
 
 inlineLoader :: DomBuilder t m => m ()
 inlineLoader = divClass "ui active centered inline text loader" $ text "Loading"
