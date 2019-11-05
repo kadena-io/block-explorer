@@ -190,6 +190,13 @@ blockTableWidget = do
 
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
+      divClass "statistic" blank
+      divClass "large statistic" $ do
+        divClass "label" $ elAttr "a" ("href" =: "https://coinlist.co/kadena" <> "target" =: "_blank") $ text "Token Sale Live on Coinlist"
+      divClass "statistic" blank
+
+  divClass "ui segment" $ do
+    divClass "ui small three statistics" $ do
         statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
 
         if _as_network as == NetId_Testnet
@@ -197,9 +204,10 @@ blockTableWidget = do
             statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
             statistic "Current TPS" (dynText $ showTps <$> tps)
           else do
-            statistic "Est. Pre-launch coins left" (dynText $ formatNum intFmt <$> coinsLeft)
+            divClass "statistic" $ do
+              divClass "value" $ (dynText $ formatNum intFmt <$> coinsLeft)
+              divClass "label" $ text "Est. Pre-launch coins left"
             statistic "Est. Time to Launch" $ dynText (fmap f dti)
-
   divClass "block-table" $ do
     divClass "header-row" $ do
       elClass "span" "table-header" $ text "Height"
