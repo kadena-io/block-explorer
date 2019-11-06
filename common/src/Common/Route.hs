@@ -117,7 +117,7 @@ blockIdRouteEncoder = pathLiteralEncoder "chain" $ pathParamEncoder unsafeTshowE
 
 addNetRoute :: NetId -> BlockIdRoute -> R FrontendRoute
 addNetRoute netId r = case netId of
-  --NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ r
+  NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ r
   NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ r
   NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_Chain :/ r))
 

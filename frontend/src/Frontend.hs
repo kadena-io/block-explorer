@@ -67,6 +67,7 @@ mainDispatch route = do
     FR_About -> do
       divClass "ui fixed inverted menu" $ nav NetId_Testnet
       aboutWidget
+    FR_Mainnet -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
     --FR_Mainnet -> networkDispatch route NetId_Mainnet
     FR_Testnet -> networkDispatch route NetId_Testnet
     FR_Customnet -> subPairRoute_ $ \host ->

@@ -88,7 +88,7 @@ linkItem nm url = do
     elAttr "a" ("href" =: url <> "class" =: "item") $ text nm
 
 networkName :: NetId -> Text
---networkName NetId_Mainnet = "Mainnet"
+networkName NetId_Mainnet = "Mainnet"
 networkName NetId_Testnet = "Testnet"
 networkName (NetId_Custom h) = humanize h
 
