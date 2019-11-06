@@ -44,7 +44,7 @@ import           Frontend.Common
 
 apiBaseUrl :: ChainwebHost -> Text
 apiBaseUrl (ChainwebHost h cver) =
-    T.pack $ printf "https://%s/chainweb/0.0/%s/" (T.unpack $ hostToText h) (T.unpack $ versionText cver)
+    hostScheme h <> hostToText h <> "/chainweb/0.0/" <> versionText cver <> "/"
 
 cutUrl :: ChainwebHost -> Text
 cutUrl h = apiBaseUrl h <> "cut"
@@ -88,7 +88,7 @@ getInfo
   => Event t Host
   -> m (Event t (Maybe ServerInfo))
 getInfo host = do
-  let mkUrl h = "https://" <> hostToText h <> "/info"
+  let mkUrl h = hostScheme h <> hostToText h <> "/info"
   resp <- performRequestsAsync $ fmap (\h -> (h, XhrRequest "GET" (mkUrl h) def)) host
   return (decodeXhrResponse . snd <$> resp)
 

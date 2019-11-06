@@ -37,6 +37,9 @@ data Host = Host
   , hostPort :: Int
   } deriving (Eq,Ord,Show,Read,Generic)
 
+hostScheme :: Host -> Text
+hostScheme h = if hostPort h == 80 then "http://" else "https://"
+
 instance ToJSON Host where
     toEncoding = genericToEncoding defaultOptions
 instance FromJSON Host
@@ -96,21 +99,10 @@ netIdPathSegment = \case
   NetId_Testnet -> "testnet"
   NetId_Custom _ -> "custom"
 
-
 netHost :: NetId -> Host
-netHost NetId_Mainnet = Host "us-e1.chainweb.com" 443
+netHost NetId_Mainnet = Host "data.chainweb.com" 80
 netHost NetId_Testnet = Host "us1.testnet.chainweb.com" 443
 netHost (NetId_Custom h) = h
-
-instance Humanizable NetId where
-  humanize NetId_Mainnet = "us-e1.chainweb.com"
-  humanize NetId_Testnet = "us1.testnet.chainweb.com"
-  humanize (NetId_Custom h) = humanize h
-
-instance Readable NetId where
-  fromText "us-e3.chainweb.com" = pure NetId_Mainnet
-  fromText "us1.testnet.chainweb.com" = pure NetId_Testnet
-  fromText t = NetId_Custom <$> fromText t
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
 humanReadableTextPrism = prism' humanize fromText
@@ -147,11 +139,6 @@ data ServerInfo = ServerInfo
 
 siChainsList :: ServerInfo -> [ChainId]
 siChainsList = S.toAscList . _siChains
-
---{"nodeNumberOfChains":10
---,"nodeApiVersion":"0.0"
---,"nodeChains":["8","9","4","5","6","7","0","1","2","3"]
---,"nodeVersion":"mainnet01"}
 
 instance FromJSON ServerInfo where
   parseJSON = withObject "ServerInfo" $ \o -> ServerInfo
