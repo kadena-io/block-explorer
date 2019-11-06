@@ -100,7 +100,7 @@ netIdPathSegment = \case
   NetId_Custom _ -> "custom"
 
 netHost :: NetId -> Host
-netHost NetId_Mainnet = Host "data.chainweb.com" 443
+netHost NetId_Mainnet = Host "edata.chainweb.com" 443
 netHost NetId_Testnet = Host "us1.testnet.chainweb.com" 443
 netHost (NetId_Custom h) = h
 
