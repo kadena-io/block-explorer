@@ -88,19 +88,19 @@ instance ToJSON ChainwebHost where
 instance FromJSON ChainwebHost
 
 data NetId
-   = NetId_Mainnet
-   | NetId_Testnet
+--   = NetId_Mainnet
+   = NetId_Testnet
    | NetId_Custom Host
    deriving (Eq,Ord)
 
 netIdPathSegment :: NetId -> Text
 netIdPathSegment = \case
-  NetId_Mainnet -> "mainnet"
+--  NetId_Mainnet -> "mainnet"
   NetId_Testnet -> "testnet"
   NetId_Custom _ -> "custom"
 
 netHost :: NetId -> Host
-netHost NetId_Mainnet = Host "edata.chainweb.com" 443
+--netHost NetId_Mainnet = Host "edata.chainweb.com" 443
 netHost NetId_Testnet = Host "us1.testnet.chainweb.com" 443
 netHost (NetId_Custom h) = h
 

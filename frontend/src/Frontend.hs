@@ -63,11 +63,11 @@ mainDispatch
 mainDispatch route = do
   pb <- getPostBuild
   subRoute_ $ \case
-    FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
+    FR_Main -> setRoute ((FR_Testnet :/ NetRoute_Chainweb :/ ()) <$ pb)
     FR_About -> do
-      divClass "ui fixed inverted menu" $ nav NetId_Mainnet
+      divClass "ui fixed inverted menu" $ nav NetId_Testnet
       aboutWidget
-    FR_Mainnet -> networkDispatch route NetId_Mainnet
+    --FR_Mainnet -> networkDispatch route NetId_Mainnet
     FR_Testnet -> networkDispatch route NetId_Testnet
     FR_Customnet -> subPairRoute_ $ \host ->
       networkDispatch route (NetId_Custom host)
@@ -188,12 +188,12 @@ blockTableWidget = do
       hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
       coinsLeft = (\st -> (realToFrac $ _gs_blocksCountdown st) * (2.304523 :: Double)) <$> stats
 
-  divClass "ui segment" $ do
-    divClass "ui small three statistics" $ do
-      divClass "statistic" blank
-      divClass "large statistic" $ do
-        divClass "label" $ elAttr "a" ("href" =: "https://coinlist.co/kadena" <> "target" =: "_blank") $ text "Token Sale Live on Coinlist"
-      divClass "statistic" blank
+--  divClass "ui segment" $ do
+--    divClass "ui small three statistics" $ do
+--      divClass "statistic" blank
+--      divClass "large statistic" $ do
+--        divClass "label" $ elAttr "a" ("href" =: "https://coinlist.co/kadena" <> "target" =: "_blank") $ text "Token Sale Live on Coinlist"
+--      divClass "statistic" blank
 
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do

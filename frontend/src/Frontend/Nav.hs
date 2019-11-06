@@ -88,7 +88,7 @@ linkItem nm url = do
     elAttr "a" ("href" =: url <> "class" =: "item") $ text nm
 
 networkName :: NetId -> Text
-networkName NetId_Mainnet = "Mainnet"
+--networkName NetId_Mainnet = "Mainnet"
 networkName NetId_Testnet = "Testnet"
 networkName (NetId_Custom h) = humanize h
 
@@ -98,12 +98,13 @@ networkWidget
   => NetId
   -> m ()
 networkWidget netId = mdo
-  (e, _) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
+  --(e, _) <- elAttr' "div" ("class" =: "ui dropdown item") $ mdo
+  (e, _) <- elAttr' "div" ("class" =: "ui item") $ mdo
     text $ networkName netId
-    let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
-    elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      networkItem "Testnet" $ FR_Testnet :/ NetRoute_Chainweb :/ ()
-      networkItem "Mainnet" $ FR_Mainnet :/ NetRoute_Chainweb :/ ()
+--    let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
+--    elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
+--      networkItem "Testnet" $ FR_Testnet :/ NetRoute_Chainweb :/ ()
+--      networkItem "Mainnet" $ FR_Mainnet :/ NetRoute_Chainweb :/ ()
   route <- askRoute
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
