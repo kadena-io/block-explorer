@@ -185,9 +185,11 @@ blockTableWidget = do
   let elapsedTime gs ti = diffUTCTime (_tickInfo_lastUTC ti) (_gs_startTime gs)
       elapsed = elapsedTime <$> stats <*> dti
       tps = calcTps <$> stats <*> elapsed
-      hashrate = (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s) <$> dti <*> dbt
       coinsLeft = (\st -> (realToFrac $ _gs_blocksCountdown st) * (2.304523 :: Double)) <$> stats
 
+  hashrate <- holdDyn Nothing $ attachWith
+    (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
+    (current dti) (updated dbt)
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
       divClass "statistic" blank
