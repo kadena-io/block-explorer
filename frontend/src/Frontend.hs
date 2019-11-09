@@ -18,6 +18,7 @@ import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Maybe
 import           Data.Ord
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -169,6 +170,20 @@ calcTps gs elapsed = fromIntegral (_gs_txCount gs) / realToFrac elapsed
 showTps :: Double -> Text
 showTps = T.pack . printf "%.2f"
 
+calcCoinsLeft :: UTCTime -> BlockTable -> Maybe Double
+calcCoinsLeft now bt =
+    case M.lookupMax (_blockTable_blocks bt) of
+      Nothing -> Nothing
+      Just (cur, _) ->
+        let traunch1 = firstAdjust - fromIntegral cur
+            traunch2 = realToFrac blocksLeft - traunch1
+         in Just $ traunch1 * reward1 * 10 + traunch2 * reward2 * 10
+  where
+    blocksLeft = diffUTCTime launchTime now / 30
+    firstAdjust = 87600
+    reward1 = 2.304523
+    reward2 = 2.297878
+
 blockTableWidget
   :: (MonadApp r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
@@ -185,11 +200,12 @@ blockTableWidget = do
   let elapsedTime gs ti = diffUTCTime (_tickInfo_lastUTC ti) (_gs_startTime gs)
       elapsed = elapsedTime <$> stats <*> dti
       tps = calcTps <$> stats <*> elapsed
-      coinsLeft = (\st -> (realToFrac $ _gs_blocksCountdown st) * (2.304523 :: Double)) <$> stats
 
   hashrate <- holdDyn Nothing $ attachWith
     (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
     (current dti) (updated dbt)
+  coinsLeft <- holdDyn Nothing $ attachWith calcCoinsLeft
+    (_tickInfo_lastUTC <$> current dti) (updated dbt)
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
       divClass "statistic" blank
@@ -207,7 +223,7 @@ blockTableWidget = do
             statistic "Current TPS" (dynText $ showTps <$> tps)
           else do
             divClass "statistic" $ do
-              divClass "value" $ (dynText $ formatNum intFmt <$> coinsLeft)
+              divClass "value" $ (dynText $ maybe "-" (formatNum intFmt) <$> coinsLeft)
               divClass "label" $ text "Est. Pre-launch coins left"
             statistic "Est. Time to Launch" $ dynText (fmap f dti)
   divClass "block-table" $ do
