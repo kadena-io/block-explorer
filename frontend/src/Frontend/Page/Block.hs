@@ -14,11 +14,14 @@ module Frontend.Page.Block where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
+import qualified Data.ByteString.Base16 as B16
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
+import           Numeric
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
@@ -114,7 +117,7 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
         tfield "Neighbors" $ neighbors $ _blockHeader_neighbors bh
         tfield "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash bh
         tfield "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
-        tfield "Nonce" $ text $ _blockHeader_nonce bh
+        tfield "Nonce" $ text $ T.pack $ showHex (_blockHeader_nonce bh) ""
         return ()
     blockPayloadWidget netId c bh bp
   where

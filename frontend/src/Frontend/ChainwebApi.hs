@@ -27,10 +27,12 @@ import           Data.Hashable
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
+import           Data.Word
 import           GHC.Generics
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value)
@@ -265,7 +267,7 @@ data BlockHeader = BlockHeader
   , _blockHeader_payloadHash :: Hash
   , _blockHeader_chainwebVer :: Text
   , _blockHeader_target :: BytesLE
-  , _blockHeader_nonce :: Text
+  , _blockHeader_nonce :: Word64
   } deriving (Eq,Ord,Show)
 
 blockDifficulty :: BlockHeader -> Double
@@ -288,7 +290,7 @@ instance FromJSON BlockHeader where
     <*> (o .: "payloadHash")
     <*> o .: "chainwebVersion"
     <*> o .: "target"
-    <*> o .: "nonce"
+    <*> (fromText =<< (o .: "nonce"))
 
 data BlockTable = BlockTable
   { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
