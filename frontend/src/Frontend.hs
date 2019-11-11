@@ -465,7 +465,7 @@ linksFromBlock cs hoveredBlock fromBlock = do
                 if fst fromBlock > fst hb
                   then "stroke" =: "rgb(220,220,220)"
                   else if hb == fromBlock ||
-                          heightDiff hb > 0
+                          isDownstreamFrom hb fromBlock
                          then "stroke" =: "rgb(100,100,100)" <>
                               "stroke-width" =: "1.0"
                          else "stroke" =: "rgb(220,220,220)"
