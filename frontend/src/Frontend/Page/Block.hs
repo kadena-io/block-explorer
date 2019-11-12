@@ -61,7 +61,9 @@ blockWidget si netId (cid :. hash :. r) = do
       chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
       c = ChainId cid
   ebh <- getBlockHeader chainwebHost c hash
-  void $ networkHold (text "Block does not exist") (blockPageNoPayload netId chainwebHost c r <$> fmapMaybe id ebh)
+  void $ networkHold (text "Retrieving block...") $ ffor ebh $ \case
+    Nothing -> text "Block does not exist"
+    Just bh -> blockPageNoPayload netId chainwebHost c r bh
 
 blockLink
   :: (MonadApp r t m,
