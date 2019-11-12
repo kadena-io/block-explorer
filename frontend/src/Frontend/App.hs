@@ -24,7 +24,6 @@ import           Reflex.Dom.Core hiding (Value)
 import           Common.Route
 import           Common.Types
 import           Frontend.AppState
-import           Frontend.ChainwebApi
 ------------------------------------------------------------------------------
 
 type MonadApp r t m =
