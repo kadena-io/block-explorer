@@ -9,7 +9,7 @@ import           Reflex.Dom
 import           Obelisk.Generated.Static
 ------------------------------------------------------------------------------
 
-aboutWidget :: (Monad m, DomBuilder t m) => m ()
+aboutWidget :: DomBuilder t m => m ()
 aboutWidget = divClass "ui text container" $ do
   el "p" $ text "Block Explorer is an analytics tool for the Kadena platform which visualizes the mining, propagation and braiding of blocks across multiple Kadena chains in real time."
   elAttr "img" ("src" =: static @"AboutBlockExplorer.png" <> "style" =: "width: 100%;") blank

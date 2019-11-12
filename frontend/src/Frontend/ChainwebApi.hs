@@ -23,7 +23,6 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Either
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
-import           Data.Hashable
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -33,10 +32,8 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
 import           Data.Word
-import           GHC.Generics
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value)
-import           Text.Printf
 ------------------------------------------------------------------------------
 import           Blake2Native
 import           Common.Utils

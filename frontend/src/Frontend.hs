@@ -18,7 +18,6 @@ import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Maybe
 import           Data.Ord
 import           Data.Text (Text)
 import qualified Data.Text as T
