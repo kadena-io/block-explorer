@@ -22,8 +22,6 @@ module Frontend.AppState where
 ------------------------------------------------------------------------------
 --import           Control.Error
 import           Control.Lens
-import           Control.Monad.Fix
-import           Control.Monad.Trans
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Text (Text)
@@ -31,11 +29,9 @@ import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Data.Word
 import           GHC.Generics
-import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex
 import           Reflex.Dom
 import           Reflex.Dom.EventSource
-import           Reflex.Network
 ------------------------------------------------------------------------------
 import           Common.Types
 import           Common.Utils
@@ -132,8 +128,8 @@ setStartTime t gs = gs { _gs_startTime = t }
 data AppState t = AppState
     { _as_network :: NetId
     , _as_serverInfo :: ServerInfo
-    , _as_blockTable :: Dynamic t BlockTable
-    , _as_stats :: Dynamic t GlobalStats
+--    , _as_blockTable :: Dynamic t BlockTable
+--    , _as_stats :: Dynamic t GlobalStats
     } deriving Generic
 
 getMissing :: BlockTable -> BlockHeaderTx -> [(ChainId, Hash)]
@@ -148,51 +144,16 @@ launchTime :: UTCTime
 launchTime = parseTimeOrError True defaultTimeLocale "%Y-%m-%dT%H:%M:%S" "2019-12-05T17:00:00"
 
 stateManager
-    :: (DomBuilder t m, MonadHold t m, Prerender js t m, MonadFix m,
-        PostBuild t m, MonadJSM (Performable m), HasJSContext (Performable m),
-        PerformEvent t m, TriggerEvent t m)
+    :: DomBuilder t m
     => Text
     -- ^ Application route...not in use yet
     -> NetId
-    -> CServerInfo
+    -> ServerInfo
     -> Event t AppTriggers
     -- ^ Not in use yet
     -> m (AppState t)
-stateManager _ n csi _ = do
-    let cfg = EventSourceConfig never True
-        si = _csiServerInfo csi
-    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
-    es <- startEventSource ch cfg
-    let downEvent = _eventSource_recv es
-
-    ebt <- getBlockTable ch csi
-
-    rec blockTable <- foldDyn ($) mempty $ mergeWith (.)
-          [ (<>) <$> ebt
-          , (\mbtx bt -> maybe bt (insertBlockTable bt) mbtx) <$> downEvent
-          , (\pair bt -> maybe bt (insertBlockTable bt . pairToBhtx) pair) <$> newMissing
-          ]
-
-        let missingBlocks = getMissingBlocks blockTable downEvent
-            getHeader (cid,hash) = getBlockHeader ch cid (hashB64U hash)
-            eme = sequence . fmap getHeader <$> missingBlocks
-        ee <- networkHold (return []) eme
-        let newMissing = switch (current (leftmost <$> ee))
-
-
-    let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
-
-    pb <- getPostBuild
-    now <- prerender (return t0) (liftIO getCurrentTime)
-    stats <- foldDyn ($) (GlobalStats 0 t0 mempty) $ mergeWith (.)
-      [ maybe id addTxCount <$> downEvent
-      , setStartTime <$> tag (current now) pb
-      , addHashrateData <$> filterRight newHrd
-      ]
-
-    return $ AppState n si blockTable stats
-  where
-    t0 = UTCTime (ModifiedJulianDay 0) 0
+stateManager _ n si _ = do
+    return $ AppState n si --blockTable stats
 
 pairToBhtx :: (BlockHeader, Text) -> BlockHeaderTx
 pairToBhtx (h, bhBinBase64) =

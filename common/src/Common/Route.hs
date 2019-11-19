@@ -19,7 +19,6 @@ module Common.Route where
 ------------------------------------------------------------------------------
 import           Prelude hiding ((.), id)
 import           Control.Category (Category (..))
-import           Control.Monad.Except
 import           Data.Functor.Identity
 import           Data.Some (Some)
 import qualified Data.Some as Some

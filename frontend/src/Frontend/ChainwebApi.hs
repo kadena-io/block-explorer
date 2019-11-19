@@ -8,7 +8,6 @@
 module Frontend.ChainwebApi where
 
 ------------------------------------------------------------------------------
-import           Control.Applicative (liftA2)
 import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
@@ -26,7 +25,6 @@ import qualified Data.HashMap.Strict as HM
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Maybe
 import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -39,7 +37,6 @@ import           Reflex.Dom hiding (Cut, Value)
 import           Blake2Native
 import           Common.Utils
 import           Common.Types
-import           Frontend.Common
 ------------------------------------------------------------------------------
 
 apiBaseUrl :: ChainwebHost -> Text
@@ -73,15 +70,11 @@ getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
       HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
   => Host
-  -> m (Dynamic t (Maybe CServerInfo))
+  -> m (Dynamic t (Maybe ServerInfo))
 getServerInfo h = do
   pb <- getPostBuild
   esi <- getInfo (h <$ pb)
-  si <- holdDyn Nothing esi
-  let ch = ChainwebHost h . _siChainwebVer <$> fmapMaybe id esi
-      f = maximum . map _tipHeight . HM.elems . _cutChains
-  height <- holdDyn Nothing =<< f <$$$> getCut ch
-  pure $ (liftA2 . liftA2) CServerInfo si height
+  holdDyn Nothing esi
 
 getInfo
   :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
@@ -171,11 +164,8 @@ getBlockHeaderByHeight h c blockHeight = do
              -- NOTE: Order of this list must match the order of the argument to decodeResults
              ]
   resp <- performRequestsAsync $ reqs <$ pb
-  let eRes = decodeHeightResults <$> traceEventWith foo resp
-  return (hush <$> traceEvent "headerByHeight" eRes)
-
-foo :: [XhrResponse] -> String
-foo rs = T.unpack $ T.unlines $ "headerByHeight resp" : (fromMaybe "no response text" . _xhrResponse_responseText <$> rs)
+  let eRes = decodeHeightResults <$> resp
+  return (hush <$> eRes)
 
 decodeHeightResults :: [XhrResponse] -> Either String (BlockHeader, Text)
 decodeHeightResults [bh, bhBin] = do

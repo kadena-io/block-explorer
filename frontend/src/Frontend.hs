@@ -16,6 +16,7 @@ module Frontend where
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson
+import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Ord
@@ -26,12 +27,14 @@ import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Formattable.NumFormat
+import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend
 import           Obelisk.Generated.Static
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
+import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Text.Printf
 ------------------------------------------------------------------------------
@@ -81,9 +84,16 @@ networkDispatch route netId = prerender_ blank $ do
     dsi <- getServerInfo $ netHost netId
     dyn_ $ ffor dsi $ \case
       Nothing -> inlineLoader
-      Just csi -> runApp route netId csi $ subRoute_ $ \case
-        NetRoute_Chainweb -> blockTableWidget
-        NetRoute_Chain -> blockPage (_csiServerInfo csi) netId
+      Just si -> runApp route netId si $ subRoute_ $ \case
+        NetRoute_Chainweb -> do
+          as <- ask
+          pb <- getPostBuild
+          let h = netHost $ _as_network as
+          let ch = ChainwebHost h $ _siChainwebVer $ _as_serverInfo as
+              f = maximum . map _tipHeight . HM.elems . _cutChains
+          height <- holdDyn Nothing =<< f <$$$> getCut (ch <$ pb)
+          void $ networkView (blockTableWidget <$> height)
+        NetRoute_Chain -> blockPage si netId
 
 inlineLoader :: DomBuilder t m => m ()
 inlineLoader = divClass "ui active centered inline text loader" $ text "Loading"
@@ -183,14 +193,55 @@ calcCoinsLeft now bt =
     reward1 = 2.304523
     reward2 = 2.297878
 
+initBlockTable
+  :: (MonadApp r t m, HasJSContext (Performable m), MonadJSM (Performable m),
+      Prerender js t m)
+  => BlockHeight
+  -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats)
+initBlockTable height = do
+    (AppState n si) <- ask
+    let cfg = EventSourceConfig never True
+    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
+    es <- startEventSource ch cfg
+    let downEvent = _eventSource_recv es
+
+    ebt <- getBlockTable ch $ CServerInfo si height
+
+    rec blockTable <- foldDyn ($) mempty $ mergeWith (.)
+          [ (<>) <$> ebt
+          , (\mbtx bt -> maybe bt (insertBlockTable bt) mbtx) <$> downEvent
+          , (\pair bt -> maybe bt (insertBlockTable bt . pairToBhtx) pair) <$> newMissing
+          ]
+
+        let missingBlocks = getMissingBlocks blockTable downEvent
+            getHeader (cid,hash) = getBlockHeader ch cid (hashB64U hash)
+            eme = sequence . fmap getHeader <$> missingBlocks
+        ee <- networkHold (return []) eme
+        let newMissing = switch (current (leftmost <$> ee))
+
+    let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
+    pb <- getPostBuild
+    now <- prerender (return t0) (liftIO getCurrentTime)
+    stats <- foldDyn ($) (GlobalStats 0 t0 mempty) $ mergeWith (.)
+      [ maybe id addTxCount <$> downEvent
+      , setStartTime <$> tag (current now) pb
+      , addHashrateData <$> filterRight newHrd
+      ]
+    return (blockTable, stats)
+  where
+    t0 = UTCTime (ModifiedJulianDay 0) 0
+
+
 blockTableWidget
   :: (MonadApp r t m, Prerender js t m,
+      MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => App r t m ()
-blockTableWidget = do
+  => Maybe BlockHeight
+  -> App r t m ()
+blockTableWidget Nothing = text "Error getting cut from server"
+blockTableWidget (Just height) = do
   as <- ask
-  let stats = _as_stats as
-      dbt = _as_blockTable as
+  (dbt, stats) <- initBlockTable height
 
   dti <- fmap join $ prerender (return $ constDyn dummy) $ do
     t <- liftIO getCurrentTime
@@ -456,7 +507,6 @@ linksFromBlock cs hoveredBlock fromBlock = do
   let toBlocks = petersonGraph M.! from
       mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
         where
-          heightDiff b = fst b - fst fromBlock
           stroke =
             case mhb of
               Nothing -> "stroke" =: "rgb(220,220,220)"
