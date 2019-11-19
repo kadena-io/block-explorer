@@ -27,9 +27,10 @@ transactionPage
   => BlockPayload
   -> m ()
 transactionPage bp = do
-  el "h2" $ text "Transaction"
+  let txs = _blockPayload_transactions bp
+  el "h2" $ text $ (tshow $ length txs) <> " Transactions"
   divClass "ui accordion" $ do
-    forM_ (_blockPayload_transactions bp) $ \t -> mdo
+    forM_ txs $ \t -> mdo
       open <- toggle False $ domEvent Click e
       let addActive cls active =
             ("class" =: if active then ("active " <> cls) else cls)

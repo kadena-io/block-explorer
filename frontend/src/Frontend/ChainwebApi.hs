@@ -26,6 +26,7 @@ import qualified Data.HashMap.Strict as HM
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Maybe
 import           Data.Readable
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -156,6 +157,33 @@ getBlockHeader h c blockHash = do
   let eRes = decodeResults <$> resp
   return (hush <$> eRes)
 
+getBlockHeaderByHeight
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  => ChainwebHost
+  -> ChainId
+  -> BlockHeight
+  -> m (Event t (Maybe (BlockHeader, Text)))
+  -- ^ Returns the block header and the base64url-encoded binary serialization
+getBlockHeaderByHeight h c blockHeight = do
+  pb <- getPostBuild
+  let reqs = [ mkSingleHeightRequest h c blockHeight
+             , mkSingleHeightRequestBinary h c blockHeight
+             -- NOTE: Order of this list must match the order of the argument to decodeResults
+             ]
+  resp <- performRequestsAsync $ reqs <$ pb
+  let eRes = decodeHeightResults <$> traceEventWith foo resp
+  return (hush <$> traceEvent "headerByHeight" eRes)
+
+foo :: [XhrResponse] -> String
+foo rs = T.unpack $ T.unlines $ "headerByHeight resp" : (fromMaybe "no response text" . _xhrResponse_responseText <$> rs)
+
+decodeHeightResults :: [XhrResponse] -> Either String (BlockHeader, Text)
+decodeHeightResults [bh, bhBin] = do
+  h <- first ("Error decoding block header: " <>) $ decodeXhr bh
+  hBin <- first ("Error decoding binary block header: " <>) $ decodeXhr bhBin
+  return (head $ _respItems_items h, head $ _respItems_items hBin)
+decodeHeightResults _ = Left "Invalid number of results"
+
 decodeResults :: [XhrResponse] -> Either String (BlockHeader, Text)
 decodeResults [bh, bhBin] = do
   h <- first ("Error decoding block header: " <>) $ decodeXhr bh
@@ -194,6 +222,16 @@ mkHeaderRequest h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) 
     maxh = _csiNewestBlockHeight csi
     minh = maxh - blockTableNumRows
 
+mkSingleHeightRequest :: ChainwebHost -> ChainId -> BlockHeight -> XhrRequest ()
+mkSingleHeightRequest h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c) cfg
+  where
+    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
+
+mkSingleHeightRequestBinary :: ChainwebHost -> ChainId -> BlockHeight -> XhrRequest ()
+mkSingleHeightRequestBinary h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c) cfg
+  where
+    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json" }
+
 mkSingleHeaderRequest :: ChainwebHost -> ChainId -> Text -> XhrRequest ()
 mkSingleHeaderRequest h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
   where
@@ -223,6 +261,18 @@ calcPowHash :: ByteString -> Either String Text
 calcPowHash bs = do
   h <- blake2s 32 "" $ B.take (B.length bs - 32) bs
   return $ T.decodeUtf8 $ B16.encode $ B.reverse h
+
+data RespItems a = RespItems
+  { _respItems_next :: Text
+  , _respItems_items :: [a]
+  , _respItems_limit :: Int
+  } deriving (Eq,Ord,Show)
+
+instance FromJSON a => FromJSON (RespItems a) where
+  parseJSON = withObject "RespItems" $ \o -> RespItems
+    <$> o .: "next"
+    <*> o .: "items"
+    <*> o .: "limit"
 
 data BlockHeaderTx = BlockHeaderTx
   { _blockHeaderTx_header :: BlockHeader
@@ -389,7 +439,7 @@ payloadCode (ContPayload c) = _cont_pactId c
 
 data Exec = Exec
   { _exec_code :: Text
-  , _exec_data :: Object
+  , _exec_data :: Maybe Object
   } deriving (Eq,Show)
 
 instance FromJSON Exec where

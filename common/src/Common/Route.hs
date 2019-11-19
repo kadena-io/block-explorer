@@ -48,28 +48,23 @@ blockRouteEncoder = pathComponentEncoder $ \case
   Block_Header -> PathEnd $ unitEncoder mempty
   Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
 
---blockRouteToPath :: BlockRoute () -> [Text]
---blockRouteToPath Block_Header = []
---blockRouteToPath Block_Transactions = ["txs"]
+data BlockIndexRoute :: * -> * where
+  BlockIndex_Hash :: BlockIndexRoute (Text :. R BlockRoute)
+  BlockIndex_Height :: BlockIndexRoute (Int :. R BlockRoute)
 
---blockRouteEncoder
---  :: Int
---  -> Text
---  -> Encoder (Either Text) (Either Text) (R BlockRoute) PageName
---blockRouteEncoder chainId blockHash = pathComponentEncoder $ \case
---  Block_Header -> PathEnd $ unitEncoder mempty
---  Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
-
-type BlockIdRoute = Int :. Text :. R BlockRoute
+blockIndexRouteEncoder :: Encoder (Either Text) (Either Text) (R BlockIndexRoute) PageName
+blockIndexRouteEncoder = pathComponentEncoder $ \case
+  BlockIndex_Hash -> PathSegment "block" $ pathParamEncoder id blockRouteEncoder
+  BlockIndex_Height -> PathSegment "height" $ pathParamEncoder unsafeTshowEncoder blockRouteEncoder
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
-  NetRoute_Chain :: NetRoute BlockIdRoute
+  NetRoute_Chain :: NetRoute (Int :. R BlockIndexRoute)
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_Chainweb -> PathEnd $ unitEncoder mempty
-  NetRoute_Chain -> PathSegment "dashboard" blockIdRouteEncoder
+  NetRoute_Chain -> PathSegment "chain" $ pathParamEncoder unsafeTshowEncoder blockIndexRouteEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
@@ -78,21 +73,6 @@ data FrontendRoute :: * -> * where
   FR_Testnet :: FrontendRoute (R NetRoute)
   FR_Customnet :: FrontendRoute (Host :. R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
-
-pathOnlyEncoderIgnoringQuery :: (Applicative check, MonadError Text parse) => Encoder check parse [Text] PageName
-pathOnlyEncoderIgnoringQuery = unsafeMkEncoder $ EncoderImpl
-  { _encoderImpl_decode = \(path, _query) -> pure path
-  , _encoderImpl_encode = \path -> (path, mempty)
-  }
-
---singletonListEncoder :: (Applicative check, MonadError Text parse) => Encoder check parse a [a]
---singletonListEncoder = unsafeMkEncoder $ EncoderImpl
---  { _encoderImpl_decode = \case
---      [a] -> pure a
---      l -> throwError $ "singletonListEncoderImpl: expected one item, got " <> tshow (length l)
---  , _encoderImpl_encode = (:[])
---  }
-
 
 backendRouteEncoder
   :: Encoder (Either Text) Identity (R (FullRoute BackendRoute FrontendRoute)) PageName
@@ -112,19 +92,17 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
 hostEncoder :: Encoder (Either Text) (Either Text) Host Text
 hostEncoder = prismEncoder humanReadableTextPrism
 
-blockIdRouteEncoder :: Encoder (Either Text) (Either Text) BlockIdRoute PageName
-blockIdRouteEncoder = pathLiteralEncoder "chain" $ pathParamEncoder unsafeTshowEncoder $ pathLiteralEncoder "block" $ pathParamEncoder id blockRouteEncoder
-
-addNetRoute :: NetId -> BlockIdRoute -> R FrontendRoute
-addNetRoute netId r = case netId of
-  NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ r
-  NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ r
-  NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_Chain :/ r))
+addNetRoute :: NetId -> Int -> R BlockIndexRoute -> R FrontendRoute
+addNetRoute netId c r = case netId of
+  NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ (c :. r)
+  NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ (c :. r)
+  NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_Chain :/ (c :. r)))
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
   , ''BlockRoute
+  , ''BlockIndexRoute
   , ''NetRoute
   ]
 

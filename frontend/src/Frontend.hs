@@ -302,8 +302,8 @@ blockWidget0 ti hoveredBlock hs height cid = do
   let mbh = M.lookup cid <$> hs
   (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
     viewIntoMaybe mbh blank $ \bh -> do
-      let getHash = hashB64U . _blockHeader_hash . _blockHeaderTx_header
-      let mkRoute h = addNetRoute net $ unChainId cid :. getHash h :. Block_Header :/ () --TODO: Which NetId should it be?
+      let getHeight = _blockHeader_height . _blockHeaderTx_header
+      let mkRoute h = addNetRoute net (unChainId cid) $ BlockIndex_Height :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         el "div" $ do
           elClass "span" "blockheight" $ do

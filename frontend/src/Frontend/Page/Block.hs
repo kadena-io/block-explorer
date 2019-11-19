@@ -41,53 +41,72 @@ blockPage
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => ServerInfo
   -> NetId
-  -> App (Int :. Text :. R BlockRoute) t m ()
+  -> App (Int :. R BlockIndexRoute) t m ()
 blockPage si netId = do
-    args <- askRoute
-    void $ networkView (blockWidget si netId <$> args)
+    subPairRoute_ $ \cid -> subRoute_ $ \case
+      BlockIndex_Hash -> blockHashWidget si netId cid
+      BlockIndex_Height -> blockHeightWidget si netId cid
 
-blockWidget
+blockHashWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
   => ServerInfo
   -> NetId
-  -> Int :. Text :. R BlockRoute
-  -> m ()
-blockWidget si netId (cid :. hash :. r) = do
+  -> Int
+  -> App (Text :. R BlockRoute) t m ()
+blockHashWidget si netId cid = do
   as <- ask
   let n = _as_network as
       chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
       c = ChainId cid
-  ebh <- getBlockHeader chainwebHost c hash
-  void $ networkHold (text "Retrieving block...") $ ffor ebh $ \case
-    Nothing -> text "Block does not exist"
-    Just bh -> blockPageNoPayload netId chainwebHost c r bh
+  subPairRoute_ $ \hash -> do
+    ebh <- getBlockHeader chainwebHost c hash
+    void $ networkHold (text "Block does not exist") (blockPageNoPayload netId chainwebHost c <$> fmapMaybe id ebh)
+
+blockHeightWidget
+  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
+  => ServerInfo
+  -> NetId
+  -> Int
+  -> App (Int :. R BlockRoute) t m ()
+blockHeightWidget si netId cid = do
+  as <- ask
+  let n = _as_network as
+      chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
+      c = ChainId cid
+  subPairRoute_ $ \height -> do
+    ebh <- getBlockHeaderByHeight chainwebHost c height
+    void $ networkHold (text "Retrieving block...") $ ffor ebh $ \case
+      Nothing -> text "Block does not exist"
+      Just bh -> blockPageNoPayload netId chainwebHost c bh
 
 blockLink
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => NetId
   -> ChainId
-  -> Hash
+  -> BlockHeight
+  -> Text
   -> m ()
-blockLink netId chainId hash =
-  routeLink (addNetRoute netId $ unChainId chainId :. hashB64U hash :. Block_Header :/ ()) $ text $ hashHex hash
+blockLink netId chainId height linkText =
+  routeLink (addNetRoute netId (unChainId chainId) $ BlockIndex_Height :/ height :. Block_Header :/ ()) $ text linkText
 
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
   => NetId
   -> ChainwebHost
   -> ChainId
-  -> R BlockRoute
   -> (BlockHeader, Text)
-  -> m ()
-blockPageNoPayload netId h c r bh = do
+  -> App (R BlockRoute) t m ()
+  -- -> m ()
+blockPageNoPayload netId h c bh = do
   let choose ep = case ep of
         Left e -> text $ "Block payload query failed: " <> T.pack e
-        Right payload -> case r of
-          Block_Header :/ _ -> blockHeaderPage netId h c bh payload
-          Block_Transactions :/ _ -> transactionPage payload
+        Right payload -> subRoute_ $ \case
+          Block_Header -> blockHeaderPage netId h c bh payload
+          Block_Transactions -> transactionPage payload
   pEvt <- getBlockPayload h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (text "Retrieving payload...") (choose <$> pEvt)
 
@@ -121,12 +140,13 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
         return ()
     blockPayloadWidget netId c bh bp
   where
-    parent p = blockLink netId (_blockHeader_chainId bh) p
+    prevHeight = _blockHeader_height bh - 1
+    parent p = blockLink netId (_blockHeader_chainId bh) prevHeight (hashHex p)
     neighbors ns = do
       forM_ (M.toList ns) $ \(cid,nh) -> do
         el "div" $ do
           text $ "Chain " <> tshow cid <> ": "
-          blockLink netId cid nh
+          blockLink netId cid prevHeight (hashHex nh)
 
 blockPayloadWidget
   :: (MonadApp r t m,
@@ -150,4 +170,4 @@ blockPayloadWidget netId c bh bp = do
         let rawHash = _blockHeader_hash bh
         let hash = hashB64U rawHash
         tfield "Transactions" $
-          routeLink (addNetRoute netId $ unChainId c :. hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+          routeLink (addNetRoute netId (unChainId c) $ BlockIndex_Hash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
