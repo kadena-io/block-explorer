@@ -83,7 +83,7 @@ networkDispatch route netId = prerender_ blank $ do
   elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
     dsi <- getServerInfo $ netHost netId
     dyn_ $ ffor dsi $ \case
-      Nothing -> inlineLoader "Loading"
+      Nothing -> inlineLoader "Loading..."
       Just si -> runApp route netId si $ subRoute_ $ \case
         NetRoute_Chainweb -> do
           as <- ask
@@ -91,8 +91,8 @@ networkDispatch route netId = prerender_ blank $ do
           let h = netHost $ _as_network as
           let ch = ChainwebHost h $ _siChainwebVer $ _as_serverInfo as
               f = maximum . map _tipHeight . HM.elems . _cutChains
-          height <- holdDyn Nothing =<< f <$$$> getCut (ch <$ pb)
-          void $ networkView (blockTableWidget <$> height)
+          height <- f <$$$> getCut (ch <$ pb)
+          void $ networkHold (inlineLoader "Getting latest cut...") (blockTableWidget <$> height)
         NetRoute_Chain -> blockPage si netId
 
 footer
