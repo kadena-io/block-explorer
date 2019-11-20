@@ -83,7 +83,7 @@ networkDispatch route netId = prerender_ blank $ do
   elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
     dsi <- getServerInfo $ netHost netId
     dyn_ $ ffor dsi $ \case
-      Nothing -> inlineLoader
+      Nothing -> inlineLoader "Loading"
       Just si -> runApp route netId si $ subRoute_ $ \case
         NetRoute_Chainweb -> do
           as <- ask
@@ -94,9 +94,6 @@ networkDispatch route netId = prerender_ blank $ do
           height <- holdDyn Nothing =<< f <$$$> getCut (ch <$ pb)
           void $ networkView (blockTableWidget <$> height)
         NetRoute_Chain -> blockPage si netId
-
-inlineLoader :: DomBuilder t m => m ()
-inlineLoader = divClass "ui active centered inline text loader" $ text "Loading"
 
 footer
   :: (DomBuilder t m)

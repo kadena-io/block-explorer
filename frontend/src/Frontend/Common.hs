@@ -72,3 +72,6 @@ distributeMaybe d = do
   holdDyn mInner0 $ flip push (updated d) $ \new -> do
     old <- sample $ current d
     if isJust old == isJust new then return Nothing else Just <$> mapM inner new
+
+inlineLoader :: DomBuilder t m => Text -> m ()
+inlineLoader msg = divClass "ui active centered inline text loader" $ text msg

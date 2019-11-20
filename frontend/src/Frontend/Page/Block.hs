@@ -61,7 +61,7 @@ blockHashWidget si netId cid = do
       c = ChainId cid
   subPairRoute_ $ \hash -> do
     ebh <- getBlockHeader chainwebHost c hash
-    void $ networkHold (text "Retrieving block...") $ ffor ebh $ \case
+    void $ networkHold (inlineLoader "Retrieving block...") $ ffor ebh $ \case
       Nothing -> text "Block with that hash does not exist"
       Just bh -> blockPageNoPayload netId chainwebHost c bh
 
@@ -79,7 +79,7 @@ blockHeightWidget si netId cid = do
       c = ChainId cid
   subPairRoute_ $ \height -> do
     ebh <- getBlockHeaderByHeight chainwebHost c height
-    void $ networkHold (text "Retrieving block...") $ ffor ebh $ \case
+    void $ networkHold (inlineLoader "Retrieving block...") $ ffor ebh $ \case
       Nothing -> text "Block does not exist"
       Just bh -> blockPageNoPayload netId chainwebHost c bh
 
@@ -110,7 +110,7 @@ blockPageNoPayload netId h c bh = do
           Block_Header -> blockHeaderPage netId h c bh payload
           Block_Transactions -> transactionPage payload
   pEvt <- getBlockPayload h c (_blockHeader_payloadHash $ fst bh)
-  void $ networkHold (text "Retrieving payload...") (choose <$> pEvt)
+  void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
 
 blockHeaderPage
