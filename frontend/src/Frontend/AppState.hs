@@ -128,8 +128,6 @@ setStartTime t gs = gs { _gs_startTime = t }
 data AppState t = AppState
     { _as_network :: NetId
     , _as_serverInfo :: ServerInfo
---    , _as_blockTable :: Dynamic t BlockTable
---    , _as_stats :: Dynamic t GlobalStats
     } deriving Generic
 
 getMissing :: BlockTable -> BlockHeaderTx -> [(ChainId, Hash)]

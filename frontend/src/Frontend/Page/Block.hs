@@ -61,7 +61,9 @@ blockHashWidget si netId cid = do
       c = ChainId cid
   subPairRoute_ $ \hash -> do
     ebh <- getBlockHeader chainwebHost c hash
-    void $ networkHold (text "Block does not exist") (blockPageNoPayload netId chainwebHost c <$> fmapMaybe id ebh)
+    void $ networkHold (text "Retrieving block...") $ ffor ebh $ \case
+      Nothing -> text "Block with that hash does not exist"
+      Just bh -> blockPageNoPayload netId chainwebHost c bh
 
 blockHeightWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
