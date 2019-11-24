@@ -61,22 +61,7 @@ hostToText h =
       then hostAddress h
       else hostAddress h <> ":" <> tshow (hostPort h)
 
-data ChainwebVersion = Development | Testnet02 | Mainnet01
-  deriving (Eq,Ord,Show,Read,Generic)
-
-instance ToJSON ChainwebVersion where
-    toEncoding = genericToEncoding defaultOptions
-      { constructorTagModifier = fmap Char.toLower }
-    toJSON = genericToJSON defaultOptions
-      { constructorTagModifier = fmap Char.toLower }
-instance FromJSON ChainwebVersion where
-    parseJSON = genericParseJSON defaultOptions
-      { constructorTagModifier = fmap Char.toLower }
-
-versionText :: ChainwebVersion -> Text
-versionText Development = "development"
-versionText Testnet02 = "testnet02"
-versionText Mainnet01 = "mainnet01"
+type ChainwebVersion = Text
 
 data ChainwebHost = ChainwebHost
   { chHost :: Host

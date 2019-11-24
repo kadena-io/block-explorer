@@ -41,7 +41,7 @@ import           Common.Types
 
 apiBaseUrl :: ChainwebHost -> Text
 apiBaseUrl (ChainwebHost h cver) =
-    hostScheme h <> hostToText h <> "/chainweb/0.0/" <> versionText cver <> "/"
+    hostScheme h <> hostToText h <> "/chainweb/0.0/" <> cver <> "/"
 
 cutUrl :: ChainwebHost -> Text
 cutUrl h = apiBaseUrl h <> "cut"
