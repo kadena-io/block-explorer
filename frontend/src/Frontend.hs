@@ -255,10 +255,12 @@ blockTableWidget (Just height) = do
     (_tickInfo_lastUTC <$> current dti) (updated dbt)
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
-      divClass "statistic" blank
+      divClass "statistic" $ do
+        divClass "label" $ text "Stage 1: Mining (In Progress)"
       divClass "large statistic" $ do
-        divClass "label" $ elAttr "a" ("href" =: "https://coinlist.co/kadena" <> "target" =: "_blank") $ text "Token Sale Live on Coinlist"
-      divClass "statistic" blank
+        divClass "label" $ text "Stage 2: Token Operations (ETA Dec 6)"
+      divClass "statistic" $ do
+        divClass "label" $ text "Stage 3: Smart Contracts (ETA Jan 15)"
 
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
@@ -271,8 +273,8 @@ blockTableWidget (Just height) = do
           else do
             divClass "statistic" $ do
               divClass "value" $ (dynText $ maybe "-" (formatNum intFmt) <$> coinsLeft)
-              divClass "label" $ text "Est. Pre-launch coins left"
-            statistic "Est. Time to Launch" $ dynText (fmap f dti)
+              divClass "label" $ text "Est. Stage 1 coins left"
+            statistic "Until Stage 2" $ dynText (fmap f dti)
   divClass "block-table" $ do
     divClass "header-row" $ do
       elClass "span" "table-header" $ text "Height"
