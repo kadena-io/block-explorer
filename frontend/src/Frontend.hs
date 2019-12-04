@@ -258,7 +258,7 @@ blockTableWidget (Just height) = do
       divClass "statistic" $ do
         divClass "label" $ text "Stage 1: Mining (In Progress)"
       divClass "large statistic" $ do
-        divClass "label" $ text "Stage 2: Token Operations (ETA Dec 6)"
+        divClass "label" $ text "Stage 2: Token Operations (ETA Dec 17)"
       divClass "statistic" $ do
         divClass "label" $ text "Stage 3: Smart Contracts (ETA Jan 15)"
 
