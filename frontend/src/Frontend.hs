@@ -383,6 +383,8 @@ diffStr :: Double -> Text
 diffStr d = T.pack $ printf "%.2f %s" (d / divisor) units
   where
     (divisor, units :: String)
+      | d >= 1e18 = (1e18, "EH")
+      | d >= 1e15 = (1e15, "PH")
       | d >= 1e12 = (1e12, "TH")
       | d >= 1e9 = (1e9, "GH")
       | d >= 1e6 = (1e6, "MH")
