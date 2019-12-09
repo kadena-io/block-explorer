@@ -10,7 +10,6 @@ import Control.Applicative
 import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
-import qualified Data.Char as Char
 import           Data.Hashable
 import           Data.Readable
 import           Data.Set (Set)
@@ -21,14 +20,8 @@ import           GHC.Generics (Generic)
 import           Text.Read (readMaybe)
 ------------------------------------------------------------------------------
 import           Common.Utils
+import           ChainwebApi.Types.Common
 ------------------------------------------------------------------------------
-
-type BlockHeight = Int
---newtype BlockHeight = BlockHeight { unBlockHeight :: Int }
---  deriving (Eq,Ord,Enum)
---
---instance Show BlockHeight where
---  show (BlockHeight b) = show b
 
 type Domain = Text
 

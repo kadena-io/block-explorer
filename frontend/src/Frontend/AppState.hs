@@ -33,6 +33,11 @@ import           Reflex
 import           Reflex.Dom
 import           Reflex.Dom.EventSource
 ------------------------------------------------------------------------------
+import           ChainwebApi.Types.Base64Url
+import           ChainwebApi.Types.BlockHeader
+import           ChainwebApi.Types.BlockHeaderTx
+import           ChainwebApi.Types.BytesLE
+import           ChainwebApi.Types.Hash
 import           Common.Types
 import           Common.Utils
 import           Frontend.ChainwebApi

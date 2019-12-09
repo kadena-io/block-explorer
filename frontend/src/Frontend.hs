@@ -38,6 +38,12 @@ import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Text.Printf
 ------------------------------------------------------------------------------
+import           ChainwebApi.Types.BlockHeader
+import           ChainwebApi.Types.BlockHeaderTx
+import           ChainwebApi.Types.ChainTip
+import           ChainwebApi.Types.Common
+import           ChainwebApi.Types.Cut
+import           ChainwebApi.Types.Hash
 import           Common.Route
 import           Common.Types
 import           Common.Utils

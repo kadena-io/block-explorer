@@ -16,9 +16,16 @@ import           Control.Monad
 import           Data.Maybe
 import           Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
+import           ChainwebApi.Types.BlockPayload
+import           ChainwebApi.Types.ChainwebMeta
+import           ChainwebApi.Types.Hash
+import           ChainwebApi.Types.PactCommand
+import           ChainwebApi.Types.Payload
+import           ChainwebApi.Types.Sig
+import           ChainwebApi.Types.Signer
+import           ChainwebApi.Types.Transaction
 import           Common.Utils
 import           Frontend.App
-import           Frontend.ChainwebApi
 import           Frontend.Common
 ------------------------------------------------------------------------------
 
