@@ -5,7 +5,9 @@ module ChainwebApi.Types.BlockHeaderTx where
 ------------------------------------------------------------------------------
 import           Data.Aeson
 import           Data.Text (Text)
+------------------------------------------------------------------------------
 import           ChainwebApi.Types.BlockHeader
+import           ChainwebApi.Types.BlockPayload
 ------------------------------------------------------------------------------
 
 data BlockHeaderTx = BlockHeaderTx
@@ -13,7 +15,8 @@ data BlockHeaderTx = BlockHeaderTx
   , _blockHeaderTx_txCount :: Maybe Int
   , _blockHeaderTx_powHash :: Maybe Text
   , _blockHeaderTx_target :: Maybe Text
-  } deriving (Eq,Ord,Show)
+  , _blockHeaderTx_payload :: Maybe BlockPayload
+  } deriving (Eq,Show)
 
 instance FromJSON BlockHeaderTx where
   parseJSON = withObject "BlockHeaderTx" $ \o -> BlockHeaderTx
@@ -21,3 +24,4 @@ instance FromJSON BlockHeaderTx where
     <*> o .: "txCount"
     <*> o .:? "powHash"
     <*> o .:? "target"
+    <*> o .:? "payload"

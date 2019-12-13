@@ -174,7 +174,7 @@ decodeXhr = eitherDecode . BL.fromStrict . T.encodeUtf8 <=<
 
 combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
 combineBlockTables bt Nothing = bt
-combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b Nothing Nothing Nothing)) bt0 $ rights $
+combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b Nothing Nothing Nothing Nothing)) bt0 $ rights $
   map (parseEither parseJSON) $ getItems v
 
 mkHeaderRequest :: ChainwebHost -> CServerInfo -> [XhrRequest ()]
@@ -213,7 +213,7 @@ calcPowHash bs = do
 data BlockTable = BlockTable
   { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
   , _blockTable_cut :: Map ChainId BlockHeaderTx
-  } deriving (Eq,Ord)
+  } deriving (Eq)
 
 instance Show BlockTable where
   show (BlockTable bs _) = unlines $ map show $ M.keys bs
@@ -244,6 +244,29 @@ insertBlockTable (BlockTable bs cut) btx = BlockTable bs2 cut2
 
     f Nothing = Just $ M.singleton c btx
     f (Just m) = Just $ M.insert c btx m
+
+addPayloadToTable
+  :: BlockHeight
+  -> ChainId
+  -> BlockPayload
+  -> BlockTable
+  -> BlockTable
+addPayloadToTable h c p bt = modifyBlockInTable bt h c f
+  where
+    f bhtx = bhtx { _blockHeaderTx_payload = Just p }
+
+modifyBlockInTable
+  :: BlockTable
+  -> BlockHeight
+  -> ChainId
+  -> (BlockHeaderTx -> BlockHeaderTx)
+  -> BlockTable
+modifyBlockInTable (BlockTable bs cut) h c func = BlockTable bs2 cut2
+  where
+    bs2 = M.adjust (M.adjust func c) h bs
+    cut2 = M.adjust g c cut
+    height = _blockHeader_height . _blockHeaderTx_header
+    g b = if height b == h then func b else b
 
 getBlock :: BlockHeight -> ChainId -> BlockTable -> Maybe BlockHeaderTx
 getBlock bh cid bt = M.lookup cid =<< M.lookup bh (_blockTable_blocks bt)

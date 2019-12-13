@@ -103,12 +103,12 @@ span.hovered-block {
 div.summary-inner {
     padding: 5px;
     animation-name: my-block-fade-in;
-    animation-duration: 1.5s;
+    animation-duration: 1.0s;
     animation-timing-function: ease-in-out;
 }
 
 @keyframes my-block-fade-in {
-    0% { background-color:  #ffffe0; }
+    0% { background-color:  #eeeeee; }
     100% { background-color: white; }
 }
 
