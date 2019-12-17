@@ -144,7 +144,7 @@ getMissing bt bhtx = filter (\p -> getBlock (height-1) (fst p) bt == Nothing) ci
            M.toList (_blockHeader_neighbors h)
 
 launchTime :: UTCTime
-launchTime = parseTimeOrError True defaultTimeLocale "%Y-%m-%dT%H:%M:%S" "2019-12-17T16:00:00"
+launchTime = parseTimeOrError True defaultTimeLocale "%Y-%m-%dT%H:%M:%S" "2020-01-15T00:00:00"
 
 stateManager
     :: DomBuilder t m

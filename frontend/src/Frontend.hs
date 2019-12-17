@@ -271,16 +271,8 @@ blockTableWidget (Just height) = do
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
         statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-
-        if _as_network as == NetId_Testnet
-          then do
-            statistic "Transactions Received" (dynText $ tshow . _gs_txCount <$> stats)
-            statistic "Current TPS" (dynText $ showTps <$> tps)
-          else do
-            divClass "statistic" $ do
-              divClass "value" $ (dynText $ maybe "-" (formatNum intFmt) <$> coinsLeft)
-              divClass "label" $ text "Est. Stage 1 coins left"
-            statistic "Until Stage 2" $ dynText (fmap f dti)
+        statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
+        statistic "Until Stage 3" $ dynText (fmap f dti)
   divClass "block-table" $ do
     divClass "header-row" $ do
       elClass "span" "table-header" $ text "Height"
