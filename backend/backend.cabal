@@ -30,3 +30,11 @@ executable backend
                , common
                , frontend
                , obelisk-backend
+
+--executable chainweb-data
+--  main-is: cwdata.hs
+--  hs-source-dirs: src-bin
+--  if impl(ghcjs)
+--    buildable: False
+--  build-depends: base
+--               , common

@@ -8,6 +8,7 @@ library
   build-depends:
       aeson
     , base
+--    , beam
     , bytestring
     , base16-bytestring
     , base64-bytestring
