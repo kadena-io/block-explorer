@@ -17,7 +17,7 @@ import qualified Data.Text as T
 import           GHC.Generics (Generic)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
-import           ChainwebApi.Types.Common
+import           Chainweb.Api.Common
 import           Common.Utils
 ------------------------------------------------------------------------------
 
