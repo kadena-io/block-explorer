@@ -11,6 +11,7 @@ library
     , bytestring
     , base16-bytestring
     , base64-bytestring
+    , chainweb-api
     , containers
     , dependent-sum
     , errors
