@@ -191,7 +191,7 @@ mkSingleHeightRequest h c blockHeight = XhrRequest "GET" (headersUrl h blockHeig
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
 
 mkSingleHeightRequestBinary :: ChainwebHost -> ChainId -> BlockHeight -> XhrRequest ()
-mkSingleHeightRequestBinary h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c) cfg
+mkSingleHeightRequestBinary h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c <> "&hfmt=bin") cfg
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json" }
 
@@ -201,7 +201,7 @@ mkSingleHeaderRequest h c blockHash = XhrRequest "GET" (headerUrl h c blockHash)
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
 
 mkSingleHeaderRequestBinary :: ChainwebHost -> ChainId -> Text -> XhrRequest ()
-mkSingleHeaderRequestBinary h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
+mkSingleHeaderRequestBinary h c blockHash = XhrRequest "GET" (headerUrl h c blockHash <> "&hfmt=bin") cfg
   where
     cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json" }
 
