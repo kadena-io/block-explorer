@@ -1,14 +1,14 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
 module Frontend.Page.Block where
 
 ------------------------------------------------------------------------------
@@ -25,13 +25,14 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 ------------------------------------------------------------------------------
-import           ChainwebApi.Types.Base64Url
-import           ChainwebApi.Types.BlockHeader
-import           ChainwebApi.Types.BlockPayload
-import           ChainwebApi.Types.BytesLE
-import           ChainwebApi.Types.Common
-import           ChainwebApi.Types.Hash
-import           ChainwebApi.Types.MinerData
+import           Chainweb.Api.Base64Url
+import           Chainweb.Api.BlockHeader
+import           Chainweb.Api.BlockPayload
+import           Chainweb.Api.BytesLE
+import           Chainweb.Api.ChainId
+import           Chainweb.Api.Common
+import           Chainweb.Api.Hash
+import           Chainweb.Api.MinerData
 import           Common.Route
 import           Common.Types
 import           Common.Utils

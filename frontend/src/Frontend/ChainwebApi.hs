@@ -1,9 +1,9 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell#-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
 
 module Frontend.ChainwebApi where
 
@@ -28,15 +28,16 @@ import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value)
 ------------------------------------------------------------------------------
 import           Blake2Native
-import           ChainwebApi.Types.BlockHeader
-import           ChainwebApi.Types.BlockHeaderTx
-import           ChainwebApi.Types.BlockPayload
-import           ChainwebApi.Types.Common
-import           ChainwebApi.Types.Cut
-import           ChainwebApi.Types.Hash
-import           ChainwebApi.Types.RespItems
+import           Chainweb.Api.BlockHeader
+import           Chainweb.Api.BlockHeaderTx
+import           Chainweb.Api.BlockPayload
+import           Chainweb.Api.ChainId
+import           Chainweb.Api.Common
+import           Chainweb.Api.Cut
+import           Chainweb.Api.Hash
+import           Chainweb.Api.RespItems
+import           Common.Types hiding (ChainId(..))
 import           Common.Utils
-import           Common.Types
 ------------------------------------------------------------------------------
 
 apiBaseUrl :: ChainwebHost -> Text
@@ -212,7 +213,7 @@ calcPowHash bs = do
 
 data BlockTable = BlockTable
   { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
-  , _blockTable_cut :: Map ChainId BlockHeaderTx
+  , _blockTable_cut    :: Map ChainId BlockHeaderTx
   } deriving (Eq,Ord)
 
 instance Show BlockTable where
@@ -242,7 +243,7 @@ insertBlockTable (BlockTable bs cut) btx = BlockTable bs2 cut2
     height = _blockHeader_height . _blockHeaderTx_header
     g b1 b2 = if height b1 > height b2 then b1 else b2
 
-    f Nothing = Just $ M.singleton c btx
+    f Nothing  = Just $ M.singleton c btx
     f (Just m) = Just $ M.insert c btx m
 
 getBlock :: BlockHeight -> ChainId -> BlockTable -> Maybe BlockHeaderTx
