@@ -36,7 +36,7 @@ import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
 import           Chainweb.Api.RespItems
-import           Common.Types hiding (ChainId(..))
+import           Common.Types
 import           Common.Utils
 ------------------------------------------------------------------------------
 

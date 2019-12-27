@@ -26,7 +26,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
-import           Formattable.NumFormat
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend

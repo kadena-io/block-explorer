@@ -5,19 +5,16 @@
 
 module Common.Types where
 
-import           Control.Applicative
 ------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
-import           Data.Hashable
 import           Data.Readable
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           GHC.Generics (Generic)
-import           Text.Read (readMaybe)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           ChainwebApi.Types.Common
