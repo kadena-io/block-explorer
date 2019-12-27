@@ -1,33 +1,31 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Common.Types where
 
-import Control.Applicative
 ------------------------------------------------------------------------------
 import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
-import           Data.Hashable
 import           Data.Readable
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           GHC.Generics (Generic)
-import           Text.Read (readMaybe)
 ------------------------------------------------------------------------------
+import           Chainweb.Api.ChainId
+import           Chainweb.Api.Common
 import           Common.Utils
-import           ChainwebApi.Types.Common
 ------------------------------------------------------------------------------
 
 type Domain = Text
 
 data Host = Host
   { hostAddress :: Text
-  , hostPort :: Int
+  , hostPort    :: Int
   } deriving (Eq,Ord,Show,Read,Generic)
 
 hostScheme :: Host -> Text
@@ -57,7 +55,7 @@ hostToText h =
 type ChainwebVersion = Text
 
 data ChainwebHost = ChainwebHost
-  { chHost :: Host
+  { chHost    :: Host
   , chVersion :: ChainwebVersion
   } deriving (Eq,Ord,Show,Read,Generic)
 
@@ -78,41 +76,23 @@ netIdPathSegment = \case
   NetId_Custom _ -> "custom"
 
 netHost :: NetId -> Host
-netHost NetId_Mainnet = Host "estats.chainweb.com" 443
-netHost NetId_Testnet = Host "us1.testnet.chainweb.com" 443
+netHost NetId_Mainnet    = Host "estats.chainweb.com" 443
+netHost NetId_Testnet    = Host "us1.testnet.chainweb.com" 443
 netHost (NetId_Custom h) = h
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
 humanReadableTextPrism = prism' humanize fromText
 
-newtype ChainId = ChainId { unChainId :: Int }
-  deriving (Eq,Ord,Hashable)
-
-chainIdFromText :: Monad m => Text -> m ChainId
-chainIdFromText
-  = maybe (fail "ChainId string was not an integer") (pure . ChainId)
-  . readMaybe . T.unpack
-
-instance FromJSON ChainId where
-  parseJSON v = do
-        withText "ChainId" chainIdFromText v
-    <|> withScientific "ChainId" (pure . ChainId . round) v
-instance FromJSONKey ChainId where
-  fromJSONKey = FromJSONKeyTextParser chainIdFromText
-
-instance Show ChainId where
-  show (ChainId b) = show b
-
 data CServerInfo = CServerInfo
-  { _csiServerInfo :: ServerInfo -- TODO use this properly
+  { _csiServerInfo        :: ServerInfo -- TODO use this properly
   , _csiNewestBlockHeight :: BlockHeight
   } deriving (Eq,Ord,Show)
 
 data ServerInfo = ServerInfo
   { _siChainwebVer :: ChainwebVersion
-  , _siApiVer :: Text -- TODO use this properly
-  , _siChains :: Set ChainId
-  , _siNumChains :: Int
+  , _siApiVer      :: Text -- TODO use this properly
+  , _siChains      :: Set ChainId
+  , _siNumChains   :: Int
   } deriving (Eq,Ord,Show)
 
 siChainsList :: ServerInfo -> [ChainId]

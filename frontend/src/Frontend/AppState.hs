@@ -33,11 +33,12 @@ import           Reflex
 import           Reflex.Dom
 import           Reflex.Dom.EventSource
 ------------------------------------------------------------------------------
-import           ChainwebApi.Types.Base64Url
-import           ChainwebApi.Types.BlockHeader
-import           ChainwebApi.Types.BlockHeaderTx
-import           ChainwebApi.Types.BytesLE
-import           ChainwebApi.Types.Hash
+import           Chainweb.Api.Base64Url
+import           Chainweb.Api.BlockHeader
+import           Chainweb.Api.BlockHeaderTx
+import           Chainweb.Api.BytesLE
+import           Chainweb.Api.ChainId
+import           Chainweb.Api.Hash
 import           Common.Types
 import           Common.Utils
 import           Frontend.ChainwebApi
@@ -76,12 +77,12 @@ triggerBatch
 triggerBatch l e = tellEvent $ (\as -> set l as mempty) <$> e
 
 data HashrateData = HashrateData
-    { _hd_deltaT :: NominalDiffTime
+    { _hd_deltaT     :: NominalDiffTime
     , _hd_difficulty :: Integer
     } deriving (Eq,Ord,Show)
 
 data GlobalStats = GlobalStats
-    { _gs_txCount :: Word64
+    { _gs_txCount   :: Word64
     , _gs_startTime :: UTCTime
     , _gs_hashrates :: Map ChainId HashrateData
     } deriving (Eq,Ord,Show)
@@ -131,7 +132,7 @@ setStartTime :: UTCTime -> GlobalStats -> GlobalStats
 setStartTime t gs = gs { _gs_startTime = t }
 
 data AppState t = AppState
-    { _as_network :: NetId
+    { _as_network    :: NetId
     , _as_serverInfo :: ServerInfo
     } deriving Generic
 

@@ -13,6 +13,7 @@ library
     , bytes
     , bytestring
     , cereal
+    , chainweb-api
     , common
     , containers
     , data-default

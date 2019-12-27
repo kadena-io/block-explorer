@@ -44,7 +44,6 @@ project ./. ({ pkgs, hackGet, ... }: {
   };
 
   packages = {
-    # digraph depends on massiv which can't build with GHCJS
-    # digraph = hackGet ./deps/digraph;
+    chainweb-api = hackGet ./deps/chainweb-api;
   };
 })

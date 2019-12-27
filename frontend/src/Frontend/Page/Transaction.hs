@@ -1,32 +1,32 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecursiveDo                #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
 module Frontend.Page.Transaction where
 
 ------------------------------------------------------------------------------
-import           Control.Monad
-import           Data.Maybe
-import           Reflex.Dom.Core hiding (Value)
+import Control.Monad
+import Data.Maybe
+import Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
-import           ChainwebApi.Types.BlockPayload
-import           ChainwebApi.Types.ChainwebMeta
-import           ChainwebApi.Types.Hash
-import           ChainwebApi.Types.PactCommand
-import           ChainwebApi.Types.Payload
-import           ChainwebApi.Types.Sig
-import           ChainwebApi.Types.Signer
-import           ChainwebApi.Types.Transaction
-import           Common.Utils
-import           Frontend.App
-import           Frontend.Common
+import Chainweb.Api.BlockPayload
+import Chainweb.Api.ChainwebMeta
+import Chainweb.Api.Hash
+import Chainweb.Api.PactCommand
+import Chainweb.Api.Payload
+import Chainweb.Api.Sig
+import Chainweb.Api.Signer
+import Chainweb.Api.Transaction
+import Common.Utils
+import Frontend.App
+import Frontend.Common
 ------------------------------------------------------------------------------
 
 transactionPage

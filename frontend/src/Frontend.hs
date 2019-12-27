@@ -1,15 +1,15 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecursiveDo                #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
 module Frontend where
 
 ------------------------------------------------------------------------------
@@ -26,7 +26,6 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
-import           Formattable.NumFormat
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend
@@ -38,12 +37,13 @@ import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Text.Printf
 ------------------------------------------------------------------------------
-import           ChainwebApi.Types.BlockHeader
-import           ChainwebApi.Types.BlockHeaderTx
-import           ChainwebApi.Types.ChainTip
-import           ChainwebApi.Types.Common
-import           ChainwebApi.Types.Cut
-import           ChainwebApi.Types.Hash
+import           Chainweb.Api.BlockHeader
+import           Chainweb.Api.BlockHeaderTx
+import           Chainweb.Api.ChainId
+import           Chainweb.Api.ChainTip
+import           Chainweb.Api.Common
+import           Chainweb.Api.Cut
+import           Chainweb.Api.Hash
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -131,9 +131,9 @@ appHead = do
     meta ("name" =: "keywords" <> "content" =: "kadena, block explorer, mining, propagation, smart contracts, blockchain, chainweb")
     mTrackId <- getTextCfg "frontend/tracking-id"
     case mTrackId of
-      Nothing -> googleAnalyticsTracker "UA-127512784-5"
+      Nothing            -> googleAnalyticsTracker "UA-127512784-5"
       Just "no-tracking" -> blank
-      Just tid -> googleAnalyticsTracker tid
+      Just tid           -> googleAnalyticsTracker tid
 
     css (static @"semantic.min.css")
     css (static @"css/custom.css")

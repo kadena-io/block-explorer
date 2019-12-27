@@ -11,6 +11,7 @@ library
     , bytestring
     , base16-bytestring
     , base64-bytestring
+    , chainweb-api
     , containers
     , dependent-sum
     , errors
@@ -29,23 +30,6 @@ library
     TypeFamilies
     PolyKinds
   exposed-modules:
-    ChainwebApi.Types.Base64Url
-    ChainwebApi.Types.BlockHeader
-    ChainwebApi.Types.BlockHeaderTx
-    ChainwebApi.Types.BlockPayload
-    ChainwebApi.Types.BytesLE
-    ChainwebApi.Types.ChainTip
-    ChainwebApi.Types.ChainwebMeta
-    ChainwebApi.Types.Common
-    ChainwebApi.Types.Cut
-    ChainwebApi.Types.Hash
-    ChainwebApi.Types.MinerData
-    ChainwebApi.Types.PactCommand
-    ChainwebApi.Types.Payload
-    ChainwebApi.Types.RespItems
-    ChainwebApi.Types.Sig
-    ChainwebApi.Types.Signer
-    ChainwebApi.Types.Transaction
     Common.Api
     Common.Route
     Common.Types
