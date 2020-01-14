@@ -8,7 +8,7 @@
 module Frontend.ChainwebApi where
 
 ------------------------------------------------------------------------------
-import           Control.Lens
+import           Control.Lens hiding ((.=))
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.Lens
@@ -20,6 +20,7 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Lazy as BL
 import           Data.Either
 import           Data.List
+import qualified Data.HashMap.Strict as HM
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Text (Text)
@@ -32,6 +33,7 @@ import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockHeaderTx
 import           Chainweb.Api.BlockPayload
 import           Chainweb.Api.ChainId
+import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
@@ -104,7 +106,7 @@ getBlockTable
   -> m (Event t BlockTable)
 getBlockTable h csi = do
   pb <- getPostBuild
-  resp <- performRequestsAsync $ mkHeaderRequest h csi <$ pb
+  resp <- performRequestsAsync $ mkHeaderRequest HeaderJson h csi <$ pb
   return (foldl' (\bt val -> combineBlockTables bt val) mempty <$> (fmap decodeXhrResponse <$> resp))
 
 getBlockHeader
@@ -116,8 +118,8 @@ getBlockHeader
   -- ^ Returns the block header and the base64url-encoded binary serialization
 getBlockHeader h c blockHash = do
   pb <- getPostBuild
-  let reqs = [ mkSingleHeaderRequest h c blockHash
-             , mkSingleHeaderRequestBinary h c blockHash
+  let reqs = [ mkSingleHeaderRequest HeaderJson h c blockHash
+             , mkSingleHeaderRequest HeaderBinary h c blockHash
              -- NOTE: Order of this list must match the order of the argument to decodeResults
              ]
   resp <- performRequestsAsync $ reqs <$ pb
@@ -133,13 +135,32 @@ getBlockHeaderByHeight
   -- ^ Returns the block header and the base64url-encoded binary serialization
 getBlockHeaderByHeight h c blockHeight = do
   pb <- getPostBuild
-  let reqs = [ mkSingleHeightRequest h c blockHeight
-             , mkSingleHeightRequestBinary h c blockHeight
-             -- NOTE: Order of this list must match the order of the argument to decodeResults
-             ]
-  resp <- performRequestsAsync $ reqs <$ pb
+  emcut <- getCut (h <$ pb)
+  let cutHash = fmap _tipHash . HM.lookup c . _cutChains <$> fmapMaybe id emcut
+  let mkReqs ch = [ mkAncestorHeaderRequest HeaderJson h c ch blockHeight blockHeight
+                  , mkAncestorHeaderRequest HeaderBinary h c ch blockHeight blockHeight
+                  -- NOTE: Order of this list must match the order of the argument to decodeResults
+                  ]
+  resp <- performRequestsAsync $ mkReqs <$> fmapMaybe id cutHash
   let eRes = decodeHeightResults <$> resp
-  return (hush <$> eRes)
+  return (hush <$> traceEvent "eRes" eRes)
+
+--getBlockHeaderByHeightOld
+--  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+--  => ChainwebHost
+--  -> ChainId
+--  -> BlockHeight
+--  -> m (Event t (Maybe (BlockHeader, Text)))
+--  -- ^ Returns the block header and the base64url-encoded binary serialization
+--getBlockHeaderByHeightOld h c blockHeight = do
+--  pb <- getPostBuild
+--  let reqs = [ mkSingleHeightRequest h c blockHeight
+--             , mkSingleHeightRequestBinary h c blockHeight
+--             -- NOTE: Order of this list must match the order of the argument to decodeResults
+--             ]
+--  resp <- performRequestsAsync $ reqs <$ pb
+--  let eRes = decodeHeightResults <$> resp
+--  return (hush <$> eRes)
 
 decodeHeightResults :: [XhrResponse] -> Either String (BlockHeader, Text)
 decodeHeightResults [bh, bhBin] = do
@@ -178,33 +199,48 @@ combineBlockTables bt Nothing = bt
 combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b Nothing Nothing Nothing)) bt0 $ rights $
   map (parseEither parseJSON) $ getItems v
 
-mkHeaderRequest :: ChainwebHost -> CServerInfo -> [XhrRequest ()]
-mkHeaderRequest h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
+data HeaderEncoding = HeaderBinary | HeaderJson
+  deriving (Eq,Ord,Show,Read,Enum)
+
+headerEncoding :: HeaderEncoding -> Map Text Text
+headerEncoding HeaderBinary = "accept" =: "application/json"
+headerEncoding HeaderJson = "accept" =: "application/json;blockheader-encoding=object"
+
+mkHeaderRequest :: HeaderEncoding -> ChainwebHost -> CServerInfo -> [XhrRequest ()]
+mkHeaderRequest he h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
                          $ siChainsList $ _csiServerInfo csi
   where
-    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
+    cfg = def { _xhrRequestConfig_headers = headerEncoding he }
     maxh = _csiNewestBlockHeight csi
     minh = maxh - blockTableNumRows
 
-mkSingleHeightRequest :: ChainwebHost -> ChainId -> BlockHeight -> XhrRequest ()
-mkSingleHeightRequest h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c) cfg
+mkSingleHeightRequest :: HeaderEncoding -> ChainwebHost -> ChainId -> BlockHeight -> XhrRequest ()
+mkSingleHeightRequest he h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c) cfg
   where
-    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
+    cfg = def { _xhrRequestConfig_headers = headerEncoding he }
 
-mkSingleHeightRequestBinary :: ChainwebHost -> ChainId -> BlockHeight -> XhrRequest ()
-mkSingleHeightRequestBinary h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c <> "&hfmt=bin") cfg
+mkAncestorHeaderRequest
+  :: HeaderEncoding
+  -> ChainwebHost
+  -> ChainId
+  -> Text
+  -> Int
+  -> Int
+  -> XhrRequest ByteString
+mkAncestorHeaderRequest he h c cutHash minHeight maxHeight = XhrRequest "POST" url cfg
   where
-    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json" }
+    cfg = def { _xhrRequestConfig_headers = headerEncoding he <>
+                                            "content-type" =: "application/json"
+              , _xhrRequestConfig_sendData = body }
+    body = BL.toStrict $ encode $ object [ "upper" .= [cutHash], "lower" .= ([] :: [Text]) ]
+    url = chainBaseUrl h c <> "/header/branch?minheight=" <> tshow minHeight <>
+          "&maxheight=" <> tshow maxHeight
 
-mkSingleHeaderRequest :: ChainwebHost -> ChainId -> Text -> XhrRequest ()
-mkSingleHeaderRequest h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
-  where
-    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json;blockheader-encoding=object" }
 
-mkSingleHeaderRequestBinary :: ChainwebHost -> ChainId -> Text -> XhrRequest ()
-mkSingleHeaderRequestBinary h c blockHash = XhrRequest "GET" (headerUrl h c blockHash <> "&hfmt=bin") cfg
+mkSingleHeaderRequest :: HeaderEncoding -> ChainwebHost -> ChainId -> Text -> XhrRequest ()
+mkSingleHeaderRequest he h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
   where
-    cfg = def { _xhrRequestConfig_headers = "accept" =: "application/json" }
+    cfg = def { _xhrRequestConfig_headers = headerEncoding he }
 
 calcPowHash :: ByteString -> Either String Text
 calcPowHash bs = do

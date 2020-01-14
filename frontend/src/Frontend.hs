@@ -243,22 +243,15 @@ blockTableWidget
   -> App r t m ()
 blockTableWidget Nothing = text "Error getting cut from server"
 blockTableWidget (Just height) = do
-  as <- ask
   (dbt, stats) <- initBlockTable height
 
   dti <- fmap join $ prerender (return $ constDyn dummy) $ do
     t <- liftIO getCurrentTime
     clockLossy 1 t
 
-  let elapsedTime gs ti = diffUTCTime (_tickInfo_lastUTC ti) (_gs_startTime gs)
-      elapsed = elapsedTime <$> stats <*> dti
-      tps = calcTps <$> stats <*> elapsed
-
   hashrate <- holdDyn Nothing $ attachWith
     (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
     (current dti) (updated dbt)
-  coinsLeft <- holdDyn Nothing $ attachWith calcCoinsLeft
-    (_tickInfo_lastUTC <$> current dti) (updated dbt)
   divClass "ui segment" $ do
     divClass "ui small three statistics" $ do
       divClass "statistic" $ do
