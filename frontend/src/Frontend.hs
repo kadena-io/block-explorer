@@ -39,11 +39,13 @@ import           Text.Printf
 ------------------------------------------------------------------------------
 import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockHeaderTx
+import           Chainweb.Api.BlockPayload
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
+import           Chainweb.Api.MinerData
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -214,6 +216,7 @@ initBlockTable height = do
           [ (<>) <$> ebt
           , (\mbtx bt -> maybe bt (insertBlockTable bt) mbtx) <$> downEvent
           , (\pair bt -> maybe bt (insertBlockTable bt . pairToBhtx) pair) <$> newMissing
+          , insertPayload <$> switch (current payloadUpdates)
           ]
 
         let missingBlocks = getMissingBlocks blockTable downEvent
@@ -221,6 +224,12 @@ initBlockTable height = do
             eme = sequence . fmap getHeader <$> missingBlocks
         ee <- networkHold (return []) eme
         let newMissing = switch (current (leftmost <$> ee))
+            newBlocks = leftmost
+              [ _blockHeaderTx_header <$$> downEvent
+              , fst <$$> newMissing
+              ]
+        payloadUpdates <- networkHold (return never) $ getPayload ch <$> fmapMaybe id newBlocks
+
 
     let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
     pb <- getPostBuild
@@ -233,6 +242,19 @@ initBlockTable height = do
     return (blockTable, stats)
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
+
+insertPayload :: Either String (BlockPayload, BlockHeader) -> BlockTable -> BlockTable
+insertPayload (Left e) _ = error $ "Error getting block payload: " <> e
+insertPayload (Right (p,h)) bt = addPayloadToTable (_blockHeader_height h) (_blockHeader_chainId h) p bt
+
+getPayload
+  :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m))
+  => ChainwebHost
+  -> BlockHeader
+  -> m (Event t (Either String (BlockPayload, BlockHeader)))
+getPayload ch h = do
+  e <- getBlockPayload ch (_blockHeader_chainId h) (_blockHeader_payloadHash h)
+  return $ (,h) <$$> e
 
 
 blockTableWidget
@@ -335,20 +357,30 @@ blockWidget0
   -> m (Event t (Maybe ChainId))
 blockWidget0 ti hoveredBlock hs height cid = do
   net <- asks _as_network
-  let mkAttrs = \case
-        Nothing -> "class" =: "summary-details"
-        Just hb -> if isDownstreamFrom hb (height, cid)
-                     then "class" =: "summary-details hovered-block"
-                     else "class" =: "summary-details"
+  let mkAttrs bh mhb = cls <> sty
+        where
+          sty = case _blockHeaderTx_payload bh of
+            Nothing -> mempty
+            Just p ->
+              case (_minerData_publicKeys $ _blockPayload_minerData p) of
+                [] -> mempty
+                (k:_) -> "style" =: ("background-color: #" <> T.take 3 k <> "4")
+          cls = case mhb of
+            Nothing -> "class" =: "summary-details"
+            Just hb -> if isDownstreamFrom hb (height, cid)
+                         then "class" =: "summary-details hovered-block"
+                         else "class" =: "summary-details"
   let mbh = M.lookup cid <$> hs
-  (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
-    viewIntoMaybe mbh blank $ \bh -> do
+  res <- viewIntoMaybe mbh (elClass "span" "summary-details" $ return never) $ \bh -> do
+    (e,_) <- elDynAttr' "span" (mkAttrs <$> bh <*> hoveredBlock) $ do
+
       let getHeight = _blockHeader_height . _blockHeaderTx_header
       let mkRoute h = addNetRoute net (unChainId cid) $ BlockIndex_Height :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         el "div" $ do
           elClass "span" "blockheight" $ do
-              dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
+              dynText $ maybe "-" (T.take 10 . _minerData_account . _blockPayload_minerData) . _blockHeaderTx_payload <$> bh
+              --dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 
         let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
         void $ prerender blank $ divClass "blockdiv" $
@@ -357,12 +389,9 @@ blockWidget0 ti hoveredBlock hs height cid = do
         divClass "blockdiv" $ do
           dynText $ maybe "" (\c -> tshow c <> " txs") . _blockHeaderTx_txCount <$> bh
 
-        --divClass "blockdiv" $ do
-        --  dynText $ diffStr . fromIntegral . targetToDifficulty . leToInteger .
-        --            unBytesLE . _blockHeader_target . _blockHeaderTx_header <$> bh
-
-  return $ leftmost [ fmap (const cid) <$> tag (current mbh) (domEvent Mouseenter e)
-                    , Nothing <$ domEvent Mouseleave e]
+    return $ leftmost [ fmap (const cid) <$> tag (current mbh) (domEvent Mouseenter e)
+                      , Nothing <$ domEvent Mouseleave e]
+  switch <$> hold never res
 
 diffStr :: Double -> Text
 diffStr d = T.pack $ printf "%.2f %s" (d / divisor) units
