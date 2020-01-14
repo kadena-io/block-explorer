@@ -161,7 +161,7 @@ stateManager _ n si _ = do
 
 pairToBhtx :: (BlockHeader, Text) -> BlockHeaderTx
 pairToBhtx (h, bhBinBase64) =
-    BlockHeaderTx h Nothing mPowHash Nothing
+    BlockHeaderTx h Nothing mPowHash Nothing Nothing
   where
     mPowHash = either (const Nothing) Just (calcPowHash =<< decodeB64UrlNoPaddingText bhBinBase64)
 

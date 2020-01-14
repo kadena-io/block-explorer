@@ -196,7 +196,7 @@ decodeXhr = eitherDecode . BL.fromStrict . T.encodeUtf8 <=<
 
 combineBlockTables :: BlockTable -> Maybe Value -> BlockTable
 combineBlockTables bt Nothing = bt
-combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b Nothing Nothing Nothing)) bt0 $ rights $
+combineBlockTables bt0 (Just v) = foldl' (\bt b -> insertBlockTable bt (BlockHeaderTx b Nothing Nothing Nothing Nothing)) bt0 $ rights $
   map (parseEither parseJSON) $ getItems v
 
 data HeaderEncoding = HeaderBinary | HeaderJson
@@ -247,10 +247,33 @@ calcPowHash bs = do
   h <- blake2s 32 "" $ B.take (B.length bs - 32) bs
   return $ T.decodeUtf8 $ B16.encode $ B.reverse h
 
+addPayloadToTable
+  :: BlockHeight
+  -> ChainId
+  -> BlockPayload
+  -> BlockTable
+  -> BlockTable
+addPayloadToTable h c p bt = modifyBlockInTable bt h c f
+  where
+    f bhtx = bhtx { _blockHeaderTx_payload = Just p }
+
+modifyBlockInTable
+  :: BlockTable
+  -> BlockHeight
+  -> ChainId
+  -> (BlockHeaderTx -> BlockHeaderTx)
+  -> BlockTable
+modifyBlockInTable (BlockTable bs cut) h c func = BlockTable bs2 cut2
+  where
+    bs2 = M.adjust (M.adjust func c) h bs
+    cut2 = M.adjust g c cut
+    height = _blockHeader_height . _blockHeaderTx_header
+    g b = if height b == h then func b else b
+
 data BlockTable = BlockTable
   { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
   , _blockTable_cut    :: Map ChainId BlockHeaderTx
-  } deriving (Eq,Ord)
+  } deriving (Eq)
 
 instance Show BlockTable where
   show (BlockTable bs _) = unlines $ map show $ M.keys bs
