@@ -275,19 +275,9 @@ blockTableWidget (Just height) = do
     (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
     (current dti) (updated dbt)
   divClass "ui segment" $ do
-    divClass "ui small three statistics" $ do
-      divClass "statistic" $ do
-        divClass "label" $ text "Stage 1: Mining"
-      divClass "large statistic" $ do
-        divClass "label" $ text "Stage 2: Token Operations (In Progress)"
-      divClass "statistic" $ do
-        divClass "label" $ text "Stage 3: Smart Contracts (ETA Jan 15)"
-
-  divClass "ui segment" $ do
-    divClass "ui small three statistics" $ do
+    divClass "ui small two statistics" $ do
         statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
         statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
-        statistic "Until Stage 3" $ dynText (fmap f dti)
   divClass "block-table" $ do
     divClass "header-row" $ do
       elClass "span" "table-header" $ text "Height"
