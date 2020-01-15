@@ -47,7 +47,9 @@ transactionPage bp = do
       elDynAttr "div" (addActive "content" <$> open) $ do
         elClass "table" "ui definition table" $ do
           el "tbody" $ do
-            tfield "Transaction Hash" $ text $ hashHex $ _transaction_hash t
+            tfield "Request Key" $ do
+              let reqKey = hashB64U $ _transaction_hash t
+              text reqKey
             tfield "Meta" $ do
               let meta = _pactCommand_meta $ _transaction_cmd t
               elClass "table" "ui definition table" $ el "tbody" $ do
