@@ -56,9 +56,9 @@ chainHashesUrl :: ChainwebHost -> BlockHeight -> BlockHeight -> ChainId -> Text
 chainHashesUrl h minHeight maxHeight chainId = chainBaseUrl h chainId <>
   "/hash?minheight=" <> tshow minHeight <> "&maxheight=" <> tshow maxHeight
 
-headersUrl :: ChainwebHost -> BlockHeight -> BlockHeight -> ChainId -> Text
-headersUrl h minHeight maxHeight chainId = chainBaseUrl h chainId <>
-  "/header?minheight=" <> tshow minHeight <> "&maxheight=" <> tshow maxHeight
+headersUrl :: ChainwebHost -> BlockHeight -> Int -> ChainId -> Text
+headersUrl h minHeight limit chainId = chainBaseUrl h chainId <>
+  "/header?minheight=" <> tshow minHeight <> "&limit=" <> tshow limit
 
 headerUrl :: ChainwebHost -> ChainId -> Text -> Text
 headerUrl h chainId blockHash = chainBaseUrl h chainId <> "/header/" <> blockHash
@@ -137,30 +137,13 @@ getBlockHeaderByHeight h c blockHeight = do
   pb <- getPostBuild
   emcut <- getCut (h <$ pb)
   let cutHash = fmap _tipHash . HM.lookup c . _cutChains <$> fmapMaybe id emcut
-  let mkReqs ch = [ mkAncestorHeaderRequest HeaderJson h c ch blockHeight blockHeight
-                  , mkAncestorHeaderRequest HeaderBinary h c ch blockHeight blockHeight
+  let mkReqs ch = [ mkAncestorHeaderRequest HeaderJson h c ch blockHeight 1
+                  , mkAncestorHeaderRequest HeaderBinary h c ch blockHeight 1
                   -- NOTE: Order of this list must match the order of the argument to decodeResults
                   ]
   resp <- performRequestsAsync $ mkReqs <$> fmapMaybe id cutHash
   let eRes = decodeHeightResults <$> resp
   return (hush <$> traceEvent "eRes" eRes)
-
---getBlockHeaderByHeightOld
---  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
---  => ChainwebHost
---  -> ChainId
---  -> BlockHeight
---  -> m (Event t (Maybe (BlockHeader, Text)))
---  -- ^ Returns the block header and the base64url-encoded binary serialization
---getBlockHeaderByHeightOld h c blockHeight = do
---  pb <- getPostBuild
---  let reqs = [ mkSingleHeightRequest h c blockHeight
---             , mkSingleHeightRequestBinary h c blockHeight
---             -- NOTE: Order of this list must match the order of the argument to decodeResults
---             ]
---  resp <- performRequestsAsync $ reqs <$ pb
---  let eRes = decodeHeightResults <$> resp
---  return (hush <$> eRes)
 
 decodeHeightResults :: [XhrResponse] -> Either String (BlockHeader, Text)
 decodeHeightResults [bh, bhBin] = do
@@ -224,17 +207,17 @@ mkAncestorHeaderRequest
   -> ChainwebHost
   -> ChainId
   -> Text
-  -> Int
+  -> BlockHeight
   -> Int
   -> XhrRequest ByteString
-mkAncestorHeaderRequest he h c cutHash minHeight maxHeight = XhrRequest "POST" url cfg
+mkAncestorHeaderRequest he h c cutHash minHeight limit = XhrRequest "POST" url cfg
   where
     cfg = def { _xhrRequestConfig_headers = headerEncoding he <>
                                             "content-type" =: "application/json"
               , _xhrRequestConfig_sendData = body }
     body = BL.toStrict $ encode $ object [ "upper" .= [cutHash], "lower" .= ([] :: [Text]) ]
     url = chainBaseUrl h c <> "/header/branch?minheight=" <> tshow minHeight <>
-          "&maxheight=" <> tshow maxHeight
+          "&limit=" <> tshow limit
 
 
 mkSingleHeaderRequest :: HeaderEncoding -> ChainwebHost -> ChainId -> Text -> XhrRequest ()
