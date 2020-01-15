@@ -44,17 +44,6 @@ import           Frontend.Page.Transaction
 ------------------------------------------------------------------------------
 
 
-blockPage
-  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => ServerInfo
-  -> NetId
-  -> App (Int :. R BlockIndexRoute) t m ()
-blockPage si netId = do
-    subPairRoute_ $ \cid -> subRoute_ $ \case
-      BlockIndex_Hash -> blockHashWidget si netId cid
-      BlockIndex_Height -> blockHeightWidget si netId cid
-
 blockHashWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
@@ -100,7 +89,7 @@ blockLink
   -> Text
   -> m ()
 blockLink netId chainId height linkText =
-  routeLink (addNetRoute netId (unChainId chainId) $ BlockIndex_Height :/ height :. Block_Header :/ ()) $ text linkText
+  routeLink (addNetRoute netId (unChainId chainId) $ Chain_BlockHeight :/ height :. Block_Header :/ ()) $ text linkText
 
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
@@ -116,7 +105,7 @@ blockPageNoPayload netId h c bh = do
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> subRoute_ $ \case
           Block_Header -> blockHeaderPage netId h c bh payload
-          Block_Transactions -> transactionPage payload
+          Block_Transactions -> transactionPage h c payload
   pEvt <- getBlockPayload h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
@@ -180,4 +169,4 @@ blockPayloadWidget netId c bh bp = do
         let rawHash = _blockHeader_hash bh
         let hash = hashB64U rawHash
         tfield "Transactions" $
-          routeLink (addNetRoute netId (unChainId c) $ BlockIndex_Hash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+          routeLink (addNetRoute netId (unChainId c) $ Chain_BlockHash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash

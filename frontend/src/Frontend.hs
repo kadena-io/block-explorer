@@ -99,7 +99,19 @@ networkDispatch route netId = prerender_ blank $ do
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
           void $ networkHold (inlineLoader "Getting latest cut...") (blockTableWidget <$> height)
-        NetRoute_Chain -> blockPage si netId
+        NetRoute_Chain -> chainRouteHandler si netId
+
+chainRouteHandler
+  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+  => ServerInfo
+  -> NetId
+  -> App (Int :. R ChainRoute) t m ()
+chainRouteHandler si netId = do
+    subPairRoute_ $ \cid -> subRoute_ $ \case
+      Chain_BlockHash -> blockHashWidget si netId cid
+      Chain_BlockHeight -> blockHeightWidget si netId cid
+      Chain_TxReqKey -> text "TX search results"
 
 footer
   :: (DomBuilder t m)
@@ -225,10 +237,11 @@ initBlockTable height = do
     let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
     pb <- getPostBuild
     now <- prerender (return t0) (liftIO getCurrentTime)
-    stats <- foldDyn ($) (GlobalStats 0 t0 mempty) $ mergeWith (.)
+    stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0) $ mergeWith (.)
       [ maybe id addTxCount <$> downEvent
       , setStartTime <$> tag (current now) pb
       , addHashrateData <$> filterRight newHrd
+      , maybe id addModuleCount <$> downEvent
       ]
     return (blockTable, stats)
   where
@@ -236,7 +249,7 @@ initBlockTable height = do
 
 
 blockTableWidget
-  :: (MonadApp r t m, Prerender js t m,
+  :: forall js r t m. (MonadApp r t m, Prerender js t m,
       MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Maybe BlockHeight
@@ -334,7 +347,7 @@ blockWidget0 ti hoveredBlock hs height cid = do
   (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
     viewIntoMaybe mbh blank $ \bh -> do
       let getHeight = _blockHeader_height . _blockHeaderTx_header
-      let mkRoute h = addNetRoute net (unChainId cid) $ BlockIndex_Height :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
+      let mkRoute h = addNetRoute net (unChainId cid) $ Chain_BlockHeight :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         el "div" $ do
           elClass "span" "blockheight" $ do
