@@ -43,7 +43,7 @@ transactionPage bp = do
             ("class" =: if active then ("active " <> cls) else cls)
       (e,_) <- elDynAttr' "div" (addActive "title" <$> open) $ do
         elClass "i" "dropdown icon" blank
-        el "code" $ text $ payloadCode $ _pactCommand_payload $ _transaction_cmd t
+        el "pre" $ text $ payloadCode $ _pactCommand_payload $ _transaction_cmd t
       elDynAttr "div" (addActive "content" <$> open) $ do
         elClass "table" "ui definition table" $ do
           el "tbody" $ do
