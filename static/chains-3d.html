@@ -21,15 +21,15 @@
     /* ---------------------------------------------------------------------- */
     /* Chainweb API */
 
-    const headerStreamUrl = `https://${headerStreamHost}/chainweb/0.0/development/header/updates`;
+    const headerStreamUrl = `https://${headerStreamHost}/chainweb/0.0/mainnet01/header/updates`;
 
     function getHeaderRequest (cid, hash) {
-      const url = `https://${apiHost}/chainweb/0.0/development/chain/${cid}/header/${hash}`;
+      const url = `https://${apiHost}/chainweb/0.0/mainnet01/chain/${cid}/header/${hash}`;
       return new Request(url, { headers: new Headers({ accept: "application/json;blockheader-encoding=object" })});
     }
 
     function getPayloadRequest (cid, hash) {
-      const url = `https://${apiHost}/chainweb/0.0/development/chain/${cid}/payload/${hash}`;
+      const url = `https://${apiHost}/chainweb/0.0/mainnet01/chain/${cid}/payload/${hash}`;
       return new Request(url);
     }
 
