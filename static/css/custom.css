@@ -116,3 +116,7 @@ div.summary-inner {
     background: #e0e1e2 none;
     padding: 5px;
 }
+
+.custombreak {
+    word-break: keep-all;
+}

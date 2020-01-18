@@ -32,6 +32,7 @@ import           Blake2Native
 import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockHeaderTx
 import           Chainweb.Api.BlockPayload
+import           Chainweb.Api.BlockPayloadWithOutputs
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
@@ -68,6 +69,9 @@ headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
 
 payloadUrl :: ChainwebHost -> ChainId -> Hash -> Text
 payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash
+
+payloadWithOutputsUrl :: ChainwebHost -> ChainId -> Hash -> Text
+payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash <> "/outputs"
 
 getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
@@ -171,6 +175,20 @@ getBlockPayload h c payloadHash = do
     return (decodeXhr <$> resp)
   where
     req = XhrRequest "GET" (payloadUrl h c payloadHash)
+            (def { _xhrRequestConfig_headers = "accept" =: "application/json" })
+
+getBlockPayloadWithOutputs
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  => ChainwebHost
+  -> ChainId
+  -> Hash
+  -> m (Event t (Either String BlockPayloadWithOutputs))
+getBlockPayloadWithOutputs h c payloadHash = do
+    pb <- getPostBuild
+    resp <- performRequestAsync $ req <$ pb
+    return (decodeXhr <$> resp)
+  where
+    req = XhrRequest "GET" (payloadWithOutputsUrl h c payloadHash)
             (def { _xhrRequestConfig_headers = "accept" =: "application/json" })
 
 decodeXhr :: FromJSON a => XhrResponse -> Either String a
