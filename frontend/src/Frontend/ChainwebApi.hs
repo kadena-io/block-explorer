@@ -137,8 +137,8 @@ getBlockHeaderByHeight h c blockHeight = do
   pb <- getPostBuild
   emcut <- getCut (h <$ pb)
   let cutHash = fmap _tipHash . HM.lookup c . _cutChains <$> fmapMaybe id emcut
-  let mkReqs ch = [ mkAncestorHeaderRequest HeaderJson h c ch blockHeight 1
-                  , mkAncestorHeaderRequest HeaderBinary h c ch blockHeight 1
+  let mkReqs ch = [ mkAncestorHeaderRequest HeaderJson h c ch blockHeight blockHeight
+                  , mkAncestorHeaderRequest HeaderBinary h c ch blockHeight blockHeight
                   -- NOTE: Order of this list must match the order of the argument to decodeResults
                   ]
   resp <- performRequestsAsync $ mkReqs <$> fmapMaybe id cutHash
@@ -208,16 +208,16 @@ mkAncestorHeaderRequest
   -> ChainId
   -> Text
   -> BlockHeight
-  -> Int
+  -> BlockHeight
   -> XhrRequest ByteString
-mkAncestorHeaderRequest he h c cutHash minHeight limit = XhrRequest "POST" url cfg
+mkAncestorHeaderRequest he h c cutHash minHeight maxHeight = XhrRequest "POST" url cfg
   where
     cfg = def { _xhrRequestConfig_headers = headerEncoding he <>
                                             "content-type" =: "application/json"
               , _xhrRequestConfig_sendData = body }
     body = BL.toStrict $ encode $ object [ "upper" .= [cutHash], "lower" .= ([] :: [Text]) ]
     url = chainBaseUrl h c <> "/header/branch?minheight=" <> tshow minHeight <>
-          "&limit=" <> tshow limit
+          "&maxheight=" <> tshow maxHeight
 
 
 mkSingleHeaderRequest :: HeaderEncoding -> ChainwebHost -> ChainId -> Text -> XhrRequest ()
