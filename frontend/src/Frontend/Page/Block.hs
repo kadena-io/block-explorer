@@ -212,7 +212,7 @@ blockPayloadWithOutputsWidget netId c bh bp = do
           tfield "Logs" $ text $ (maybe "" hashB64U $ _toutLogs coinbase)
           tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData coinbase
           maybe (pure ()) (tfield "Continuation" . text . tshow) $ _toutContinuation coinbase
-          tfield "Transaction ID" $ text $ tshow $ _toutTxId coinbase
+          tfield "Transaction ID" $ maybe blank (text . tshow) $ _toutTxId coinbase
         let rawHash = _blockHeader_hash bh
         let hash = hashB64U rawHash
         let numberOfTransactions =
