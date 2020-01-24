@@ -1,7 +1,7 @@
 {
   "owner": "kadena-io",
   "repo": "chainweb-api",
-  "branch": "emmanuel/add-signer-fields",
-  "rev": "74432f903327d246217ecef6588df47ec0051f55",
-  "sha256": "1j7p4701r10c657i1dg5lz93zgsnss5j9vjnykm4vgrwz2xr3c36"
+  "branch": "master",
+  "rev": "6d5be3b399e7a6f4a93432a63d82fd709dd9edba",
+  "sha256": "1dchs3cz4k01csiv7j87j49jgiyq8qb1cg098637pj6i8g79zccz"
 }
