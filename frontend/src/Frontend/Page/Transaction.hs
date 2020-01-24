@@ -70,18 +70,19 @@ transactionPage bp = do
                     tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
                     tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
                     tfield "Signature Capabilites" $ do
-                      elClass "table" "ui celled table" $ do
-                        el "thead" $ do
-                          el "tr" $ do
-                            el "th" $ text "Name"
-                            el "th" $ text "Arguments"
-                        forM_ (_signer_capList s) $ \c -> do
-                          el "tbody" $ do
-                            elClass "tr" "top aligned" $ do
-                              el "td" $ text $ _scName c
-                              elClass "td" "top aligned"
-                                $ sequence
-                                $ fmap (el "div" . text) (unwrapJSON <$> _scArgs c) <|> empty
+                      when (not $ null $ _signer_capList s) $ do
+                        elClass "table" "ui celled table" $ do
+                          el "thead" $ do
+                            el "tr" $ do
+                              el "th" $ text "Name"
+                              el "th" $ text "Arguments"
+                          forM_ (_signer_capList s) $ \c -> do
+                            el "tbody" $ do
+                              elClass "tr" "top aligned" $ do
+                                el "td" $ text $ _scName c
+                                elClass "td" "top aligned"
+                                  $ sequence
+                                  $ fmap (el "div" . text) (unwrapJSON <$> _scArgs c) <|> empty
               tfield "Signatures" $ do
                 forM_ (_transaction_sigs t) $ \s -> do
                   el "div" $ text $ unSig s
@@ -92,6 +93,6 @@ transactionPage bp = do
                   tfield "Logs" $ text $ maybe "null " hashB64U $ _toutLogs tout
                   tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData tout
                   maybe (pure ()) (tfield "Continutaion" . text . tshow)  $ _toutContinuation tout
-                  tfield "Transaction Id" $ text $ tshow $  _toutTxId tout
+                  tfield "Transaction ID" $ maybe blank (text . tshow) $  _toutTxId tout
   where
     fromPactResult (PactResult pr) = pr
