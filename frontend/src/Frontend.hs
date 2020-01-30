@@ -54,6 +54,7 @@ import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Nav
 import           Frontend.Page.Block
+import           Frontend.Page.ReqKey
 ------------------------------------------------------------------------------
 
 frontend :: Frontend (R FrontendRoute)
@@ -111,7 +112,7 @@ chainRouteHandler si netId = do
     subPairRoute_ $ \cid -> subRoute_ $ \case
       Chain_BlockHash -> blockHashWidget si netId cid
       Chain_BlockHeight -> blockHeightWidget si netId cid
-      Chain_TxReqKey -> text "TX search results"
+      Chain_TxReqKey -> requestKeyWidget si netId cid
 
 footer
   :: (DomBuilder t m)
@@ -284,7 +285,7 @@ blockTableWidget (Just height) = do
     return ()
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
-    f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
+    _f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
     format :: (Int, Int, Int, Int) -> Text
     format (d, h, m, s) = T.pack $ printf "%d days %02d:%02d:%02d" d h m s
     convertToDHMS t =

@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TupleSections              #-}
 
 module Frontend.ChainwebApi where
 
@@ -69,6 +70,9 @@ headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
 payloadUrl :: ChainwebHost -> ChainId -> Hash -> Text
 payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash
 
+pollUrl :: ChainwebHost -> ChainId -> Text
+pollUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/poll"
+
 getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
       HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
@@ -78,6 +82,29 @@ getServerInfo h = do
   pb <- getPostBuild
   esi <- getInfo (h <$ pb)
   holdDyn Nothing esi
+
+fromRequestKey
+    :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m), PostBuild t m)
+    => ChainwebHost
+    -> ChainId
+    -> Dynamic t Text
+    -> m (Event t (Maybe Value))
+fromRequestKey host chainId dReqKey = do
+    pb <- getPostBuild
+    let taggedReqKey = tag (current dReqKey) pb
+    resp <- performRequestsAsync $ fmap makeXhrRequest taggedReqKey
+    return $ decodeXhrResponse . snd <$> resp
+  where
+    makeXhrRequest requestKey = (host, XhrRequest "POST" url (cfg requestKey))
+    url = pollUrl host chainId
+    cfg requestKey = def {
+      _xhrRequestConfig_headers =
+        headerEncoding HeaderJson
+        <> "content-type" =: "application/json"
+        <> "charset" =: "utf-8"
+      , _xhrRequestConfig_sendData = body }
+        where
+          body = BL.toStrict $ encode $ object [ "requestKeys" .= [requestKey] ]
 
 getInfo
   :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))

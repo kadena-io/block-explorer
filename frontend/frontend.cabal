@@ -52,6 +52,7 @@ library
     Frontend.Nav
     Frontend.Page.Block
     Frontend.Page.Transaction
+    Frontend.Page.ReqKey
     Frontend.Storage
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign

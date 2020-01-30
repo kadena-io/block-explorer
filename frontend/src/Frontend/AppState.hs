@@ -133,7 +133,7 @@ addModuleCount :: BlockHeaderTx -> GlobalStats -> GlobalStats
 addModuleCount bhtx gs = gs { _gs_moduleCount = _gs_moduleCount gs + moduleCount }
   where
     moduleCount = 0
-    txs = _blockHeaderTx_payload bhtx
+    _txs = _blockHeaderTx_payload bhtx
 
 setStartTime :: UTCTime -> GlobalStats -> GlobalStats
 setStartTime t gs = gs { _gs_startTime = t }

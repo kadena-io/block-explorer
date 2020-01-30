@@ -14,10 +14,9 @@ module Frontend.Page.Transaction where
 ------------------------------------------------------------------------------
 import Control.Monad
 import Data.Maybe
-import qualified Data.Text as T
-import Language.Javascript.JSaddle (MonadJSM)
+-- import qualified Data.Text as T
+-- import Language.Javascript.JSaddle (MonadJSM)
 import Reflex.Dom.Core hiding (Value)
-import Text.Printf
 ------------------------------------------------------------------------------
 import Chainweb.Api.BlockPayload
 import Chainweb.Api.ChainId
@@ -34,13 +33,14 @@ import Frontend.App
 import Frontend.Common
 ------------------------------------------------------------------------------
 
-transactionPage
-  :: (MonadApp r t m, MonadJSM (Performable m))
+-- transactionPage :: (MonadApp r t m, MonadJSM (Performable m))
+transactionPage ::
+  MonadApp r t m
   => ChainwebHost
   -> ChainId
   -> BlockPayload
   -> m ()
-transactionPage h c bp = do
+transactionPage _h _c bp = do
   let txs = _blockPayload_transactions bp
   el "h2" $ text $ (tshow $ length txs) <> " Transactions"
   divClass "ui accordion" $ do
