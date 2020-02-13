@@ -33,14 +33,11 @@ import Frontend.App
 import Frontend.Common
 ------------------------------------------------------------------------------
 
--- transactionPage :: (MonadApp r t m, MonadJSM (Performable m))
-transactionPage ::
-  MonadApp r t m
-  => ChainwebHost
-  -> ChainId
-  -> BlockPayload
+transactionPage
+  :: MonadApp r t m
+  => BlockPayload
   -> m ()
-transactionPage _h _c bp = do
+transactionPage bp = do
   let txs = _blockPayload_transactions bp
   el "h2" $ text $ (tshow $ length txs) <> " Transactions"
   divClass "ui accordion" $ do
