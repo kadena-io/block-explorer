@@ -105,7 +105,7 @@ blockPageNoPayload netId h c bh = do
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> subRoute_ $ \case
           Block_Header -> blockHeaderPage netId h c bh payload
-          Block_Transactions -> transactionPage h c payload
+          Block_Transactions -> transactionPage payload
   pEvt <- getBlockPayload h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
