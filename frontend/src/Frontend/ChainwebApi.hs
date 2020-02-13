@@ -33,6 +33,7 @@ import           Blake2Native
 import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockHeaderTx
 import           Chainweb.Api.BlockPayload
+import           Chainweb.Api.BlockPayloadWithOutputs
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
@@ -72,6 +73,9 @@ payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hash
 
 pollUrl :: ChainwebHost -> ChainId -> Text
 pollUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/poll"
+
+payloadWithOutputsUrl :: ChainwebHost -> ChainId -> Hash -> Text
+payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash <> "/outputs"
 
 getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
@@ -164,8 +168,8 @@ getBlockHeaderByHeight h c blockHeight = do
   pb <- getPostBuild
   emcut <- getCut (h <$ pb)
   let cutHash = fmap _tipHash . HM.lookup c . _cutChains <$> fmapMaybe id emcut
-  let mkReqs ch = [ mkAncestorHeaderRequest HeaderJson h c ch blockHeight 1
-                  , mkAncestorHeaderRequest HeaderBinary h c ch blockHeight 1
+  let mkReqs ch = [ mkAncestorHeaderRequest HeaderJson h c ch blockHeight blockHeight
+                  , mkAncestorHeaderRequest HeaderBinary h c ch blockHeight blockHeight
                   -- NOTE: Order of this list must match the order of the argument to decodeResults
                   ]
   resp <- performRequestsAsync $ mkReqs <$> fmapMaybe id cutHash
@@ -198,6 +202,20 @@ getBlockPayload h c payloadHash = do
     return (decodeXhr <$> resp)
   where
     req = XhrRequest "GET" (payloadUrl h c payloadHash)
+            (def { _xhrRequestConfig_headers = "accept" =: "application/json" })
+
+getBlockPayloadWithOutputs
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  => ChainwebHost
+  -> ChainId
+  -> Hash
+  -> m (Event t (Either String BlockPayloadWithOutputs))
+getBlockPayloadWithOutputs h c payloadHash = do
+    pb <- getPostBuild
+    resp <- performRequestAsync $ req <$ pb
+    return (decodeXhr <$> resp)
+  where
+    req = XhrRequest "GET" (payloadWithOutputsUrl h c payloadHash)
             (def { _xhrRequestConfig_headers = "accept" =: "application/json" })
 
 decodeXhr :: FromJSON a => XhrResponse -> Either String a
@@ -235,16 +253,16 @@ mkAncestorHeaderRequest
   -> ChainId
   -> Text
   -> BlockHeight
-  -> Int
+  -> BlockHeight
   -> XhrRequest ByteString
-mkAncestorHeaderRequest he h c cutHash minHeight limit = XhrRequest "POST" url cfg
+mkAncestorHeaderRequest he h c cutHash minHeight maxHeight = XhrRequest "POST" url cfg
   where
     cfg = def { _xhrRequestConfig_headers = headerEncoding he <>
                                             "content-type" =: "application/json"
               , _xhrRequestConfig_sendData = body }
     body = BL.toStrict $ encode $ object [ "upper" .= [cutHash], "lower" .= ([] :: [Text]) ]
     url = chainBaseUrl h c <> "/header/branch?minheight=" <> tshow minHeight <>
-          "&limit=" <> tshow limit
+          "&maxheight=" <> tshow maxHeight
 
 
 mkSingleHeaderRequest :: HeaderEncoding -> ChainwebHost -> ChainId -> Text -> XhrRequest ()

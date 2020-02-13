@@ -28,6 +28,7 @@ import           Reflex.Network
 import           Chainweb.Api.Base64Url
 import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockPayload
+import           Chainweb.Api.BlockPayloadWithOutputs
 import           Chainweb.Api.BytesLE
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.Common
@@ -40,6 +41,7 @@ import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
+import           Frontend.Page.Common
 import           Frontend.Page.Transaction
 ------------------------------------------------------------------------------
 
@@ -106,7 +108,7 @@ blockPageNoPayload netId h c bh = do
         Right payload -> subRoute_ $ \case
           Block_Header -> blockHeaderPage netId h c bh payload
           Block_Transactions -> transactionPage payload
-  pEvt <- getBlockPayload h c (_blockHeader_payloadHash $ fst bh)
+  pEvt <- getBlockPayloadWithOutputs h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
 
@@ -117,7 +119,7 @@ blockHeaderPage
   -> ChainwebHost
   -> ChainId
   -> (BlockHeader, Text)
-  -> BlockPayload
+  -> BlockPayloadWithOutputs
   -> m ()
 blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
     el "h2" $ text "Block Header"
@@ -137,7 +139,7 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
         tfield "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
         tfield "Nonce" $ text $ T.pack $ showHex (_blockHeader_nonce bh) ""
         return ()
-    blockPayloadWidget netId c bh bp
+    blockPayloadWithOutputsWidget netId c bh bp
   where
     prevHeight = _blockHeader_height bh - 1
     parent p = blockLink netId (_blockHeader_chainId bh) prevHeight (hashHex p)
@@ -170,3 +172,45 @@ blockPayloadWidget netId c bh bp = do
         let hash = hashB64U rawHash
         tfield "Transactions" $
           routeLink (addNetRoute netId (unChainId c) $ Chain_BlockHash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+
+blockPayloadWithOutputsWidget
+  :: (MonadApp r t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+  => NetId
+  -> ChainId
+  -> BlockHeader
+  -> BlockPayloadWithOutputs
+  -> m ()
+blockPayloadWithOutputsWidget netId c bh bp = do
+    el "h2" $ text "Block Payload"
+    elAttr "table" ("class" =: "ui definition table") $ do
+      el "tbody" $ do
+        tfield "Miner" $ do
+          el "div" $ text $ "Account: " <> _minerData_account (_blockPayloadWithOutputs_minerData bp)
+          el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayloadWithOutputs_minerData bp)
+          el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayloadWithOutputs_minerData bp)
+        tfield "Transactions Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_transactionsHash bp
+        tfield "Outputs Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_outputsHash bp
+        tfield "Payload Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_payloadHash bp
+        let coinbase = fromCoinbase $ _blockPayloadWithOutputs_coinbase bp
+        tfield "Coinbase Output" $ do
+          elClass "table" "ui definition table" $ el "tbody" $ do
+          tfield "Gas" $ text $ tshow $ _toutGas coinbase
+          tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult coinbase
+          tfield "Request Key" $ text $ hashB64U $ _toutReqKey coinbase
+          tfield "Logs" $ text $ (maybe "" hashB64U $ _toutLogs coinbase)
+          tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData coinbase
+          maybe (pure ()) (tfield "Continuation" . text . tshow) $ _toutContinuation coinbase
+          tfield "Transaction ID" $ maybe blank (text . tshow) $ _toutTxId coinbase
+        let rawHash = _blockHeader_hash bh
+        let hash = hashB64U rawHash
+        let numberOfTransactions =
+              case length $ _blockPayloadWithOutputs_transactionsWithOutputs bp of
+                n | n <= 0 -> "No transactions"
+                  | n == 1 -> "1 Transaction"
+                  | otherwise -> tshow n <> " Transactions"
+        tfield numberOfTransactions $
+          routeLink (addNetRoute netId (unChainId c) $ BlockIndex_Hash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+  where
+    fromCoinbase (Coinbase cb) = cb
+    fromPactResult (PactResult pr) = pr

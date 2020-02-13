@@ -51,6 +51,7 @@ library
     Frontend.ChainwebApi
     Frontend.Nav
     Frontend.Page.Block
+    Frontend.Page.Common
     Frontend.Page.Transaction
     Frontend.Page.ReqKey
     Frontend.Storage
