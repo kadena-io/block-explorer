@@ -210,7 +210,7 @@ blockPayloadWithOutputsWidget netId c bh bp = do
                   | n == 1 -> "1 Transaction"
                   | otherwise -> tshow n <> " Transactions"
         tfield numberOfTransactions $
-          routeLink (addNetRoute netId (unChainId c) $ BlockIndex_Hash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+          routeLink (addNetRoute netId (unChainId c) $ Chain_BlockHash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
   where
     fromCoinbase (Coinbase cb) = cb
     fromPactResult (PactResult pr) = pr
