@@ -104,7 +104,9 @@ networkDispatch route netId = prerender_ blank $ do
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      Prerender js t m
+     )
   => ServerInfo
   -> NetId
   -> App (Int :. R ChainRoute) t m ()
