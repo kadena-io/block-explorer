@@ -20,8 +20,8 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Lazy as BL
 import           Data.Either
-import           Data.List
 import qualified Data.HashMap.Strict as HM
+import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Text (Text)
@@ -101,11 +101,12 @@ fromRequestKey host chainId dReqKey = do
   where
     makeXhrRequest requestKey = (host, XhrRequest "POST" url (cfg requestKey))
     url = pollUrl host chainId
-    cfg requestKey = def {
-      _xhrRequestConfig_headers =
-        headerEncoding HeaderJson
-        <> "content-type" =: "application/json"
-        <> "charset" =: "utf-8"
+
+    cfg :: Text -> XhrRequestConfig ByteString
+    cfg requestKey = def
+      { _xhrRequestConfig_headers =
+        "content-type" =: "application/json"
+        <> "accept" =: "application/json"
       , _xhrRequestConfig_sendData = body }
         where
           body = BL.toStrict $ encode $ object [ "requestKeys" .= [requestKey] ]
