@@ -1,13 +1,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Frontend.Page.ReqKey where
 
 ------------------------------------------------------------------------------
 import Control.Monad.Reader
+import Data.Aeson
 import Data.Text (Text)
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T (pack)
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
@@ -41,11 +44,20 @@ requestKeyWidget si _netId cid = do
 
     reqKey <- askRoute
 
+    --cmdResult :: Event t (Maybe Value) <- fromRequestKey chainwebHost c reqKey
     cmdResult <- fromRequestKey chainwebHost c reqKey
-    void $ networkHold  (inlineLoader "Retrieving command result...") $ ffor cmdResult $ \case
-      Nothing -> dynText (reqKeyMessage <$> reqKey)
-      Just _ -> text "maybe you don't suck"
+    void $ networkHold (inlineLoader "Retrieving command result...") $ ffor cmdResult $ \case
+      Nothing -> dynText (nothingMessage <$> reqKey)
+      Just v -> case v of
+        Object o -> if HM.null o
+                      then dynText (reqKeyMessage <$> reqKey)
+                      else text $ tshow o
+        _ -> dynText (aesonMessage <$> reqKey)
 
   where
+    nothingMessage =
+      T.pack . printf "Unknown error returned while polling for request key " . show
+    aesonMessage =
+      T.pack . printf "Unexpected result returned while polling for request key " . show
     reqKeyMessage =
       T.pack . printf "Your request key %s is not associated with an already processed transaction." . show

@@ -96,10 +96,10 @@ fromRequestKey
 fromRequestKey host chainId dReqKey = do
     pb <- getPostBuild
     let taggedReqKey = tag (current dReqKey) pb
-    resp <- performRequestsAsync $ fmap makeXhrRequest taggedReqKey
-    return $ decodeXhrResponse . snd <$> resp
+    resp <- performRequestAsync $ fmap makeXhrRequest taggedReqKey
+    return $ decodeXhrResponse <$> resp
   where
-    makeXhrRequest requestKey = (host, XhrRequest "POST" url (cfg requestKey))
+    makeXhrRequest requestKey = XhrRequest "POST" url (cfg requestKey)
     url = pollUrl host chainId
 
     cfg :: Text -> XhrRequestConfig ByteString
