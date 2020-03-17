@@ -7,7 +7,7 @@
 , kpkgs ? import ./deps/kpkgs { inherit system; }
 }:
 let
-  obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; inherit (kpkgs) reflex-platform-func;};
+  obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; };
   pkgs = obelisk.reflex-platform.nixpkgs;
   haskellLib = pkgs.haskell.lib;
 in with obelisk;
@@ -20,14 +20,14 @@ project ./. ({ pkgs, hackGet, ... }: {
     let inherit (pkgs) lib;
     in {
       bytes = dontCheck super.bytes;
-      formattable = doJailbreak (dontCheck (callHackageDirect {
+      formattable = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "formattable";
         ver = "0.1.1";
         sha256 = "12ivb374zymkqzq3w9a9vhxbri5bpymi1di6kk45hp2f6b8lafpz";
       }));
       lens-aeson = dontCheck super.lens-aeson;
       pact = haskellLib.dontCheck super.pact;
-      perfect-vector-shuffle = doJailbreak (dontCheck (callHackageDirect {
+      perfect-vector-shuffle = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "perfect-vector-shuffle";
         ver = "0.1.1";
         sha256 = "0ddr9ksqkl9ncvih54yzr3p6rs08r5wk0yf7aj3ijlk30dg7sdwf";
