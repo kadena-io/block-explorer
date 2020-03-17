@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
@@ -13,10 +14,10 @@ import Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T (pack)
 import Data.Word
+import GHC.Generics (Generic)
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
 import Obelisk.Route.Frontend
-import Pact.Types.Command (PactResult(..))
 import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
 import Text.Printf (printf)
@@ -37,7 +38,7 @@ import Frontend.Common
 data PollResult = PollResult
   { _cr_reqKey :: Text
   , _cr_txId :: Word64
-  , _cr_result :: !PactResult
+  , _cr_result :: Value
   , _cr_gas :: Int
   , _cr_logs :: Text
   , _cr_continuation :: Value
@@ -46,20 +47,13 @@ data PollResult = PollResult
 
 instance FromJSON PollResult where
   parseJSON = withObject "PollResult" $ \o -> PollResult
-    <$> fmap (/1000000.0) (o .: "creationTime")
-    <*> o .: "parent"
-    <*> o .: "height"
-    <*> o .: "hash"
-    <*> o .: "chainId"
-    <*> o .: "weight"
-    <*> fmap (/1000000.0) (o .: "epochStart")
-    <*> o .: "adjacents"
-    <*> (o .: "payloadHash")
-    <*> o .: "chainwebVersion"
-    <*> o .: "target"
-    <*> o .: "featureFlags"
-    <*> (fromText =<< (o .: "nonce"))
-
+    <$> o .: "reqKey"
+    <*> o .: "txId"
+    <*> o .: "result"
+    <*> o .: "gas"
+    <*> o .: "logs"
+    <*> o .: "continuation"
+    <*> o .:? "metaData"
 
 requestKeyWidget
     :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
@@ -76,21 +70,26 @@ requestKeyWidget si _netId cid = do
 
     reqKey <- askRoute
 
-    --cmdResult :: Event t (Maybe Value) <- fromRequestKey chainwebHost c reqKey
-    cmdResult <- fromRequestKey chainwebHost c reqKey
+    cmdResult :: Event t (Maybe Value) <- fromRequestKey chainwebHost c reqKey
     void $ networkHold (inlineLoader "Retrieving command result...") $ ffor cmdResult $ \case
       Nothing -> dynText (nothingMessage <$> reqKey)
-      Just v -> case fromJSON v of
-        Success pr -> requestKeyResultPage pr
+      Just v -> case v of
+        Object o ->
+          if HM.null o
+          then dynText (reqKeyMessage <$> reqKey)
+          else text $ tshow o
         _ -> dynText (aesonMessage <$> reqKey)
-      _ -> dynText (reqKeyMessage <$> reqKey)
+     -- case fromJSON v of
+     --   Success pr -> requestKeyResultPage pr
+     --   _ -> dynText (reqKeyMessage <$> reqKey)
 
   where
-    err s = T.pack . printf s . show
-    aesonMessage =
-      err "Unexpected result returned while polling for request key "
-    reqKeyMessage =
-      err "Your request key %s is not associated with an already processed transaction."
+    nothingMessage s =
+      T.pack $ printf "Unknown error returned while polling for request key " <> (show s)
+    aesonMessage s =
+      T.pack $ "Unexpected result returned while polling for request key " <> show s
+    reqKeyMessage s =
+      T.pack $ printf "Your request key %s is not associated with an already processed transaction." (show s)
 
 requestKeyResultPage
     :: ( MonadApp r t m
@@ -111,4 +110,5 @@ requestKeyResultPage (PollResult rk txid pr g logs pcont meta) = do
         tfield "Result" $ text $ tshow pr
         tfield "Gas" $ text $ tshow g
         tfield "Logs" $ text $ tshow logs
-        tfield "Metadat" $ text $ tshow meta
+        tfield "Continuation" $ text $ tshow pcont
+        tfield "Metadata" $ text $ tshow meta
