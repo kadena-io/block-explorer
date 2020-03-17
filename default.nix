@@ -24,14 +24,14 @@ project ./. ({ pkgs, hackGet, ... }: {
         pkg = "formattable";
         ver = "0.1.1";
         sha256 = "12ivb374zymkqzq3w9a9vhxbri5bpymi1di6kk45hp2f6b8lafpz";
-      }));
+      } {}));
       lens-aeson = dontCheck super.lens-aeson;
       pact = haskellLib.dontCheck super.pact;
       perfect-vector-shuffle = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "perfect-vector-shuffle";
         ver = "0.1.1";
         sha256 = "0ddr9ksqkl9ncvih54yzr3p6rs08r5wk0yf7aj3ijlk30dg7sdwf";
-      }));
+      } {}));
       jsaddle-dom = overrideCabal super.jsaddle-dom (drv: {
         preConfigure = (drv.preConfigure or "") + ''
           sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
