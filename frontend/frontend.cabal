@@ -29,6 +29,7 @@ library
     , obelisk-frontend
     , obelisk-generated-static
     , obelisk-route
+    , pact
     , perfect-vector-shuffle
     , readable
     , ref-tf

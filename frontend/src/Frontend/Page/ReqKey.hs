@@ -12,9 +12,11 @@ import Data.Aeson
 import Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T (pack)
+import Data.Word
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
 import Obelisk.Route.Frontend
+import Pact.Types.Command (PactResult(..))
 import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
 import Text.Printf (printf)
@@ -28,6 +30,36 @@ import Frontend.AppState
 import Frontend.ChainwebApi
 import Frontend.Common
 ------------------------------------------------------------------------------
+
+-- | Intermediate form for the results of /poll endpoint
+-- queries
+--
+data PollResult = PollResult
+  { _cr_reqKey :: Text
+  , _cr_txId :: Word64
+  , _cr_result :: !PactResult
+  , _cr_gas :: Int
+  , _cr_logs :: Text
+  , _cr_continuation :: Value
+  , _cr_metaData :: Maybe Value
+  } deriving (Eq,Show,Generic)
+
+instance FromJSON PollResult where
+  parseJSON = withObject "PollResult" $ \o -> PollResult
+    <$> fmap (/1000000.0) (o .: "creationTime")
+    <*> o .: "parent"
+    <*> o .: "height"
+    <*> o .: "hash"
+    <*> o .: "chainId"
+    <*> o .: "weight"
+    <*> fmap (/1000000.0) (o .: "epochStart")
+    <*> o .: "adjacents"
+    <*> (o .: "payloadHash")
+    <*> o .: "chainwebVersion"
+    <*> o .: "target"
+    <*> o .: "featureFlags"
+    <*> (fromText =<< (o .: "nonce"))
+
 
 requestKeyWidget
     :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
@@ -48,16 +80,35 @@ requestKeyWidget si _netId cid = do
     cmdResult <- fromRequestKey chainwebHost c reqKey
     void $ networkHold (inlineLoader "Retrieving command result...") $ ffor cmdResult $ \case
       Nothing -> dynText (nothingMessage <$> reqKey)
-      Just v -> case v of
-        Object o -> if HM.null o
-                      then dynText (reqKeyMessage <$> reqKey)
-                      else text $ tshow o
+      Just v -> case fromJSON v of
+        Success pr -> requestKeyResultPage pr
         _ -> dynText (aesonMessage <$> reqKey)
+      _ -> dynText (reqKeyMessage <$> reqKey)
 
   where
-    nothingMessage =
-      T.pack . printf "Unknown error returned while polling for request key " . show
+    err s = T.pack . printf s . show
     aesonMessage =
-      T.pack . printf "Unexpected result returned while polling for request key " . show
+      err "Unexpected result returned while polling for request key "
     reqKeyMessage =
-      T.pack . printf "Your request key %s is not associated with an already processed transaction." . show
+      err "Your request key %s is not associated with an already processed transaction."
+
+requestKeyResultPage
+    :: ( MonadApp r t m
+       , MonadJSM (Performable m)
+       , HasJSContext (Performable m)
+       , RouteToUrl (R FrontendRoute) m
+       , SetRoute t (R FrontendRoute) m
+       , Monad (Client m)
+       )
+    => PollResult
+    -> App Text t m ()
+requestKeyResultPage (PollResult rk txid pr g logs pcont meta) = do
+    el "h2" $ text "Transaction"
+    elAttr "table" ("class" =: "ui definition table") $ do
+      el "tbody" $ do
+        tfield "Request Key" $ text $ tshow rk
+        tfield "Transaction Id" $ text $ tshow txid
+        tfield "Result" $ text $ tshow pr
+        tfield "Gas" $ text $ tshow g
+        tfield "Logs" $ text $ tshow logs
+        tfield "Metadat" $ text $ tshow meta

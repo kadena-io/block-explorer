@@ -41,6 +41,7 @@ project ./. ({ pkgs, hackGet, ... }: {
           sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
         '';
       });
+
   };
 
   packages = {
