@@ -15,6 +15,7 @@ import           Obelisk.Route
 import           Snap.Core
 ------------------------------------------------------------------------------
 import           Common.Route
+import           Frontend                  (frontend)
 ------------------------------------------------------------------------------
 
 backend :: Backend BackendRoute FrontendRoute

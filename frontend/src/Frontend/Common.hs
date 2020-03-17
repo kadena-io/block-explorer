@@ -15,7 +15,7 @@ import           Control.Monad.Fix
 import           Data.Maybe
 import           Data.Text (Text)
 import qualified GHCJS.DOM as DOM
-import qualified "ghcjs-dom" GHCJS.DOM.Document as Document
+import qualified GHCJS.DOM.Document as Document
 import qualified GHCJS.DOM.HTMLElement as HTMLElement
 import qualified GHCJS.DOM.HTMLTextAreaElement as TextArea
 import qualified GHCJS.DOM.Node as Node
