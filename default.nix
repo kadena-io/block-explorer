@@ -1,28 +1,23 @@
 # NOTE: If obelisk is bumped, we may need to remove the below jsaddle-dom
 # patch.
 
-{ obelisk ? import ./.obelisk/impl {
-    system = builtins.currentSystem;
-    iosSdkVersion = "10.2";
-    # You must accept the Android Software Development Kit License Agreement at
-    # https://developer.android.com/studio/terms in order to build Android apps.
-    # Uncomment and set this to `true` to indicate your acceptance:
-    # config.android_sdk.accept_license = false;
-  }
+{ system ? builtins.currentSystem # TODO: Get rid of this system cruft
+, iosSdkVersion ? "10.2"
+, withHoogle ? false
+, kpkgs ? import ./dep/kpkgs { inherit system; }
 }:
-with obelisk;
+let
+  obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; inherit (kpkgs) reflex-platform-func;};
+  pkgs = obelisk.reflex-platform.nixpkgs;
+  haskellLib = pkgs.haskell.lib;
+in with obelisk;
 project ./. ({ pkgs, hackGet, ... }: {
   android.applicationId = "systems.obsidian.obelisk.examples.minimal";
   android.displayName = "Obelisk Minimal Example";
   ios.bundleIdentifier = "systems.obsidian.obelisk.examples.minimal";
   ios.bundleName = "Obelisk Minimal Example";
   overrides = self: super: with pkgs.haskell.lib;
-    let callHackageDirect = {pkg, ver, sha256}@args:
-          let pkgver = "${pkg}-${ver}";
-          in self.callCabal2nix pkg (pkgs.fetchzip {
-               url = "http://hackage.haskell.org/package/${pkgver}/${pkgver}.tar.gz";
-               inherit sha256;
-             }) {};
+    let inherit (pkgs) lib;
     in {
       bytes = dontCheck super.bytes;
       formattable = doJailbreak (dontCheck (callHackageDirect {
@@ -31,6 +26,7 @@ project ./. ({ pkgs, hackGet, ... }: {
         sha256 = "12ivb374zymkqzq3w9a9vhxbri5bpymi1di6kk45hp2f6b8lafpz";
       }));
       lens-aeson = dontCheck super.lens-aeson;
+      pact = haskellLib.dontCheck super.pact;
       perfect-vector-shuffle = doJailbreak (dontCheck (callHackageDirect {
         pkg = "perfect-vector-shuffle";
         ver = "0.1.1";
