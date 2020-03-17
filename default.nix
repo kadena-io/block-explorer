@@ -7,7 +7,7 @@
 , kpkgs ? import ./deps/kpkgs { inherit system; }
 }:
 let
-  obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; };
+  obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; inherit (kpkgs) reflex-platform-func; };
   pkgs = obelisk.reflex-platform.nixpkgs;
   haskellLib = pkgs.haskell.lib;
 in with obelisk;
@@ -37,7 +37,7 @@ project ./. ({ pkgs, hackGet, ... }: {
           sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
         '';
       });
-
+      reflex-dom-core = dontCheck super.reflex-dom-core; #webdriver fails to build
   };
 
   packages = {
