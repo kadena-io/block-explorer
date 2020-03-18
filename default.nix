@@ -40,7 +40,5 @@ project ./. ({ pkgs, hackGet, ... }: {
       reflex-dom-core = dontCheck super.reflex-dom-core; #webdriver fails to build
   };
 
-  packages = {
-    chainweb-api = hackGet ./deps/chainweb-api;
-  };
+  packages = {};
 })
