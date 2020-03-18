@@ -18,6 +18,7 @@ import GHC.Generics (Generic)
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
 import Obelisk.Route.Frontend
+import Pact.Types.API
 import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
 import Text.Printf (printf)
