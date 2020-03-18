@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-module Backend (backend, frontend) where
+module Backend where
 
 ------------------------------------------------------------------------------
 import           Control.Monad.Trans
