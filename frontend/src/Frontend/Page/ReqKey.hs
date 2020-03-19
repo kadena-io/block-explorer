@@ -8,53 +8,68 @@
 module Frontend.Page.ReqKey where
 
 ------------------------------------------------------------------------------
+
+import Control.Monad (join)
 import Control.Monad.Reader
-import Data.Aeson
+
+import Data.Aeson as A
+import Data.Time.Clock.POSIX
 import Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T (pack)
 import Data.Word
+
 import GHC.Generics (Generic)
+
 import GHCJS.DOM.Types (MonadJSM)
+
 import Obelisk.Route
 import Obelisk.Route.Frontend
+
 import Pact.Types.API
+import qualified Pact.Types.Hash as Pact
+import Pact.Types.ChainMeta
+import Pact.Types.Command
+import Pact.Types.PactError
+import Pact.Types.Info
+
 import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
+
 import Text.Printf (printf)
+
 ------------------------------------------------------------------------------
 import Chainweb.Api.ChainId
+import Chainweb.Api.Common
+import Chainweb.Api.Hash
+
 import Common.Route
 import Common.Types
 import Common.Utils
+
 import Frontend.App
 import Frontend.AppState
 import Frontend.ChainwebApi
 import Frontend.Common
+import Frontend.Page.Common
 ------------------------------------------------------------------------------
 
--- | Intermediate form for the results of /poll endpoint
--- queries
+-- | The shape of enriched polling metadata from chainweb
 --
-data PollResult = PollResult
-  { _cr_reqKey :: Text
-  , _cr_txId :: Word64
-  , _cr_result :: Value
-  , _cr_gas :: Int
-  , _cr_logs :: Text
-  , _cr_continuation :: Value
-  , _cr_metaData :: Maybe Value
-  } deriving (Eq,Show,Generic)
+data PollMetaData = PollMetaData
+  { _pmd_BlockHeight :: BlockHeight
+  , _pmd_CreationTime :: POSIXTime
+  , _pmd_BlockHash :: Hash
+  , _pmd_PrevBlockHash :: Hash
+  } deriving (Eq, Show, Generic)
 
-instance FromJSON PollResult where
-  parseJSON = withObject "PollResult" $ \o -> PollResult
-    <$> o .: "reqKey"
-    <*> o .: "txId"
-    <*> o .: "result"
-    <*> o .: "gas"
-    <*> o .: "logs"
-    <*> o .: "continuation"
-    <*> o .:? "metaData"
+instance FromJSON PollMetaData where
+  parseJSON = withObject "PollMetaData" $ \o -> PollMetaData
+    <$> o .: "blockHeight"
+    <*> o .: "blockTime"
+    <*> o .: "blockHash"
+    <*> o .: "prevBlockHash"
+
 
 requestKeyWidget
     :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
@@ -71,45 +86,45 @@ requestKeyWidget si _netId cid = do
 
     reqKey <- askRoute
 
-    cmdResult :: Event t (Maybe Value) <- fromRequestKey chainwebHost c reqKey
+    cmdResult <- fromRequestKey chainwebHost c reqKey
     void $ networkHold (inlineLoader "Retrieving command result...") $ ffor cmdResult $ \case
       Nothing -> dynText (nothingMessage <$> reqKey)
-      Just v -> case v of
-        Object o ->
-          if HM.null o
-          then dynText (reqKeyMessage <$> reqKey)
-          else text $ tshow o
-        _ -> dynText (aesonMessage <$> reqKey)
-     -- case fromJSON v of
-     --   Success pr -> requestKeyResultPage pr
-     --   _ -> dynText (reqKeyMessage <$> reqKey)
-
+      Just v@Object{} -> case fromJSON v of
+        Success (PollResponses m)
+          | HM.null m -> dynText (reqKeyMessage <$> reqKey)
+          | otherwise -> void $ traverse requestKeyResultPage m
+        A.Error e -> text (aesonMessage e)
+      _ -> text $ nothingMessage "Poll fetch failed with wrong type"
   where
     nothingMessage s =
-      T.pack $ printf "Unknown error returned while polling for request key " <> (show s)
+      T.pack $ "Unknown error returned while polling for request key: " <> (show s)
     aesonMessage s =
-      T.pack $ "Unexpected result returned while polling for request key " <> show s
+      T.pack $ "Unexpected result returned while polling for request key: " <> show s
     reqKeyMessage s =
       T.pack $ printf "Your request key %s is not associated with an already processed transaction." (show s)
 
+
 requestKeyResultPage
-    :: ( MonadApp r t m
-       , MonadJSM (Performable m)
-       , HasJSContext (Performable m)
-       , RouteToUrl (R FrontendRoute) m
-       , SetRoute t (R FrontendRoute) m
-       , Monad (Client m)
-       )
-    => PollResult
-    -> App Text t m ()
-requestKeyResultPage (PollResult rk txid pr g logs pcont meta) = do
+    :: MonadApp r t m
+    => CommandResult Pact.Hash
+    -> m ()
+requestKeyResultPage (CommandResult rk txid pr g logs pcont meta) = do
     el "h2" $ text "Transaction"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Request Key" $ text $ tshow rk
-        tfield "Transaction Id" $ text $ tshow txid
+        tfield "Request Key" $ text $ requestKeyToB16Text rk
+        tfield "Transaction Id" $ text $ maybe "" tshow txid
         tfield "Result" $ text $ tshow pr
         tfield "Gas" $ text $ tshow g
-        tfield "Logs" $ text $ tshow logs
-        tfield "Continuation" $ text $ tshow pcont
-        tfield "Metadata" $ text $ tshow meta
+        tfield "Logs" $ text $ maybe "" Pact.hashToText logs
+        tfield "Continuation" $ text $ maybe "" tshow pcont
+        tfield "Metadata" $ renderMeta meta
+  where
+    renderMeta Nothing = text ""
+    renderMeta (Just v) = case fromJSON v of
+      Success (PollMetaData bh bt bhash phash) -> el "div" $ do
+        tfield "Block Height" $ text $ tshow bh
+        tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
+        tfield "Block Hash" $ text $ hashB64U bhash
+        tfield "Parent Hash" $ text $ hashB64U phash
+      A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
