@@ -124,7 +124,7 @@ requestKeyResultPage
     -> CommandResult Pact.Hash
     -> m ()
 requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
-    el "h2" $ text "Transaction"
+    el "h2" $ text "Transaction Results"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
         tfield "Request Key" $ text $ requestKeyToB16Text rk
