@@ -24,6 +24,7 @@ import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
+import           Text.Printf (printf)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.Base64Url
 import           Chainweb.Api.BlockHeader
@@ -160,6 +161,7 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
         tfield "Neighbors" $ neighbors $ _blockHeader_neighbors bh
         tfield "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash bh
         tfield "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
+        tfield "Feature Flags" $ text $ printf "0x%08x" $ _blockHeader_flags bh
         tfield "Nonce" $ text $ T.pack $ showHex (_blockHeader_nonce bh) ""
         return ()
     blockPayloadWithOutputsWidget netId c bh bp
