@@ -13,6 +13,8 @@ import Control.Monad (join)
 import Control.Monad.Reader
 
 import Data.Aeson as A
+import Data.Bifunctor
+import Data.Foldable (traverse_)
 import Data.Time.Clock.POSIX
 import Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
@@ -39,6 +41,7 @@ import Reflex.Network
 import Text.Printf (printf)
 
 ------------------------------------------------------------------------------
+
 import Chainweb.Api.ChainId
 import Chainweb.Api.Common
 import Chainweb.Api.Hash
@@ -66,7 +69,7 @@ data PollMetaData = PollMetaData
 instance FromJSON PollMetaData where
   parseJSON = withObject "PollMetaData" $ \o -> PollMetaData
     <$> o .: "blockHeight"
-    <*> o .: "blockTime"
+    <*> fmap (/ 1000000.0) (o .: "blockTime")
     <*> o .: "blockHash"
     <*> o .: "prevBlockHash"
 
@@ -85,14 +88,13 @@ requestKeyWidget si _netId cid = do
         c = ChainId cid
 
     reqKey <- askRoute
-
     cmdResult <- fromRequestKey chainwebHost c reqKey
     void $ networkHold (inlineLoader "Retrieving command result...") $ ffor cmdResult $ \case
       Nothing -> dynText (nothingMessage <$> reqKey)
       Just v@Object{} -> case fromJSON v of
         Success (PollResponses m)
           | HM.null m -> dynText (reqKeyMessage <$> reqKey)
-          | otherwise -> void $ traverse requestKeyResultPage m
+          | otherwise -> traverse_ requestKeyResultPage m
         A.Error e -> text (aesonMessage e)
       _ -> text $ nothingMessage "Poll fetch failed with wrong type"
   where
@@ -114,7 +116,7 @@ requestKeyResultPage (CommandResult rk txid pr g logs pcont meta) = do
       el "tbody" $ do
         tfield "Request Key" $ text $ requestKeyToB16Text rk
         tfield "Transaction Id" $ text $ maybe "" tshow txid
-        tfield "Result" $ text $ tshow pr
+        tfield "Result" $ renderPactResult pr
         tfield "Gas" $ text $ tshow g
         tfield "Logs" $ text $ maybe "" Pact.hashToText logs
         tfield "Continuation" $ text $ maybe "" tshow pcont
@@ -128,3 +130,6 @@ requestKeyResultPage (CommandResult rk txid pr g logs pcont meta) = do
         tfield "Block Hash" $ text $ hashB64U bhash
         tfield "Parent Hash" $ text $ hashB64U phash
       A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
+
+    renderPactResult (PactResult pr) =
+      text $ join either unwrapJSON (bimap toJSON toJSON pr)
