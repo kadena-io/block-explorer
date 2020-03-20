@@ -52,6 +52,7 @@ import Common.Utils
 
 import Frontend.App
 import Frontend.AppState
+import Frontend.Page.Block (blockLink)
 import Frontend.ChainwebApi
 import Frontend.Common
 import Frontend.Page.Common
@@ -75,13 +76,19 @@ instance FromJSON PollMetaData where
 
 
 requestKeyWidget
-    :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
+    :: ( MonadApp r t m
+       , MonadJSM (Performable m)
+       , HasJSContext (Performable m)
+       , Prerender js t m
+       , RouteToUrl (R FrontendRoute) m
+       , SetRoute t (R FrontendRoute) m
+       , Monad (Client m)
+       )
     => ServerInfo
     -> NetId
     -> Int
     -> App Text t m ()
-requestKeyWidget si _netId cid = do
+requestKeyWidget si netId cid = do
     as <- ask
     let n = _as_network as
         chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
@@ -94,7 +101,7 @@ requestKeyWidget si _netId cid = do
       Just v@Object{} -> case fromJSON v of
         Success (PollResponses m)
           | HM.null m -> dynText (reqKeyMessage <$> reqKey)
-          | otherwise -> traverse_ requestKeyResultPage m
+          | otherwise -> traverse_ (requestKeyResultPage netId c) m
         A.Error e -> text (aesonMessage e)
       _ -> text $ nothingMessage "Poll fetch failed with wrong type"
   where
@@ -107,10 +114,16 @@ requestKeyWidget si _netId cid = do
 
 
 requestKeyResultPage
-    :: MonadApp r t m
-    => CommandResult Pact.Hash
+    :: ( MonadApp r t m
+       , RouteToUrl (R FrontendRoute) m
+       , SetRoute t (R FrontendRoute) m
+       , Prerender js t m
+       )
+    => NetId
+    -> ChainId
+    -> CommandResult Pact.Hash
     -> m ()
-requestKeyResultPage (CommandResult rk txid pr g logs pcont meta) = do
+requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
     el "h2" $ text "Transaction"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
@@ -127,9 +140,11 @@ requestKeyResultPage (CommandResult rk txid pr g logs pcont meta) = do
       Success (PollMetaData bh bt bhash phash) -> el "div" $ do
         tfield "Block Height" $ text $ tshow bh
         tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
-        tfield "Block Hash" $ text $ hashB64U bhash
-        tfield "Parent Hash" $ text $ hashB64U phash
+        tfield "Block Hash" $ link bh bhash
+        tfield "Parent Hash" $ link (bh - 1) phash
       A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
 
     renderPactResult (PactResult pr) =
       text $ join either unwrapJSON (bimap toJSON toJSON pr)
+
+    link bh bhash = blockLink netId cid bh (hashHex bhash)
