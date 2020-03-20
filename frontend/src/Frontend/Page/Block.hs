@@ -182,10 +182,7 @@ blockPayloadWidget netId c bh bp = do
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
         tfield "Outputs Hash" $ text $ hashB64U $ _blockPayload_outputsHash bp
         tfield "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp
-        let rawHash = _blockHeader_hash bh
-        let hash = hashB64U rawHash
-        tfield "Transactions" $
-          routeLink (addNetRoute netId (unChainId c) $ Chain_BlockHash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+        tfield "Transactions" $ transactionsLink netId c $ _blockHeader_hash bh
 
 blockPayloadWithOutputsWidget
   :: (MonadApp r t m,
@@ -218,15 +215,29 @@ blockPayloadWithOutputsWidget netId c bh bp = do
           tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData coinbase
           maybe (pure ()) (tfield "Continuation" . text . tshow) $ _toutContinuation coinbase
           tfield "Transaction ID" $ maybe blank (text . tshow) $ _toutTxId coinbase
-        let rawHash = _blockHeader_hash bh
-        let hash = hashB64U rawHash
+
         let numberOfTransactions =
               case length $ _blockPayloadWithOutputs_transactionsWithOutputs bp of
                 n | n <= 0 -> "No transactions"
                   | n == 1 -> "1 Transaction"
                   | otherwise -> tshow n <> " Transactions"
-        tfield numberOfTransactions $
-          routeLink (addNetRoute netId (unChainId c) $ Chain_BlockHash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+        tfield numberOfTransactions $ transactionsLink netId c $ _blockHeader_hash bh
   where
     fromCoinbase (Coinbase cb) = cb
     fromPactResult (PactResult pr) = pr
+
+transactionsLink
+  :: ( MonadApp r t m
+     , RouteToUrl (R FrontendRoute) m
+     , SetRoute t (R FrontendRoute) m
+     , Prerender js t m
+     )
+  => NetId
+  -> ChainId
+  -> Hash
+  -> m ()
+transactionsLink netId c bhash =
+    routeLink route $ text $ hashHex bhash
+  where
+    route = addNetRoute netId (unChainId c)
+      $ Chain_BlockHash :/ (hashB64U bhash) :. Block_Transactions :/ ()

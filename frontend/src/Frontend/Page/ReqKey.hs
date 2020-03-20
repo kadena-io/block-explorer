@@ -52,7 +52,7 @@ import Common.Utils
 
 import Frontend.App
 import Frontend.AppState
-import Frontend.Page.Block (blockLink)
+import Frontend.Page.Block (transactionsLink)
 import Frontend.ChainwebApi
 import Frontend.Common
 import Frontend.Page.Common
@@ -140,11 +140,9 @@ requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
       Success (PollMetaData bh bt bhash phash) -> el "div" $ do
         tfield "Block Height" $ text $ tshow bh
         tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
-        tfield "Block Hash" $ link bh bhash
-        tfield "Parent Hash" $ link (bh - 1) phash
+        tfield "Block Hash" $ transactionsLink netId cid bhash
+        tfield "Parent Hash" $ transactionsLink netId cid phash
       A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
 
     renderPactResult (PactResult pr) =
       text $ join either unwrapJSON (bimap toJSON toJSON pr)
-
-    link bh bhash = blockLink netId cid bh (hashHex bhash)
