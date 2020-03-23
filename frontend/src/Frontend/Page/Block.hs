@@ -213,7 +213,7 @@ blockPayloadWithOutputsWidget netId c bh bp = do
           tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult coinbase
           tfield "Request Key" $ text $ hashB64U $ _toutReqKey coinbase
           tfield "Logs" $ text $ (maybe "" hashB64U $ _toutLogs coinbase)
-          tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData coinbase
+          tfield "Metadata" $ renderMetaData netId c $ _toutMetaData coinbase
           maybe (pure ()) (tfield "Continuation" . text . tshow) $ _toutContinuation coinbase
           tfield "Transaction ID" $ maybe blank (text . tshow) $ _toutTxId coinbase
 
