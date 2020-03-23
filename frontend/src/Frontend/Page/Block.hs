@@ -44,6 +44,7 @@ import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Page.Common
 import           Frontend.Page.Transaction
+import           Frontend.Page.Types
 ------------------------------------------------------------------------------
 
 
@@ -116,7 +117,7 @@ blockPageNoPayload netId h c bh = do
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> subRoute_ $ \case
           Block_Header -> blockHeaderPage netId h c bh payload
-          Block_Transactions -> transactionPage payload
+          Block_Transactions -> transactionPage netId c payload
   pEvt <- getBlockPayloadWithOutputs h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
@@ -225,19 +226,3 @@ blockPayloadWithOutputsWidget netId c bh bp = do
   where
     fromCoinbase (Coinbase cb) = cb
     fromPactResult (PactResult pr) = pr
-
-transactionsLink
-  :: ( MonadApp r t m
-     , RouteToUrl (R FrontendRoute) m
-     , SetRoute t (R FrontendRoute) m
-     , Prerender js t m
-     )
-  => NetId
-  -> ChainId
-  -> Hash
-  -> m ()
-transactionsLink netId c bhash =
-    routeLink route $ text $ hashHex bhash
-  where
-    route = addNetRoute netId (unChainId c)
-      $ Chain_BlockHash :/ (hashB64U bhash) :. Block_Transactions :/ ()

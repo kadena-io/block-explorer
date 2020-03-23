@@ -1,11 +1,11 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-
-module Frontend.Page.ReqKey where
+module Frontend.Page.ReqKey
+( requestKeyWidget
+) where
 
 ------------------------------------------------------------------------------
 
@@ -15,13 +15,11 @@ import Control.Monad.Reader
 import Data.Aeson as A
 import Data.Bifunctor
 import Data.Foldable (traverse_)
-import Data.Time.Clock.POSIX
 import Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T (pack)
-import Data.Word
 
-import GHC.Generics (Generic)
+
 
 import GHCJS.DOM.Types (MonadJSM)
 
@@ -30,10 +28,7 @@ import Obelisk.Route.Frontend
 
 import Pact.Types.API
 import qualified Pact.Types.Hash as Pact
-import Pact.Types.ChainMeta
 import Pact.Types.Command
-import Pact.Types.PactError
-import Pact.Types.Info
 
 import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
@@ -43,8 +38,6 @@ import Text.Printf (printf)
 ------------------------------------------------------------------------------
 
 import Chainweb.Api.ChainId
-import Chainweb.Api.Common
-import Chainweb.Api.Hash
 
 import Common.Route
 import Common.Types
@@ -52,27 +45,12 @@ import Common.Utils
 
 import Frontend.App
 import Frontend.AppState
-import Frontend.Page.Block (transactionsLink)
+import Frontend.Page.Block
 import Frontend.ChainwebApi
 import Frontend.Common
 import Frontend.Page.Common
+import Frontend.Page.Types
 ------------------------------------------------------------------------------
-
--- | The shape of enriched polling metadata from chainweb
---
-data PollMetaData = PollMetaData
-  { _pmd_BlockHeight :: BlockHeight
-  , _pmd_CreationTime :: POSIXTime
-  , _pmd_BlockHash :: Hash
-  , _pmd_PrevBlockHash :: Hash
-  } deriving (Eq, Show, Generic)
-
-instance FromJSON PollMetaData where
-  parseJSON = withObject "PollMetaData" $ \o -> PollMetaData
-    <$> o .: "blockHeight"
-    <*> fmap (/ 1000000.0) (o .: "blockTime")
-    <*> o .: "blockHash"
-    <*> o .: "prevBlockHash"
 
 
 requestKeyWidget
@@ -106,9 +84,9 @@ requestKeyWidget si netId cid = do
       _ -> text $ nothingMessage "Poll fetch failed with wrong type"
   where
     nothingMessage s =
-      T.pack $ "Unknown error returned while polling for request key: " <> (show s)
+      "Unknown error returned while polling for request key: " <> tshow s
     aesonMessage s =
-      T.pack $ "Unexpected result returned while polling for request key: " <> show s
+      "Unexpected result returned while polling for request key: " <> tshow s
     reqKeyMessage s =
       T.pack $ printf "Your request key %s is not associated with an already processed transaction." (show s)
 
@@ -133,16 +111,7 @@ requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
         tfield "Gas" $ text $ tshow g
         tfield "Logs" $ text $ maybe "" Pact.hashToText logs
         tfield "Continuation" $ text $ maybe "" tshow pcont
-        tfield "Metadata" $ renderMeta meta
+        tfield "Metadata" $ renderMetaData netId cid meta
   where
-    renderMeta Nothing = text ""
-    renderMeta (Just v) = case fromJSON v of
-      Success (PollMetaData bh bt bhash phash) -> el "div" $ do
-        tfield "Block Height" $ text $ tshow bh
-        tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
-        tfield "Block Hash" $ transactionsLink netId cid bhash
-        tfield "Parent Hash" $ transactionsLink netId cid phash
-      A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
-
-    renderPactResult (PactResult pr) =
-      text $ join either unwrapJSON (bimap toJSON toJSON pr)
+    renderPactResult (PactResult r) =
+      text $ join either unwrapJSON (bimap toJSON toJSON r)

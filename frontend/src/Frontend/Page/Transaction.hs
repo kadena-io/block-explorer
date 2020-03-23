@@ -19,6 +19,7 @@ import Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
 -- import Chainweb.Api.BlockPayload
 import Chainweb.Api.BlockPayloadWithOutputs
+import Chainweb.Api.ChainId
 import Chainweb.Api.ChainwebMeta
 import Chainweb.Api.Hash
 import Chainweb.Api.PactCommand
@@ -26,17 +27,30 @@ import Chainweb.Api.Payload
 import Chainweb.Api.Sig
 import Chainweb.Api.Signer
 import Chainweb.Api.Transaction
+import Common.Types
 import Common.Utils
+import Common.Route
 import Frontend.App
 import Frontend.Common
 import Frontend.Page.Common
+import Frontend.Page.Types
+
+import Obelisk.Route
+import Obelisk.Route.Frontend
+
 ------------------------------------------------------------------------------
 
 transactionPage
-  :: (MonadApp r t m)
-  => BlockPayloadWithOutputs
+  :: ( MonadApp r t m
+     , RouteToUrl (R FrontendRoute) m
+     , SetRoute t (R FrontendRoute) m
+     , Prerender js t m
+     )
+  => NetId
+  -> ChainId
+  -> BlockPayloadWithOutputs
   -> m ()
-transactionPage bp = do
+transactionPage netId cid bp = do
     let txs = _blockPayloadWithOutputs_transactionsWithOutputs bp
     el "h2" $ text $ (tshow $ length txs) <> " Transactions"
     divClass "ui accordion" $ do
@@ -90,8 +104,8 @@ transactionPage bp = do
                   tfield "Gas" $ text $ tshow $ _toutGas tout
                   tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult tout
                   tfield "Logs" $ text $ maybe "null " hashB64U $ _toutLogs tout
-                  tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData tout
-                  maybe (pure ()) (tfield "Continutaion" . text . tshow)  $ _toutContinuation tout
+                  tfield "Metadata" $ renderMetaData netId cid $ _toutMetaData tout
+                  maybe (pure ()) (tfield "Continuation" . text . tshow)  $ _toutContinuation tout
                   tfield "Transaction ID" $ maybe blank (text . tshow) $  _toutTxId tout
   where
     fromPactResult (PactResult pr) = pr
