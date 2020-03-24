@@ -14,7 +14,10 @@ module Frontend.Page.Transaction where
 ------------------------------------------------------------------------------
 import Control.Applicative
 import Control.Monad
+import Data.Aeson as A
 import Data.Maybe
+import qualified Data.Text as T
+import Pact.Types.Continuation (PactExec)
 import Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
 -- import Chainweb.Api.BlockPayload
@@ -107,7 +110,11 @@ transactionPage netId cid bp = do
                   tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult tout
                   tfield "Logs" $ text $ maybe "null " hashB64U $ _toutLogs tout
                   tfield "Metadata" $ renderMetaData netId cid $ _toutMetaData tout
-                  maybe (pure ()) (tfield "Continuation" . text . tshow)  $ _toutContinuation tout
+                  tfield "Continuation" $ voidMaybe renderCont $ _toutContinuation tout
                   tfield "Transaction ID" $ maybe blank (text . tshow) $  _toutTxId tout
   where
     fromPactResult (PactResult pr) = pr
+
+    renderCont v = case fromJSON v of
+      Success (pe :: PactExec) -> renderPactExec pe
+      A.Error e -> text $ T.pack $ "Unable to render continuation" <> e
