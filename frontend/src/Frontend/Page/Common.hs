@@ -121,7 +121,7 @@ renderMetaData
 renderMetaData _ _ Nothing = text "None"
 renderMetaData netId cid (Just v) = case fromJSON v of
     Success (PollMetaData bh bt bhash phash) -> do
-      elClass "table" "ui definition table" $ el "tbody" $ do
+      detailsSection $ do
         tfield "Block Height" $ text $ tshow bh
         tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
         tfield "Block Hash" $ transactionsLink netId cid bhash
@@ -137,7 +137,7 @@ renderRichObject
 renderRichObject m
     | HM.null m = pure ()
     | otherwise = void
-      $ elClass "table" "ui definition table" $ el "tbody"
+      $ detailsSection
       $ HM.traverseWithKey go m
   where
     go label v = tfield label $ text $ unwrapJSON v
@@ -150,10 +150,10 @@ renderPayload
     -> m ()
 renderPayload = \case
     ExecPayload (Exec _ d) -> do
-      elClass "table" "ui definition table" $ el "tbody" $ do
+      detailsSection $ do
         voidMaybe (tfield "Data" . renderRichObject) d
     ContPayload (Cont pid rb step d p) -> do
-      elClass "table" "ui definition table" $ el "tbody" $ do
+      detailsSection $ do
         tfield "Pact Id" $ text pid
         tfield "Rollback" $ text $ tshow rb
         tfield "Step" $ text $ tshow step
@@ -167,7 +167,7 @@ renderPactExec
     => PactExec
     -> m ()
 renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
-    elClass "table" "ui definition table" $ el "tbody" $ do
+    detailsSection $ do
       tfield "Step Count" $ text $ tshow stepCount
       voidMaybe (tfield "Yield" . renderYield) y
       voidMaybe (tfield "Executed" . text . tshow) x
@@ -183,7 +183,7 @@ renderProvenance
     => Provenance
     -> m ()
 renderProvenance (Provenance (Pact.ChainId c) mhash) =
-  elClass "table" "ui definition table" $ el "tbody" $ do
+  detailsSection $ do
     tfield "Target Chain" $ text c
     tfield "Module Hash" $ text $ tshow mhash
 
@@ -194,7 +194,7 @@ renderYield
     => Yield
     -> m ()
 renderYield (Yield (ObjectMap m) p) =
-  elClass "table" "ui definition table" $ el "tbody" $ do
+  detailsSection $ do
     tfield "Data" $ renderRichObject $ yieldMap m
     voidMaybe (tfield "Provenance" . renderProvenance) p
 
@@ -210,6 +210,6 @@ renderContinuation
     => PactContinuation
     -> m ()
 renderContinuation (PactContinuation n args) =
-  elClass "table" "ui definition table" $ el "tbody" $ do
+  detailsSection $ do
     tfield "Name" $ text $ ppName n
     tfield "Args" $ text $ unwrapJSON $ toJSON args
