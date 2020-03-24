@@ -47,18 +47,20 @@ blockRouteEncoder = pathComponentEncoder $ \case
   Block_Header -> PathEnd $ unitEncoder mempty
   Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
 
-data BlockIndexRoute :: * -> * where
-  BlockIndex_Hash :: BlockIndexRoute (Text :. R BlockRoute)
-  BlockIndex_Height :: BlockIndexRoute (Int :. R BlockRoute)
+data ChainRoute :: * -> * where
+  Chain_BlockHash :: ChainRoute (Text :. R BlockRoute)
+  Chain_BlockHeight :: ChainRoute (Int :. R BlockRoute)
+  Chain_TxReqKey :: ChainRoute Text
 
-blockIndexRouteEncoder :: Encoder (Either Text) (Either Text) (R BlockIndexRoute) PageName
+blockIndexRouteEncoder :: Encoder (Either Text) (Either Text) (R ChainRoute) PageName
 blockIndexRouteEncoder = pathComponentEncoder $ \case
-  BlockIndex_Hash -> PathSegment "block" $ pathParamEncoder id blockRouteEncoder
-  BlockIndex_Height -> PathSegment "height" $ pathParamEncoder unsafeTshowEncoder blockRouteEncoder
+  Chain_BlockHash -> PathSegment "block" $ pathParamEncoder id blockRouteEncoder
+  Chain_BlockHeight -> PathSegment "height" $ pathParamEncoder unsafeTshowEncoder blockRouteEncoder
+  Chain_TxReqKey -> PathSegment "tx" singlePathSegmentEncoder
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
-  NetRoute_Chain :: NetRoute (Int :. R BlockIndexRoute)
+  NetRoute_Chain :: NetRoute (Int :. R ChainRoute)
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
@@ -91,7 +93,7 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
 hostEncoder :: Encoder (Either Text) (Either Text) Host Text
 hostEncoder = prismEncoder humanReadableTextPrism
 
-addNetRoute :: NetId -> Int -> R BlockIndexRoute -> R FrontendRoute
+addNetRoute :: NetId -> Int -> R ChainRoute -> R FrontendRoute
 addNetRoute netId c r = case netId of
   NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ (c :. r)
   NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ (c :. r)
@@ -101,7 +103,7 @@ concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
   , ''BlockRoute
-  , ''BlockIndexRoute
+  , ''ChainRoute
   , ''NetRoute
   ]
 

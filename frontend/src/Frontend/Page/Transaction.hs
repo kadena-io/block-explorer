@@ -14,11 +14,15 @@ module Frontend.Page.Transaction where
 ------------------------------------------------------------------------------
 import Control.Applicative
 import Control.Monad
+import Data.Aeson as A
 import Data.Maybe
+import qualified Data.Text as T
+import Pact.Types.Continuation (PactExec)
 import Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
 -- import Chainweb.Api.BlockPayload
 import Chainweb.Api.BlockPayloadWithOutputs
+import Chainweb.Api.ChainId
 import Chainweb.Api.ChainwebMeta
 import Chainweb.Api.Hash
 import Chainweb.Api.PactCommand
@@ -26,17 +30,29 @@ import Chainweb.Api.Payload
 import Chainweb.Api.Sig
 import Chainweb.Api.Signer
 import Chainweb.Api.Transaction
+import Common.Types
 import Common.Utils
+import Common.Route
 import Frontend.App
 import Frontend.Common
 import Frontend.Page.Common
+
+import Obelisk.Route
+import Obelisk.Route.Frontend
+
 ------------------------------------------------------------------------------
 
 transactionPage
-  :: (MonadApp r t m)
-  => BlockPayloadWithOutputs
+  :: ( MonadApp r t m
+     , RouteToUrl (R FrontendRoute) m
+     , SetRoute t (R FrontendRoute) m
+     , Prerender js t m
+     )
+  => NetId
+  -> ChainId
+  -> BlockPayloadWithOutputs
   -> m ()
-transactionPage bp = do
+transactionPage netId cid bp = do
     let txs = _blockPayloadWithOutputs_transactionsWithOutputs bp
     el "h2" $ text $ (tshow $ length txs) <> " Transactions"
     divClass "ui accordion" $ do
@@ -53,6 +69,9 @@ transactionPage bp = do
               tfield "Request Key" $ do
                 let reqKey = hashB64U $ _transaction_hash t
                 text reqKey
+              tfield "Payload" $ do
+                let payload = _pactCommand_payload $ _transaction_cmd t
+                renderPayload payload
               tfield "Meta" $ do
                 let meta = _pactCommand_meta $ _transaction_cmd t
                 elClass "table" "ui definition table" $ el "tbody" $ do
@@ -90,8 +109,12 @@ transactionPage bp = do
                   tfield "Gas" $ text $ tshow $ _toutGas tout
                   tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult tout
                   tfield "Logs" $ text $ maybe "null " hashB64U $ _toutLogs tout
-                  tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData tout
-                  maybe (pure ()) (tfield "Continutaion" . text . tshow)  $ _toutContinuation tout
+                  tfield "Metadata" $ renderMetaData netId cid $ _toutMetaData tout
+                  tfield "Continuation" $ voidMaybe renderCont $ _toutContinuation tout
                   tfield "Transaction ID" $ maybe blank (text . tshow) $  _toutTxId tout
   where
     fromPactResult (PactResult pr) = pr
+
+    renderCont v = case fromJSON v of
+      Success (pe :: PactExec) -> renderPactExec pe
+      A.Error e -> text $ T.pack $ "Unable to render continuation" <> e
