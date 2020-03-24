@@ -73,7 +73,7 @@ voidMaybe = maybe (pure ())
 ppName :: Name -> Text
 ppName (Name (BareName n _)) = n
 ppName (QName (QualifiedName (ModuleName t ns) n _)) =
-    maybe "" (\(NamespaceName n) -> n <> ".") ns <> t <> "." <> n
+    maybe "" (\(NamespaceName nsn) -> nsn <> ".") ns <> t <> "." <> n
 
 unwrapJSON :: Value -> Text
 unwrapJSON = \case
@@ -183,9 +183,9 @@ renderProvenance
     => Provenance
     -> m ()
 renderProvenance (Provenance (Pact.ChainId c) mhash) =
-  detailsSection $ do
-    tfield "Target Chain" $ text c
-    tfield "Module Hash" $ text $ tshow mhash
+    detailsSection $ do
+      tfield "Target Chain" $ text c
+      tfield "Module Hash" $ text $ tshow mhash
 
 -- | Render 'Yield' pact type
 --
@@ -194,10 +194,9 @@ renderYield
     => Yield
     -> m ()
 renderYield (Yield (ObjectMap m) p) =
-  detailsSection $ do
-    tfield "Data" $ renderRichObject $ yieldMap m
-    voidMaybe (tfield "Provenance" . renderProvenance) p
-
+    detailsSection $ do
+      tfield "Data" $ renderRichObject $ yieldMap m
+      voidMaybe (tfield "Provenance" . renderProvenance) p
   where
     yieldMap = HM.fromList
       . fmap (\(FieldKey k, v) -> (k, toJSON v))
@@ -210,6 +209,15 @@ renderContinuation
     => PactContinuation
     -> m ()
 renderContinuation (PactContinuation n args) =
-  detailsSection $ do
-    tfield "Name" $ text $ ppName n
-    tfield "Args" $ text $ unwrapJSON $ toJSON args
+    detailsSection $ do
+      tfield "Name" $ text $ ppName n
+      renderArgs args
+  where
+    renderArgs [] = pure ()
+    renderArgs (a:as) = do
+      tfield "Args" $ go a
+      traverse_ (tfield "" . go) as
+
+    go = text
+      . unwrapJSON
+      . toJSON

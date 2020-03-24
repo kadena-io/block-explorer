@@ -53,9 +53,16 @@ extLink href m =
 detailsSection c = do
   elClass "table" "ui fixed single line definition table" $ el "tbody" c
 
+
+
 tfield :: DomBuilder t m => Text -> m a -> m a
 tfield nm v = el "tr" $ do
   elClass "td" "two wide" $ text nm
+  el "td" v
+
+tfieldSpan :: DomBuilder t m => Text -> Text -> m a -> m a
+tfieldSpan nm l v = el "tr" $ do
+  elAttr "td" ("rowspan" =: l) $ text nm
   el "td" v
 
 viewIntoMaybe
