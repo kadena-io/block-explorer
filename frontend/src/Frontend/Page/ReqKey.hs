@@ -19,8 +19,6 @@ import Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T (pack)
 
-
-
 import GHCJS.DOM.Types (MonadJSM)
 
 import Obelisk.Route
@@ -45,11 +43,9 @@ import Common.Utils
 
 import Frontend.App
 import Frontend.AppState
-import Frontend.Page.Block
 import Frontend.ChainwebApi
 import Frontend.Common
 import Frontend.Page.Common
-import Frontend.Page.Types
 ------------------------------------------------------------------------------
 
 

@@ -33,7 +33,6 @@ import Common.Route
 import Frontend.App
 import Frontend.Common
 import Frontend.Page.Common
-import Frontend.Page.Types
 
 import Obelisk.Route
 import Obelisk.Route.Frontend
@@ -67,6 +66,9 @@ transactionPage netId cid bp = do
               tfield "Request Key" $ do
                 let reqKey = hashB64U $ _transaction_hash t
                 text reqKey
+              tfield "Payload" $ do
+                let payload = _pactCommand_payload $ _transaction_cmd t
+                renderPayload payload
               tfield "Meta" $ do
                 let meta = _pactCommand_meta $ _transaction_cmd t
                 elClass "table" "ui definition table" $ el "tbody" $ do

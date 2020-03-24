@@ -44,7 +44,6 @@ import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Page.Common
 import           Frontend.Page.Transaction
-import           Frontend.Page.Types
 ------------------------------------------------------------------------------
 
 
