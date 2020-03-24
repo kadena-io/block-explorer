@@ -42,27 +42,13 @@ extLink :: DomBuilder t m => Text -> m a -> m a
 extLink href m =
   elAttr "a" ("href" =: href <> "target" =: "_blank" <> "rel" =: "noopener") $ m
 
---detailsSection c = do
---  elClass "div" "detailsSection" c
---
---tfield :: DomBuilder t m => Text -> m a -> m a
---tfield nm v = divClass "detailsItem" $ do
---  divClass "detailsName" $ text nm
---  divClass "detailsValue" v
-
+detailsSection :: DomBuilder t m => m a -> m a
 detailsSection c = do
   elClass "table" "ui fixed single line definition table" $ el "tbody" c
-
-
 
 tfield :: DomBuilder t m => Text -> m a -> m a
 tfield nm v = el "tr" $ do
   elClass "td" "two wide" $ text nm
-  el "td" v
-
-tfieldSpan :: DomBuilder t m => Text -> Text -> m a -> m a
-tfieldSpan nm l v = el "tr" $ do
-  elAttr "td" ("rowspan" =: l) $ text nm
   el "td" v
 
 viewIntoMaybe
