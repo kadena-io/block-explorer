@@ -1,7 +1,7 @@
 {
-  "owner": "obsidiansystems",
+  "owner": "kadena-io",
   "repo": "obelisk",
-  "branch": "chainweaver",
-  "rev": "ce64679d2629356249bf744d37b4f3f3d499f77a",
-  "sha256": "1af6ds41varchnr9xfak6c32190rx1mq74ml2118yzd6951zfwlh"
+  "branch": "chainweaver-with-acme-fix",
+  "rev": "a79dff24747117bff93a9706e93c54b8e1fc38ac",
+  "sha256": "1jklf28acrmq6pksf5pi6mik5w5c45rjf8yy24faqwc1hj2plvcv"
 }
