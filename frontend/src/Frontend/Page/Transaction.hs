@@ -87,14 +87,9 @@ transactionPage netId cid bp = do
                     tfield "Public Key" $ text $ _signer_pubKey s
                     tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
                     tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
-                    tfield "Signature Capabilites" $ do
+                    tfield "Signature Capabilities" $ do
                       when (not $ null $ _signer_capList s) $ do
-                        elClass "table" "ui celled table" $ do
-                          el "thead" $ do
-                            el "tr" $ do
-                              el "th" $ text "Name"
-                              el "th" $ text "Arguments"
-                          forM_ (_signer_capList s) $ \c -> do
+                        elClass "table" "ui celled table" $ forM_ (_signer_capList s) $ \c -> do
                             el "tbody" $ do
                               elClass "tr" "top aligned" $ do
                                 el "td" $ text $ _scName c

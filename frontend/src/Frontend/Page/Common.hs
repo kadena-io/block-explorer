@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 module Frontend.Page.Common
 ( -- * useful combinators
   unwrapJSON
@@ -128,6 +129,18 @@ renderMetaData netId cid (Just v) = case fromJSON v of
         tfield "Parent Hash" $ transactionsLink netId cid phash
     A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
 
+
+-- | Render args given a list of objects with a JSON repr
+--
+renderArgs :: (MonadApp r t m, ToJSON a) => [a] -> m ()
+renderArgs [] = pure ()
+renderArgs (a:as) = do
+    tfield "Args" $ go a
+    traverse_ (tfield "" . go) as
+  where
+    go :: forall r t m a. (MonadApp r t m, ToJSON a) => a -> m ()
+    go = text . unwrapJSON . toJSON
+
 -- | Render an object as a structured table, instead of raw json
 --
 renderRichObject
@@ -212,12 +225,3 @@ renderContinuation (PactContinuation n args) =
     detailsSection $ do
       tfield "Name" $ text $ ppName n
       renderArgs args
-  where
-    renderArgs [] = pure ()
-    renderArgs (a:as) = do
-      tfield "Args" $ go a
-      traverse_ (tfield "" . go) as
-
-    go = text
-      . unwrapJSON
-      . toJSON
