@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TupleSections              #-}
 
 module Frontend.ChainwebApi where
 
@@ -19,8 +20,8 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Lazy as BL
 import           Data.Either
-import           Data.List
 import qualified Data.HashMap.Strict as HM
+import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Text (Text)
@@ -70,6 +71,9 @@ headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
 payloadUrl :: ChainwebHost -> ChainId -> Hash -> Text
 payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash
 
+pollUrl :: ChainwebHost -> ChainId -> Text
+pollUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/poll"
+
 payloadWithOutputsUrl :: ChainwebHost -> ChainId -> Hash -> Text
 payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash <> "/outputs"
 
@@ -82,6 +86,30 @@ getServerInfo h = do
   pb <- getPostBuild
   esi <- getInfo (h <$ pb)
   holdDyn Nothing esi
+
+fromRequestKey
+    :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m), PostBuild t m)
+    => ChainwebHost
+    -> ChainId
+    -> Dynamic t Text
+    -> m (Event t (Maybe Value))
+fromRequestKey host chainId dReqKey = do
+    pb <- getPostBuild
+    let taggedReqKey = tag (current dReqKey) pb
+    resp <- performRequestAsync $ fmap makeXhrRequest taggedReqKey
+    return $ decodeXhrResponse <$> resp
+  where
+    makeXhrRequest requestKey = XhrRequest "POST" url (cfg requestKey)
+    url = pollUrl host chainId
+
+    cfg :: Text -> XhrRequestConfig ByteString
+    cfg requestKey = def
+      { _xhrRequestConfig_headers =
+        "content-type" =: "application/json"
+        <> "accept" =: "application/json"
+      , _xhrRequestConfig_sendData = body }
+        where
+          body = BL.toStrict $ encode $ object [ "requestKeys" .= [requestKey] ]
 
 getInfo
   :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))

@@ -24,6 +24,7 @@ import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
+import           Text.Printf (printf)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.Base64Url
 import           Chainweb.Api.BlockHeader
@@ -46,20 +47,11 @@ import           Frontend.Page.Transaction
 ------------------------------------------------------------------------------
 
 
-blockPage
-  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => ServerInfo
-  -> NetId
-  -> App (Int :. R BlockIndexRoute) t m ()
-blockPage si netId = do
-    subPairRoute_ $ \cid -> subRoute_ $ \case
-      BlockIndex_Hash -> blockHashWidget si netId cid
-      BlockIndex_Height -> blockHeightWidget si netId cid
-
 blockHashWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
+      Prerender js t m
+     )
   => ServerInfo
   -> NetId
   -> Int
@@ -77,7 +69,9 @@ blockHashWidget si netId cid = do
 
 blockHeightWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
+      Prerender js t m
+     )
   => ServerInfo
   -> NetId
   -> Int
@@ -95,18 +89,22 @@ blockHeightWidget si netId cid = do
 
 blockLink
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      Prerender js t m
+     )
   => NetId
   -> ChainId
   -> BlockHeight
   -> Text
   -> m ()
 blockLink netId chainId height linkText =
-  routeLink (addNetRoute netId (unChainId chainId) $ BlockIndex_Height :/ height :. Block_Header :/ ()) $ text linkText
+  routeLink (addNetRoute netId (unChainId chainId) $ Chain_BlockHeight :/ height :. Block_Header :/ ()) $ text linkText
 
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m))
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
+      Prerender js t m
+     )
   => NetId
   -> ChainwebHost
   -> ChainId
@@ -118,14 +116,16 @@ blockPageNoPayload netId h c bh = do
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> subRoute_ $ \case
           Block_Header -> blockHeaderPage netId h c bh payload
-          Block_Transactions -> transactionPage payload
+          Block_Transactions -> transactionPage netId c payload
   pEvt <- getBlockPayloadWithOutputs h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
 
 blockHeaderPage
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      Prerender js t m
+     )
   => NetId
   -> ChainwebHost
   -> ChainId
@@ -141,13 +141,14 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
         tfield "Block Height" $ text $ tshow $ _blockHeader_height bh
         tfield "Parent" $ parent $ _blockHeader_parent bh
         tfield "POW Hash" $ text $ either (const "") id (calcPowHash =<< decodeB64UrlNoPaddingText bhBinBase64)
-        tfield "Target" $ text $ hexBytesLE $ _blockHeader_target bh
+        tfield "Target" $ text $ hexFromBytesLE $ _blockHeader_target bh
         tfield "Hash" $ text $ hashHex $ _blockHeader_hash bh
-        tfield "Weight" $ text $ hexBytesLE $ _blockHeader_weight bh
+        tfield "Weight" $ text $ hexFromBytesLE $ _blockHeader_weight bh
         tfield "Epoch Start" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_epochStart bh
         tfield "Neighbors" $ neighbors $ _blockHeader_neighbors bh
         tfield "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash bh
         tfield "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
+        tfield "Flags" $ text $ T.pack $ printf "0x%08x" (_blockHeader_flags bh)
         tfield "Nonce" $ text $ T.pack $ showHex (_blockHeader_nonce bh) ""
         return ()
     blockPayloadWithOutputsWidget netId c bh bp
@@ -162,7 +163,9 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
 
 blockPayloadWidget
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      Prerender js t m
+     )
   => NetId
   -> ChainId
   -> BlockHeader
@@ -179,14 +182,13 @@ blockPayloadWidget netId c bh bp = do
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
         tfield "Outputs Hash" $ text $ hashB64U $ _blockPayload_outputsHash bp
         tfield "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp
-        let rawHash = _blockHeader_hash bh
-        let hash = hashB64U rawHash
-        tfield "Transactions" $
-          routeLink (addNetRoute netId (unChainId c) $ BlockIndex_Hash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+        tfield "Transactions" $ transactionsLink netId c $ _blockHeader_hash bh
 
 blockPayloadWithOutputsWidget
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      Prerender js t m
+     )
   => NetId
   -> ChainId
   -> BlockHeader
@@ -210,18 +212,16 @@ blockPayloadWithOutputsWidget netId c bh bp = do
           tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult coinbase
           tfield "Request Key" $ text $ hashB64U $ _toutReqKey coinbase
           tfield "Logs" $ text $ (maybe "" hashB64U $ _toutLogs coinbase)
-          tfield "Metadata" $ text $ maybe "" tshow $ _toutMetaData coinbase
+          tfield "Metadata" $ renderMetaData netId c $ _toutMetaData coinbase
           maybe (pure ()) (tfield "Continuation" . text . tshow) $ _toutContinuation coinbase
           tfield "Transaction ID" $ maybe blank (text . tshow) $ _toutTxId coinbase
-        let rawHash = _blockHeader_hash bh
-        let hash = hashB64U rawHash
+
         let numberOfTransactions =
               case length $ _blockPayloadWithOutputs_transactionsWithOutputs bp of
                 n | n <= 0 -> "No transactions"
                   | n == 1 -> "1 Transaction"
                   | otherwise -> tshow n <> " Transactions"
-        tfield numberOfTransactions $
-          routeLink (addNetRoute netId (unChainId c) $ BlockIndex_Hash :/ hash :. Block_Transactions :/ ()) $ text $ hashHex rawHash
+        tfield numberOfTransactions $ transactionsLink netId c $ _blockHeader_hash bh
   where
     fromCoinbase (Coinbase cb) = cb
     fromPactResult (PactResult pr) = pr
