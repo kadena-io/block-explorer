@@ -42,9 +42,14 @@ extLink :: DomBuilder t m => Text -> m a -> m a
 extLink href m =
   elAttr "a" ("href" =: href <> "target" =: "_blank" <> "rel" =: "noopener") $ m
 
-detailsSection :: DomBuilder t m => m a -> m a
-detailsSection c = do
-  elClass "table" "ui fixed single line definition table" $ el "tbody" c
+uiTableSection :: DomBuilder t m => m a -> m a
+uiTableSection = elClass "table" "ui definition table" . el "tbody"
+
+singleLineTableSection :: DomBuilder t m => m a -> m a
+singleLineTableSection = elClass "table" "ui fixed single line definition table" . el "tbody"
+
+customTableSection :: DomBuilder t m => Text -> m a -> m a
+customTableSection t = elClass "table" t . el "tbody"
 
 tfield :: DomBuilder t m => Text -> m a -> m a
 tfield nm v = el "tr" $ do

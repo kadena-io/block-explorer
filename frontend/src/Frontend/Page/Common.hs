@@ -13,8 +13,11 @@ module Frontend.Page.Common
 , renderProvenance
 , renderRichObject
 , renderContinuation
-  -- * linking txs
+, renderMiner
+  -- * links
 , transactionsLink
+, blockHashLink
+, blockHeightLink
 ) where
 
 
@@ -42,7 +45,9 @@ import Pact.Types.Term (FieldKey(..), ObjectMap(..), PactId(..))
 -- Chainweb modules
 
 import Chainweb.Api.ChainId
+import Chainweb.Api.Common
 import Chainweb.Api.Hash
+import Chainweb.Api.MinerData
 import Chainweb.Api.Payload
 
 -- ------------------------------------------------------------------------ --
@@ -105,6 +110,44 @@ transactionsLink netId c bhash =
     route = addNetRoute netId (unChainId c)
       $ Chain_BlockHash :/ (hashB64U bhash) :. Block_Transactions :/ ()
 
+-- | Link to a block hash directly, on a given chain
+--
+blockHashLink
+    :: ( MonadApp r t m
+     , RouteToUrl (R FrontendRoute) m
+     , SetRoute t (R FrontendRoute) m
+     , Prerender js t m
+     )
+    => NetId
+    -> ChainId
+    -> Hash
+    -> m ()
+blockHashLink netId c h =
+    routeLink route $ text $ hashHex h
+  where
+    route = addNetRoute netId (unChainId c)
+      $ Chain_BlockHash :/ (hashB64U h) :. Block_Header :/ ()
+
+-- | Link to block associated with a given block height on a particular
+-- chain
+--
+blockHeightLink
+    :: ( MonadApp r t m
+       , RouteToUrl (R FrontendRoute) m
+       , SetRoute t (R FrontendRoute) m
+       , Prerender js t m
+       )
+    => NetId
+    -> ChainId
+    -> BlockHeight
+    -> Text
+    -> m ()
+blockHeightLink netId c height linkText =
+    routeLink route $ text linkText
+  where
+    route = addNetRoute netId (unChainId c)
+      $ Chain_BlockHeight :/ height :. Block_Header :/ ()
+
 -- | Render 'PollMetaData' and link to its block information
 --
 renderMetaData
@@ -115,18 +158,15 @@ renderMetaData
        )
     => NetId
     -> ChainId
-    -> Maybe Value
-      -- ^ Value ~ 'PollMetaData'
+    -> PollMetaData
     -> m ()
-renderMetaData _ _ Nothing = text "None"
-renderMetaData netId cid (Just v) = case fromJSON v of
-    Success (PollMetaData bh bt bhash phash) -> do
-      detailsSection $ do
-        tfield "Block Height" $ text $ tshow bh
-        tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
-        tfield "Block Hash" $ transactionsLink netId cid bhash
-        tfield "Parent Hash" $ transactionsLink netId cid phash
-    A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
+renderMetaData netId cid (PollMetaData bh bt bhash phash) =
+    singleLineTableSection $ do
+      tfield "Block Height" $ text $ tshow bh
+      tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
+      tfield "Block Hash" $ blockHashLink netId cid bhash
+      tfield "Parent Hash" $ blockHashLink netId cid phash
+
 
 -- | Render an object as a structured table, instead of raw json
 --
@@ -137,7 +177,7 @@ renderRichObject
 renderRichObject m
     | HM.null m = pure ()
     | otherwise = void
-      $ detailsSection
+      $ singleLineTableSection
       $ HM.traverseWithKey go m
   where
     go label v = tfield label $ text $ unwrapJSON v
@@ -150,10 +190,10 @@ renderPayload
     -> m ()
 renderPayload = \case
     ExecPayload (Exec _ d) -> do
-      detailsSection $ do
+      singleLineTableSection $ do
         voidMaybe (tfield "Data" . renderRichObject) d
     ContPayload (Cont pid rb step d p) -> do
-      detailsSection $ do
+      singleLineTableSection $ do
         tfield "Pact Id" $ text pid
         tfield "Rollback" $ text $ tshow rb
         tfield "Step" $ text $ tshow step
@@ -167,7 +207,7 @@ renderPactExec
     => PactExec
     -> m ()
 renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
-    detailsSection $ do
+    singleLineTableSection $ do
       tfield "Step Count" $ text $ tshow stepCount
       voidMaybe (tfield "Yield" . renderYield) y
       voidMaybe (tfield "Executed" . text . tshow) x
@@ -183,7 +223,7 @@ renderProvenance
     => Provenance
     -> m ()
 renderProvenance (Provenance (Pact.ChainId c) mhash) =
-    detailsSection $ do
+    singleLineTableSection $ do
       tfield "Target Chain" $ text c
       tfield "Module Hash" $ text $ tshow mhash
 
@@ -194,7 +234,7 @@ renderYield
     => Yield
     -> m ()
 renderYield (Yield (ObjectMap m) p) =
-    detailsSection $ do
+    singleLineTableSection $ do
       tfield "Data" $ renderRichObject $ yieldMap m
       voidMaybe (tfield "Provenance" . renderProvenance) p
   where
@@ -209,7 +249,7 @@ renderContinuation
     => PactContinuation
     -> m ()
 renderContinuation (PactContinuation n args) =
-    detailsSection $ do
+    singleLineTableSection $ do
       tfield "Name" $ text $ ppName n
       renderArgs args
   where
@@ -221,3 +261,13 @@ renderContinuation (PactContinuation n args) =
     go = text
       . unwrapJSON
       . toJSON
+
+renderMiner
+    :: MonadApp r t m
+    => MinerData
+    -> m ()
+renderMiner (MinerData acct p pkeys) =
+    uiTableSection $ do
+      tfield "Account" $ text $ tshow acct
+      tfield "Public Keys" $ text $ tshow pkeys
+      tfield "Predicate" $ text $ tshow $ p

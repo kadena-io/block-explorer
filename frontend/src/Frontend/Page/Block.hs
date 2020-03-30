@@ -87,19 +87,6 @@ blockHeightWidget si netId cid = do
       Nothing -> text "Block does not exist"
       Just bh -> blockPageNoPayload netId chainwebHost c bh
 
-blockLink
-  :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
-     )
-  => NetId
-  -> ChainId
-  -> BlockHeight
-  -> Text
-  -> m ()
-blockLink netId chainId height linkText =
-  routeLink (addNetRoute netId (unChainId chainId) $ Chain_BlockHeight :/ height :. Block_Header :/ ()) $ text linkText
-
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
@@ -153,13 +140,10 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
         return ()
     blockPayloadWithOutputsWidget netId c bh bp
   where
-    prevHeight = _blockHeader_height bh - 1
-    parent p = blockLink netId (_blockHeader_chainId bh) prevHeight (hashHex p)
-    neighbors ns = do
-      forM_ (M.toList ns) $ \(cid,nh) -> do
-        el "div" $ do
-          text $ "Chain " <> tshow cid <> ": "
-          blockLink netId cid prevHeight (hashHex nh)
+    parent p = blockHashLink netId (_blockHeader_chainId bh) p
+    neighbors ns = elClass "table" "ui definition table" $ el "tbody" $
+      forM_ (M.toList ns) $ \(cid,nh) ->
+        tfield ("Chain " <> tshow cid) $ blockHashLink netId cid nh
 
 blockPayloadWidget
   :: (MonadApp r t m,
@@ -175,10 +159,7 @@ blockPayloadWidget netId c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Miner" $ do
-          el "div" $ text $ "Account: " <> _minerData_account (_blockPayload_minerData bp)
-          el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayload_minerData bp)
-          el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayload_minerData bp)
+        tfield "Miner" $ renderMiner $ _blockPayload_minerData bp
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
         tfield "Outputs Hash" $ text $ hashB64U $ _blockPayload_outputsHash bp
         tfield "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp
@@ -198,10 +179,7 @@ blockPayloadWithOutputsWidget netId c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Miner" $ do
-          el "div" $ text $ "Account: " <> _minerData_account (_blockPayloadWithOutputs_minerData bp)
-          el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayloadWithOutputs_minerData bp)
-          el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayloadWithOutputs_minerData bp)
+        tfield "Miner" $ renderMiner $ _blockPayloadWithOutputs_minerData bp
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_transactionsHash bp
         tfield "Outputs Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_outputsHash bp
         tfield "Payload Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_payloadHash bp

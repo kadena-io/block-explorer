@@ -56,7 +56,6 @@ requestKeyWidget
        , Prerender js t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
-       , Monad (Client m)
        )
     => ServerInfo
     -> NetId
@@ -99,15 +98,20 @@ requestKeyResultPage
     -> m ()
 requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
     el "h2" $ text "Transaction Results"
-    elAttr "table" ("class" =: "ui definition table") $ do
-      el "tbody" $ do
-        tfield "Request Key" $ text $ requestKeyToB16Text rk
-        tfield "Transaction Id" $ text $ maybe "" tshow txid
-        tfield "Result" $ renderPactResult pr
-        tfield "Gas" $ text $ tshow g
-        tfield "Logs" $ text $ maybe "" Pact.hashToText logs
-        tfield "Continuation" $ text $ maybe "" tshow pcont
-        tfield "Metadata" $ renderMetaData netId cid meta
+    uiTableSection $ do
+      tfield "Request Key" $ text $ requestKeyToB16Text rk
+      tfield "Transaction Id" $ text $ maybe "" tshow txid
+      tfield "Result" $ renderPactResult pr
+      tfield "Gas" $ text $ tshow g
+      tfield "Logs" $ text $ maybe "" Pact.hashToText logs
+      tfield "Continuation" $ text $ maybe "" tshow pcont
+      tfield "Metadata" $ renderMetaData netId cid meta
   where
     renderPactResult (PactResult r) =
       text $ join either unwrapJSON (bimap toJSON toJSON r)
+
+    pollMeta = case meta of
+      Nothing -> Nothing
+      Just v -> case fromJSON v of
+        Success (p :: PollMetaData) -> Just $ Right p
+        A.Error e -> Just $ Left $ text $ "Unable to decode metadata: " <> T.pack e
