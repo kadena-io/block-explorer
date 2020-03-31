@@ -124,3 +124,12 @@ div.summary-inner {
     white-space: -o-pre-wrap;    /* Opera 7 */
     word-wrap: break-word;       /* Internet Explorer 5.5+ */
 }
+
+.search__dropdown {
+    border-top-right-radius: 0!important;
+    border-bottom-right-radius: 0!important;
+    -moz-border-top-right-radius: 0!important;
+    -moz-border-bottom-right-radius: 0!important;
+    -webkit-border-top-right-radius: 0!important;
+    -webkit-border-bottom-right-radius: 0!important;
+}

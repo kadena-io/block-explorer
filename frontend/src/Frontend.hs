@@ -250,11 +250,28 @@ initBlockTable height = do
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
 
+searchWidget
+  :: forall js r t m. (MonadApp r t m, Prerender js t m,
+      MonadJSM (Performable m), HasJSContext (Performable m),
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilderSpace m ~ GhcjsDomSpace)
+  => App r t m ()
+searchWidget = do
+  divClass "ui fluid action input" $ do
+    let opts = M.fromList
+          [ (0, "Request Key")
+          , (1, "Tx Code")
+          ]
+        dcfg = def & attributes .~ constDyn ("class" =: "ui compact selection dropdown search__dropdown" <> "style" =: "border-top-right-radius: 0!important; border-bottom-right-radius: 0!important;")
+    dropdown 0 (constDyn opts) dcfg
+    textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
+    elClass "button" "ui button" $ text "Search"
 
 blockTableWidget
   :: forall js r t m. (MonadApp r t m, Prerender js t m,
       MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilderSpace m ~ GhcjsDomSpace)
   => Maybe BlockHeight
   -> App r t m ()
 blockTableWidget Nothing = text "Error getting cut from server"
@@ -268,6 +285,7 @@ blockTableWidget (Just height) = do
   hashrate <- holdDyn Nothing $ attachWith
     (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
     (current dti) (updated dbt)
+  searchWidget
   divClass "ui segment" $ do
     divClass "ui small two statistics" $ do
         statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
