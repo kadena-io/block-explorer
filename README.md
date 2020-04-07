@@ -3,7 +3,7 @@
 ## Deployment Configs
 
 To deploy the block explorer, use the deployment functionality from
-[Obelisk](https://github.com/obsidian-systems/obelisk). Before deploying you may
+[Obelisk](https://github.com/obsidiansystems/obelisk). Before deploying you may
 want to create some or all of the following configs:
 
 ### Google Analytics
