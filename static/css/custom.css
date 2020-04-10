@@ -27,6 +27,10 @@ table#blockheaders th {
     text-align: center;
 }
 
+.block-table {
+    margin-top: 1em;
+}
+
 div.block-table div.spacer-row:last-child {
     display: none;
 }

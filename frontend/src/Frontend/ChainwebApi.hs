@@ -20,14 +20,21 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Lazy as BL
 import           Data.Either
+import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Proxy
+import           Data.Sequence (Seq)
+import qualified Data.Sequence as S
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
+import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value)
+import           Servant.API
+import           Servant.Reflex
 ------------------------------------------------------------------------------
 import           Blake2Native
 import           Chainweb.Api.BlockHeader
@@ -36,10 +43,17 @@ import           Chainweb.Api.BlockPayload
 import           Chainweb.Api.BlockPayloadWithOutputs
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainTip
+import           Chainweb.Api.ChainwebMeta
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
+import           Chainweb.Api.PactCommand
+import           Chainweb.Api.Payload
 import           Chainweb.Api.RespItems
+import           Chainweb.Api.Transaction
+import           ChainwebData.Api
+import           ChainwebData.Pagination
+import           ChainwebData.TxSummary
 import           Common.Types
 import           Common.Utils
 ------------------------------------------------------------------------------
@@ -205,6 +219,32 @@ getBlockPayload h c payloadHash = do
     req = XhrRequest "GET" (payloadUrl h c payloadHash)
             (def { _xhrRequestConfig_headers = "accept" =: "application/json" })
 
+getBlockPayload2
+  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  => ChainwebHost
+  -> Event t BlockHeaderTx
+  -> m (Event t (Either String BlockHeaderTx))
+getBlockPayload2 ch trigger = do
+    resp <- performRequestsAsync $ req <$> trigger
+    return (decode <$> resp)
+  where
+    bpwo2bp bpwo = BlockPayload
+      { _blockPayload_minerData = _blockPayloadWithOutputs_minerData bpwo
+      , _blockPayload_transactionsHash = _blockPayloadWithOutputs_transactionsHash bpwo
+      , _blockPayload_outputsHash = _blockPayloadWithOutputs_outputsHash bpwo
+      , _blockPayload_payloadHash = _blockPayloadWithOutputs_payloadHash bpwo
+      , _blockPayload_transactions = map fst $ _blockPayloadWithOutputs_transactionsWithOutputs bpwo
+      }
+    f bhtx bpwo = bhtx { _blockHeaderTx_payload = Just $ bpwo2bp bpwo }
+    decode (bhtx,resp) = f bhtx <$> decodeXhr resp
+    req bhtx =
+      (bhtx, XhrRequest "GET" (payloadWithOutputsUrl ch c ph)
+        (def { _xhrRequestConfig_headers = "accept" =: "application/json" }))
+      where
+        bh = _blockHeaderTx_header bhtx
+        c = _blockHeader_chainId bh
+        ph = _blockHeader_payloadHash $ _blockHeaderTx_header bhtx
+
 getBlockPayloadWithOutputs
   :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
   => ChainwebHost
@@ -299,6 +339,104 @@ modifyBlockInTable (BlockTable bs cut) h c func = BlockTable bs2 cut2
     height = _blockHeader_height . _blockHeaderTx_header
     g b = if height b == h then func b else b
 
+data RecentTxs = RecentTxs
+  { _recentTxs_txs :: Seq TxSummary
+  } deriving (Eq,Ord,Show)
+
+getSummaries :: RecentTxs -> [TxSummary]
+getSummaries (RecentTxs s) = toList s
+
+mergeRecentTxs :: [TxSummary] -> RecentTxs -> RecentTxs
+mergeRecentTxs tx (RecentTxs s1) = RecentTxs (s1 <> S.fromList tx)
+  where
+
+addNewTransaction :: BlockHeaderTx -> RecentTxs -> RecentTxs
+addNewTransaction bhtx (RecentTxs s1) = RecentTxs s2
+  where
+    maxTransactions = 10
+    s2 = S.take maxTransactions $ S.fromList txs <> s1
+
+    bh = _blockHeaderTx_header bhtx
+    mk = mkSummary (_blockHeader_chainId bh) (_blockHeader_height bh) (_blockHeader_hash bh)
+    txs = maybe [] (map mk . _blockPayload_transactions) $ _blockHeaderTx_payload bhtx
+
+mkSummary :: ChainId -> BlockHeight -> Hash -> Transaction -> TxSummary
+mkSummary (ChainId chain) height (Hash bh) (Transaction h _ pc) =
+    TxSummary chain height (T.decodeUtf8 bh) t (T.decodeUtf8 $ unHash h) s c r
+  where
+    meta = _pactCommand_meta pc
+    t = posixSecondsToUTCTime $ _chainwebMeta_creationTime meta
+    s = _chainwebMeta_sender meta
+    c = case _pactCommand_payload pc of
+          ExecPayload e -> Just $ _exec_code e
+          ContPayload _ -> Nothing
+    r = TxUnexpected
+
+--data BlockHeader = BlockHeader
+--  { _blockHeader_creationTime :: POSIXTime
+--  , _blockHeader_parent :: Hash
+--  , _blockHeader_height :: BlockHeight
+--  , _blockHeader_hash :: Hash
+--  , _blockHeader_chainId :: ChainId
+--  , _blockHeader_weight :: BytesLE
+--  , _blockHeader_epochStart :: POSIXTime
+--  , _blockHeader_neighbors :: M.Map ChainId Hash
+--  , _blockHeader_payloadHash :: Hash
+--  , _blockHeader_chainwebVer :: Text
+--  , _blockHeader_target :: BytesLE
+--  , _blockHeader_flags :: Word64
+--  , _blockHeader_nonce :: Word64
+--  } deriving (Eq,Ord,Show)
+
+--data ChainwebMeta = ChainwebMeta
+--  { _chainwebMeta_chainId      :: Text
+--  , _chainwebMeta_creationTime :: POSIXTime
+--  , _chainwebMeta_ttl          :: Int
+--  , _chainwebMeta_gasLimit     :: Int
+--  , _chainwebMeta_gasPrice     :: Double
+--  , _chainwebMeta_sender       :: Text
+--  } deriving (Eq,Ord,Show)
+--
+--data PactCommand = PactCommand
+--  { _pactCommand_payload :: Payload
+--  , _pactCommand_signers :: [Signer]
+--  , _pactCommand_meta    :: ChainwebMeta
+--  , _pactCommand_nonce   :: Text
+--  } deriving (Eq,Show)
+--
+--data Transaction = Transaction
+--  { _transaction_hash :: Hash
+--  , _transaction_sigs :: [Sig]
+--  , _transaction_cmd  :: PactCommand
+--  } deriving (Eq,Show)
+--
+--data BlockHeaderTx = BlockHeaderTx
+--  { _blockHeaderTx_header  :: BlockHeader
+--  , _blockHeaderTx_txCount :: Maybe Int
+--  , _blockHeaderTx_powHash :: Maybe Text
+--  , _blockHeaderTx_target  :: Maybe Text
+--  , _blockHeaderTx_payload :: Maybe BlockPayload
+--  } deriving (Eq,Show)
+--
+--data BlockPayload = BlockPayload
+--  { _blockPayload_minerData        :: MinerData
+--  , _blockPayload_transactionsHash :: Hash
+--  , _blockPayload_outputsHash      :: Hash
+--  , _blockPayload_payloadHash      :: Hash
+--  , _blockPayload_transactions     :: [Transaction]
+--  } deriving (Eq,Show)
+
+--data TxSummary = TxSummary
+--  { _txSummary_chain :: Int
+--  , _txSummary_height :: Int
+--  , _txSummary_blockHash :: Text
+--  , _txSummary_creationTime :: UTCTime
+--  , _txSummary_requestKey :: Text
+--  , _txSummary_sender :: Text
+--  , _txSummary_code :: Maybe Text
+--  , _txSummary_result :: TxResult
+--  } deriving (Eq,Ord,Show,Generic)
+
 data BlockTable = BlockTable
   { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
   , _blockTable_cut    :: Map ChainId BlockHeaderTx
@@ -318,7 +456,7 @@ instance Monoid BlockTable where
   mempty = BlockTable mempty mempty
 
 blockTableNumRows :: Int
-blockTableNumRows = 6
+blockTableNumRows = 4
 
 insertBlockTable :: BlockTable -> BlockHeaderTx -> BlockTable
 insertBlockTable (BlockTable bs cut) btx = BlockTable bs2 cut2
@@ -336,3 +474,42 @@ insertBlockTable (BlockTable bs cut) btx = BlockTable bs2 cut2
 
 getBlock :: BlockHeight -> ChainId -> BlockTable -> Maybe BlockHeaderTx
 getBlock bh cid bt = M.lookup cid =<< M.lookup bh (_blockTable_blocks bt)
+
+
+r2e :: ReqResult t a -> Either Text a
+r2e (ResponseSuccess _ a _) = Right a
+r2e (ResponseFailure _ t _) = Left t
+r2e (RequestFailure _ t )   = Left t
+
+cwdataUrl :: BaseUrl
+cwdataUrl = BaseFullUrl Http "odin.chainweb.com" 8080 "/"
+--cwdataUrl = BasePath "/"
+
+getRecentTxs
+    :: (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m))
+    => Event t ()
+    -> m (Event t (Either Text [TxSummary]))
+getRecentTxs evt = do
+    let (go :<|> _) = client chainwebDataApi
+                             (Proxy :: Proxy m)
+                             (Proxy :: Proxy ())
+                             (constDyn cwdataUrl)
+    txResp <- go evt
+    return $ r2e <$> txResp
+
+searchTxs
+    :: (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m))
+    => Dynamic t (QParam Limit)
+    -> Dynamic t (QParam Offset)
+    -> Dynamic t (QParam Text)
+    -> Event t ()
+    -> m (Event t (Either Text [TxSummary]))
+searchTxs lim off needle evt = do
+    let (_ :<|> go) = client chainwebDataApi
+                             (Proxy :: Proxy m)
+                             (Proxy :: Proxy ())
+                             (constDyn cwdataUrl)
+    txResp <- go lim off needle evt
+    return $ r2e <$> txResp

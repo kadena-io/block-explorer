@@ -17,6 +17,7 @@ import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.HashMap.Strict as HM
+import           Data.Foldable
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Ord
@@ -35,6 +36,7 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Dom.EventSource
 import           Reflex.Network
+import           Servant.Reflex hiding (Client)
 import           Text.Printf
 ------------------------------------------------------------------------------
 import           Chainweb.Api.BlockHeader
@@ -44,6 +46,7 @@ import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
+import           ChainwebData.TxSummary
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -55,6 +58,7 @@ import           Frontend.Common
 import           Frontend.Nav
 import           Frontend.Page.Block
 import           Frontend.Page.ReqKey
+import           Frontend.Transactions
 ------------------------------------------------------------------------------
 
 frontend :: Frontend (R FrontendRoute)
@@ -83,7 +87,7 @@ mainDispatch route = do
       networkDispatch route (NetId_Custom host)
 
 networkDispatch
-  :: ObeliskWidget js t (R FrontendRoute) m
+  :: (ObeliskWidget js t (R FrontendRoute) m)
   => Text -> NetId -> App (R NetRoute) t m ()
 networkDispatch route netId = prerender_ blank $ do
   divClass "ui fixed inverted menu" $ nav netId
@@ -99,7 +103,7 @@ networkDispatch route netId = prerender_ blank $ do
           let ch = ChainwebHost h $ _siChainwebVer $ _as_serverInfo as
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
-          void $ networkHold (inlineLoader "Getting latest cut...") (blockTableWidget <$> height)
+          void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
         NetRoute_Chain -> chainRouteHandler si netId
 
 chainRouteHandler
@@ -197,31 +201,19 @@ calcTps gs elapsed = fromIntegral (_gs_txCount gs) / realToFrac elapsed
 showTps :: Double -> Text
 showTps = T.pack . printf "%.2f"
 
-calcCoinsLeft :: UTCTime -> BlockTable -> Maybe Double
-calcCoinsLeft now bt =
-    case M.lookupMax (_blockTable_blocks bt) of
-      Nothing -> Nothing
-      Just (cur, _) ->
-        let traunch1 = firstAdjust - fromIntegral cur
-            traunch2 = realToFrac blocksLeft - traunch1
-         in Just $ traunch1 * reward1 * 10 + traunch2 * reward2 * 10
-  where
-    blocksLeft = diffUTCTime launchTime now / 30
-    firstAdjust = 87600
-    reward1 = 2.304523
-    reward2 = 2.297878
-
 initBlockTable
-  :: (MonadApp r t m, HasJSContext (Performable m), MonadJSM (Performable m),
+  :: (MonadAppIO r t m, HasJSContext (Performable m), MonadJSM (Performable m),
       Prerender js t m)
-  => BlockHeight
-  -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats)
-initBlockTable height = do
+  => NetId
+  -> BlockHeight
+  -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Dynamic t RecentTxs)
+initBlockTable netId height = do
     (AppState n si) <- ask
     let cfg = EventSourceConfig never True
     let ch = ChainwebHost (netHost n) (_siChainwebVer si)
     es <- startEventSource ch cfg
     let downEvent = _eventSource_recv es
+    eRecentTxs <- getRecentTxs (_eventSource_open es)
 
     ebt <- getBlockTable ch $ CServerInfo si height
 
@@ -239,70 +231,102 @@ initBlockTable height = do
 
     let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
     pb <- getPostBuild
-    now <- prerender (return t0) (liftIO getCurrentTime)
+    now <- liftIO getCurrentTime
     stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0) $ mergeWith (.)
       [ maybe id addTxCount <$> downEvent
-      , setStartTime <$> tag (current now) pb
+      , setStartTime now <$ pb
       , addHashrateData <$> filterRight newHrd
       , maybe id addModuleCount <$> downEvent
       ]
-    return (blockTable, stats)
+
+    let onlyTxs (Just t) = if _blockHeaderTx_txCount t == Just 0 then Nothing else Just t
+        onlyTxs Nothing = Nothing
+        blocksWithTxs = fmapMaybe onlyTxs downEvent
+
+    ebp <- getBlockPayload2 ch blocksWithTxs
+
+    recentTxs <- foldDyn ($) (RecentTxs mempty) $ leftmost
+      [ either (const id) mergeRecentTxs <$> eRecentTxs
+      , addNewTransaction <$> filterRight ebp
+      ]
+    return (blockTable, stats, recentTxs)
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
 
+data SearchType = RequestKeySearch | TxSearch
+  deriving (Eq,Ord,Show,Read,Enum)
+
 searchWidget
-  :: forall js r t m. (MonadApp r t m, Prerender js t m,
-      MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+  :: (PostBuild t m, PerformEvent t m, DomBuilder t m,
+      DomBuilder t m, MonadHold t m, MonadFix m,
+      SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
-  => App r t m ()
-searchWidget = do
+  => NetId
+  -> App (R FrontendRoute) t m ()
+searchWidget netId = do
   divClass "ui fluid action input" $ do
     let opts = M.fromList
-          [ (0, "Request Key")
-          , (1, "Tx Code")
+          [ (RequestKeySearch, "Request Key")
+          , (TxSearch, "Tx Code")
           ]
         dcfg = def & attributes .~ constDyn ("class" =: "ui compact selection dropdown search__dropdown" <> "style" =: "border-top-right-radius: 0!important; border-bottom-right-radius: 0!important;")
-    dropdown 0 (constDyn opts) dcfg
-    textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
-    elClass "button" "ui button" $ text "Search"
+    d <- dropdown TxSearch (constDyn opts) dcfg
+    ti <- textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
+    (e,click) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
+    --setRoute $ doSearch netId <$> tag (current $ (,) <$> value ti <*> value d) (domEvent Click e)
+    --res <- searchTxs (constDyn QNone) (constDyn QNone) (QParamSome <$> value ti) (domEvent Click e)
+    return ()
 
-blockTableWidget
-  :: forall js r t m. (MonadApp r t m, Prerender js t m,
+--doSearch
+--  :: DomBuilder t m
+--  => NetId
+--  -> (Text, SearchType)
+--  -> App (R FrontendRoute) t m ()
+--doSearch _ (searchText, RequestKeySearch) =
+--    FR_Mainnet :/ NetRoute_Chainweb
+--doSearch netId (searchText, TxSearch) =
+--    case netId of
+--      NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxSearch :/ searchText
+--      NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ searchText
+--      NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxSearch :/ searchText))
+
+mainPageWidget
+  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
       MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
-  => Maybe BlockHeight
+  => NetId
+  -> Maybe BlockHeight
   -> App r t m ()
-blockTableWidget Nothing = text "Error getting cut from server"
-blockTableWidget (Just height) = do
-  (dbt, stats) <- initBlockTable height
+mainPageWidget _ Nothing = text "Error getting cut from server"
+mainPageWidget netId (Just height) = do
+    (dbt, stats, recentTxs) <- initBlockTable netId height
 
-  dti <- fmap join $ prerender (return $ constDyn dummy) $ do
     t <- liftIO getCurrentTime
-    clockLossy 1 t
+    dti <- clockLossy 1 t
 
-  hashrate <- holdDyn Nothing $ attachWith
-    (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
-    (current dti) (updated dbt)
-  searchWidget
-  divClass "ui segment" $ do
-    divClass "ui small two statistics" $ do
-        statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-        statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
-  divClass "block-table" $ do
-    divClass "header-row" $ do
-      elClass "span" "table-header" $ text "Height"
-      chains <- asks (_siChains . _as_serverInfo)
-      forM_ chains $ \cid -> elClass "span" "table-header" $ do
-        el "div" $ text $ "Chain " <> tshow cid
-        elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
-                      "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
+    hashrate <- holdDyn Nothing $ attachWith
+      (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
+      (current dti) (updated dbt)
+    --searchWidget netId
+    --divClass "ui segment" $ do
+    --  divClass "ui small two statistics" $ do
+    --      statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+    --      statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
+    divClass "block-table" $ do
+      divClass "header-row" $ do
+        elClass "span" "table-header" $ text "Height"
+        chains <- asks (_siChains . _as_serverInfo)
+        forM_ chains $ \cid -> elClass "span" "table-header" $ do
+          el "div" $ text $ "Chain " <> tshow cid
+          elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
+                        "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
 
-    rec hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
-                                    (rowsWidget dti hoveredBlock)
-        hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
-    return ()
+      rec hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
+                                      (rowsWidget dti hoveredBlock)
+          hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
+      return ()
+    void $ networkView (recentTransactions <$> recentTxs)
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
     _f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)

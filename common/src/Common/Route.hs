@@ -61,11 +61,13 @@ blockIndexRouteEncoder = pathComponentEncoder $ \case
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
   NetRoute_Chain :: NetRoute (Int :. R ChainRoute)
+  NetRoute_TxSearch :: NetRoute Text
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_Chainweb -> PathEnd $ unitEncoder mempty
   NetRoute_Chain -> PathSegment "chain" $ pathParamEncoder unsafeTshowEncoder blockIndexRouteEncoder
+  NetRoute_TxSearch -> PathSegment "txsearch" singlePathSegmentEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()

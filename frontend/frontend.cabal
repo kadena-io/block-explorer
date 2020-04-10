@@ -36,6 +36,7 @@ library
     , reflex
     , reflex-dom
     , reflex-dom-core
+    , servant-reflex
     , stm
     , text
     , time
