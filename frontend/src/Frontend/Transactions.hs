@@ -80,6 +80,7 @@ txTable
   => NetId
   -> [TxSummary]
   -> m ()
+txTable net [] = blank
 txTable net txs = do
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do

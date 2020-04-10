@@ -66,36 +66,42 @@ frontend = Frontend
   { _frontend_head = appHead
   , _frontend_body = do
       route <- getAppRoute
-      mainDispatch route
+      ndbs <- getJsonCfg "frontend/data-backends"
+      mainDispatch route (either error id ndbs)
       footer
   }
 
 mainDispatch
   :: ObeliskWidget js t (R FrontendRoute) m
   => Text
+  -> DataBackends
   -> App (R FrontendRoute) t m ()
-mainDispatch route = do
+mainDispatch route ndbs = do
+  m <- getTextCfg "frontend/tracking-id"
   pb <- getPostBuild
   subRoute_ $ \case
     FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
     FR_About -> do
       divClass "ui fixed inverted menu" $ nav NetId_Mainnet
       aboutWidget
-    FR_Mainnet -> networkDispatch route NetId_Mainnet
-    FR_Testnet -> networkDispatch route NetId_Testnet
+    FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
+    FR_Testnet -> networkDispatch route ndbs NetId_Testnet
     FR_Customnet -> subPairRoute_ $ \host ->
-      networkDispatch route (NetId_Custom host)
+      networkDispatch route ndbs (NetId_Custom host)
 
 networkDispatch
   :: (ObeliskWidget js t (R FrontendRoute) m)
-  => Text -> NetId -> App (R NetRoute) t m ()
-networkDispatch route netId = prerender_ blank $ do
+  => Text
+  -> DataBackends
+  -> NetId
+  -> App (R NetRoute) t m ()
+networkDispatch route ndbs netId = prerender_ blank $ do
   divClass "ui fixed inverted menu" $ nav netId
   elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
     dsi <- getServerInfo $ netHost netId
     dyn_ $ ffor dsi $ \case
       Nothing -> inlineLoader "Loading..."
-      Just si -> runApp route netId si $ subRoute_ $ \case
+      Just si -> runApp route ndbs netId si $ subRoute_ $ \case
         NetRoute_Chainweb -> do
           as <- ask
           pb <- getPostBuild
@@ -141,6 +147,13 @@ footer = do
 
 getTextCfg :: HasConfigs m => Text -> m (Maybe Text)
 getTextCfg p = fmap (T.strip . T.decodeUtf8With T.lenientDecode) <$> getConfig p
+
+getJsonCfg :: (HasConfigs m, FromJSON a) => Text -> m (Either String a)
+getJsonCfg p = f <$> getConfig p
+  where
+    f mbs = do
+      bs <- note ("Config file missing: " <> T.unpack p) mbs
+      eitherDecodeStrict bs
 
 appHead :: (DomBuilder t m, HasConfigs m) => m ()
 appHead = do
@@ -206,14 +219,13 @@ initBlockTable
       Prerender js t m)
   => NetId
   -> BlockHeight
-  -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Dynamic t RecentTxs)
+  -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Maybe (Dynamic t RecentTxs))
 initBlockTable netId height = do
-    (AppState n si) <- ask
+    (AppState n si mdbh) <- ask
     let cfg = EventSourceConfig never True
     let ch = ChainwebHost (netHost n) (_siChainwebVer si)
     es <- startEventSource ch cfg
     let downEvent = _eventSource_recv es
-    eRecentTxs <- getRecentTxs (_eventSource_open es)
 
     ebt <- getBlockTable ch $ CServerInfo si height
 
@@ -243,12 +255,17 @@ initBlockTable netId height = do
         onlyTxs Nothing = Nothing
         blocksWithTxs = fmapMaybe onlyTxs downEvent
 
-    ebp <- getBlockPayload2 ch blocksWithTxs
+    recentTxs <- case mdbh of
+      Nothing -> return Nothing
+      Just dbh -> do
+        eRecentTxs <- getRecentTxs dbh (_eventSource_open es)
+        ebp <- getBlockPayload2 ch blocksWithTxs
 
-    recentTxs <- foldDyn ($) (RecentTxs mempty) $ leftmost
-      [ either (const id) mergeRecentTxs <$> eRecentTxs
-      , addNewTransaction <$> filterRight ebp
-      ]
+        recent <- foldDyn ($) (RecentTxs mempty) $ leftmost
+          [ either (const id) mergeRecentTxs <$> eRecentTxs
+          , addNewTransaction <$> filterRight ebp
+          ]
+        return $ Just recent
     return (blockTable, stats, recentTxs)
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
@@ -300,7 +317,7 @@ mainPageWidget
   -> App r t m ()
 mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
-    (dbt, stats, recentTxs) <- initBlockTable netId height
+    (dbt, stats, mrecent) <- initBlockTable netId height
 
     t <- liftIO getCurrentTime
     dti <- clockLossy 1 t
@@ -326,7 +343,9 @@ mainPageWidget netId (Just height) = do
                                       (rowsWidget dti hoveredBlock)
           hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
       return ()
-    void $ networkView (recentTransactions <$> recentTxs)
+    case mrecent of
+      Nothing -> blank
+      Just recent -> void $ networkView (recentTransactions <$> recent)
   where
     dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
     _f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)

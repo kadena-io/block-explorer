@@ -456,7 +456,7 @@ instance Monoid BlockTable where
   mempty = BlockTable mempty mempty
 
 blockTableNumRows :: Int
-blockTableNumRows = 4
+blockTableNumRows = 6
 
 insertBlockTable :: BlockTable -> BlockHeaderTx -> BlockTable
 insertBlockTable (BlockTable bs cut) btx = BlockTable bs2 cut2
@@ -481,35 +481,39 @@ r2e (ResponseSuccess _ a _) = Right a
 r2e (ResponseFailure _ t _) = Left t
 r2e (RequestFailure _ t )   = Left t
 
-cwdataUrl :: BaseUrl
-cwdataUrl = BaseFullUrl Http "odin.chainweb.com" 8080 "/"
---cwdataUrl = BasePath "/"
+mkDataUrl :: Host -> BaseUrl
+mkDataUrl h = BaseFullUrl scheme (hostAddress h) p "/"
+  where
+    p = hostPort h
+    scheme = if p == 443 then Https else Http
 
 getRecentTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
-    => Event t ()
+    => Host
+    -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
-getRecentTxs evt = do
+getRecentTxs h evt = do
     let (go :<|> _) = client chainwebDataApi
                              (Proxy :: Proxy m)
                              (Proxy :: Proxy ())
-                             (constDyn cwdataUrl)
+                             (constDyn $ mkDataUrl h)
     txResp <- go evt
     return $ r2e <$> txResp
 
 searchTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
-    => Dynamic t (QParam Limit)
+    => Host
+    -> Dynamic t (QParam Limit)
     -> Dynamic t (QParam Offset)
     -> Dynamic t (QParam Text)
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
-searchTxs lim off needle evt = do
+searchTxs h lim off needle evt = do
     let (_ :<|> go) = client chainwebDataApi
                              (Proxy :: Proxy m)
                              (Proxy :: Proxy ())
-                             (constDyn cwdataUrl)
+                             (constDyn $ mkDataUrl h)
     txResp <- go lim off needle evt
     return $ r2e <$> txResp

@@ -141,6 +141,7 @@ setStartTime t gs = gs { _gs_startTime = t }
 data AppState t = AppState
     { _as_network    :: NetId
     , _as_serverInfo :: ServerInfo
+    , _as_dataHost   :: Maybe Host
     } deriving Generic
 
 getMissing :: BlockTable -> BlockHeaderTx -> [(ChainId, Hash)]
@@ -158,13 +159,14 @@ stateManager
     :: DomBuilder t m
     => Text
     -- ^ Application route...not in use yet
+    -> DataBackends
     -> NetId
     -> ServerInfo
     -> Event t AppTriggers
     -- ^ Not in use yet
     -> m (AppState t)
-stateManager _ n si _ = do
-    return $ AppState n si --blockTable stats
+stateManager _ (DataBackends ndbs) n si _ = do
+    return $ AppState n si (M.lookup (_siChainwebVer si) ndbs)
 
 pairToBhtx :: (BlockHeader, Text) -> BlockHeaderTx
 pairToBhtx (h, bhBinBase64) =

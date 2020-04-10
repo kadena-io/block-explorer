@@ -8,3 +8,4 @@ result-exe
 ghcid-output.txt
 frontend.jsexe.assets
 static.assets
+config/frontend/data-backends
