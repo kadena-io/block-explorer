@@ -17,7 +17,6 @@ import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.HashMap.Strict as HM
-import           Data.Foldable
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Ord
@@ -36,7 +35,6 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Dom.EventSource
 import           Reflex.Network
-import           Servant.Reflex hiding (Client)
 import           Text.Printf
 ------------------------------------------------------------------------------
 import           Chainweb.Api.BlockHeader
@@ -46,7 +44,6 @@ import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
-import           ChainwebData.TxSummary
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -77,7 +74,6 @@ mainDispatch
   -> DataBackends
   -> App (R FrontendRoute) t m ()
 mainDispatch route ndbs = do
-  m <- getTextCfg "frontend/tracking-id"
   pb <- getPostBuild
   subRoute_ $ \case
     FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
@@ -111,6 +107,8 @@ networkDispatch route ndbs netId = prerender_ blank $ do
           height <- f <$$$> getCut (ch <$ pb)
           void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
         NetRoute_Chain -> chainRouteHandler si netId
+        NetRoute_TxReqKey -> requestKeyWidget si netId
+        NetRoute_TxSearch -> text "Not implemented yet"
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -124,7 +122,6 @@ chainRouteHandler si netId = do
     subPairRoute_ $ \cid -> subRoute_ $ \case
       Chain_BlockHash -> blockHashWidget si netId cid
       Chain_BlockHeight -> blockHeightWidget si netId cid
-      Chain_TxReqKey -> requestKeyWidget si netId cid
 
 footer
   :: (DomBuilder t m)
@@ -204,7 +201,7 @@ showResp = show
 
 statistic :: (DomBuilder t m) => Text -> m () -> m ()
 statistic label val = do
-  divClass "statistic" $ do
+  divClass "ui statistic" $ do
     divClass "value" $ val
     divClass "label" $ text label
 
@@ -279,20 +276,33 @@ searchWidget
       SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId
-  -> App (R FrontendRoute) t m ()
+  -> App r t m ()
 searchWidget netId = do
   divClass "ui fluid action input" $ do
     let opts = M.fromList
           [ (RequestKeySearch, "Request Key")
-          , (TxSearch, "Tx Code")
+--          , (TxSearch, "Tx Code")
           ]
         dcfg = def & attributes .~ constDyn ("class" =: "ui compact selection dropdown search__dropdown" <> "style" =: "border-top-right-radius: 0!important; border-bottom-right-radius: 0!important;")
-    d <- dropdown TxSearch (constDyn opts) dcfg
+    d <- dropdown RequestKeySearch (constDyn opts) dcfg
     ti <- textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
     (e,click) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
+    setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> value d) (domEvent Click e))
     --setRoute $ doSearch netId <$> tag (current $ (,) <$> value ti <*> value d) (domEvent Click e)
     --res <- searchTxs (constDyn QNone) (constDyn QNone) (QParamSome <$> value ti) (domEvent Click e)
     return ()
+
+mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
+mkSearchRoute netId str RequestKeySearch =
+  case netId of
+    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxReqKey :/ str
+    NetId_Testnet -> FR_Testnet :/ NetRoute_TxReqKey :/ str
+    NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxReqKey :/ str))
+mkSearchRoute netId str TxSearch =
+  case netId of
+    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxSearch :/ str
+    NetId_Testnet -> FR_Testnet :/ NetRoute_TxSearch :/ str
+    NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxSearch :/ str))
 
 --doSearch
 --  :: DomBuilder t m
@@ -319,17 +329,18 @@ mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
     (dbt, stats, mrecent) <- initBlockTable netId height
 
+    searchWidget netId
+
     t <- liftIO getCurrentTime
     dti <- clockLossy 1 t
-
     hashrate <- holdDyn Nothing $ attachWith
       (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
       (current dti) (updated dbt)
-    --searchWidget netId
-    --divClass "ui segment" $ do
-    --  divClass "ui small two statistics" $ do
-    --      statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-    --      statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
+    divClass "ui segment" $ do
+      divClass "ui mini two statistics" $ do
+          statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+          statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
+
     divClass "block-table" $ do
       divClass "header-row" $ do
         elClass "span" "table-header" $ text "Height"
