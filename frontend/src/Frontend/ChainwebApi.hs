@@ -486,7 +486,7 @@ cwdataUrl = BaseFullUrl Http "odin.chainweb.com" 8080 "/"
 --cwdataUrl = BasePath "/"
 
 getRecentTxs
-    :: (TriggerEvent t m, PerformEvent t m,
+    :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
     => Event t ()
     -> m (Event t (Either Text [TxSummary]))
@@ -499,7 +499,7 @@ getRecentTxs evt = do
     return $ r2e <$> txResp
 
 searchTxs
-    :: (TriggerEvent t m, PerformEvent t m,
+    :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
     => Dynamic t (QParam Limit)
     -> Dynamic t (QParam Offset)
