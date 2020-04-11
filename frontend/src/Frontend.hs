@@ -108,7 +108,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
           void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
         NetRoute_Chain -> chainRouteHandler si netId
         NetRoute_TxReqKey -> requestKeyWidget si netId
-        NetRoute_TxSearch -> text "Not implemented yet"
+        NetRoute_TxSearch -> transactionSearch si netId
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -281,15 +281,13 @@ searchWidget netId = do
   divClass "ui fluid action input" $ do
     let opts = M.fromList
           [ (RequestKeySearch, "Request Key")
---          , (TxSearch, "Tx Code")
+          , (TxSearch, "Tx Code")
           ]
         dcfg = def & attributes .~ constDyn ("class" =: "ui compact selection dropdown search__dropdown" <> "style" =: "border-top-right-radius: 0!important; border-bottom-right-radius: 0!important;")
     d <- dropdown RequestKeySearch (constDyn opts) dcfg
     ti <- textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
     (e,click) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
     setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> value d) (domEvent Click e))
-    --setRoute $ doSearch netId <$> tag (current $ (,) <$> value ti <*> value d) (domEvent Click e)
-    --res <- searchTxs (constDyn QNone) (constDyn QNone) (QParamSome <$> value ti) (domEvent Click e)
     return ()
 
 mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
@@ -298,24 +296,7 @@ mkSearchRoute netId str RequestKeySearch =
     NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxReqKey :/ str
     NetId_Testnet -> FR_Testnet :/ NetRoute_TxReqKey :/ str
     NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxReqKey :/ str))
-mkSearchRoute netId str TxSearch =
-  case netId of
-    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxSearch :/ str
-    NetId_Testnet -> FR_Testnet :/ NetRoute_TxSearch :/ str
-    NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxSearch :/ str))
-
---doSearch
---  :: DomBuilder t m
---  => NetId
---  -> (Text, SearchType)
---  -> App (R FrontendRoute) t m ()
---doSearch _ (searchText, RequestKeySearch) =
---    FR_Mainnet :/ NetRoute_Chainweb
---doSearch netId (searchText, TxSearch) =
---    case netId of
---      NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxSearch :/ searchText
---      NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ searchText
---      NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxSearch :/ searchText))
+mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 
 mainPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,

@@ -20,6 +20,7 @@ module Common.Route where
 import           Prelude hiding ((.), id)
 import           Control.Category (Category (..))
 import           Data.Functor.Identity
+import           Data.Map (Map)
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
@@ -60,14 +61,14 @@ data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
   NetRoute_Chain :: NetRoute (Int :. R ChainRoute)
   NetRoute_TxReqKey :: NetRoute Text
-  NetRoute_TxSearch :: NetRoute Text
+  NetRoute_TxSearch :: NetRoute (Map Text (Maybe Text))
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_Chainweb -> PathEnd $ unitEncoder mempty
   NetRoute_Chain -> PathSegment "chain" $ pathParamEncoder unsafeTshowEncoder blockIndexRouteEncoder
   NetRoute_TxReqKey -> PathSegment "tx" singlePathSegmentEncoder
-  NetRoute_TxSearch -> PathSegment "txsearch" singlePathSegmentEncoder
+  NetRoute_TxSearch -> PathSegment "txsearch" queryOnlyEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()

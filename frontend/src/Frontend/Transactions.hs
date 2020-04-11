@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 -- {-# LANGUAGE ConstraintKinds            #-}
 -- {-# LANGUAGE DataKinds                  #-}
@@ -38,7 +39,9 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Dom.EventSource
 import           Reflex.Network
+import           Servant.Reflex
 import           Text.Printf
+import           Text.Read
 ------------------------------------------------------------------------------
 import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockHeaderTx
@@ -47,6 +50,7 @@ import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
+import           ChainwebData.Pagination
 import           ChainwebData.TxSummary
 import           Common.Route
 import           Common.Types
@@ -72,7 +76,77 @@ recentTransactions
 recentTransactions txs = do
   net <- asks _as_network
   pb <- getPostBuild
-  txTable net $ getSummaries txs
+  txTable net $ take 5 $ getSummaries txs
+
+qParam :: Text
+qParam = "q"
+
+limParam :: Text
+limParam = "lim"
+
+pageParam :: Text
+pageParam = "page"
+
+itemsPerPage :: Integer
+itemsPerPage = 20
+
+transactionSearch
+    :: ( MonadApp r t m
+       , MonadJSM (Performable m)
+       , HasJSContext (Performable m)
+       , RouteToUrl (R FrontendRoute) m
+       , SetRoute t (R FrontendRoute) m
+       )
+    => ServerInfo
+    -> NetId
+    -> App (Map Text (Maybe Text)) t m ()
+transactionSearch si netId = do
+    (AppState n si mdbh) <- ask
+    case mdbh of
+      Nothing -> text "Transaction search feature not available for this network"
+      Just dbh -> do
+        pmap <- askRoute
+        pb <- getPostBuild
+        let page = do
+              pm <- pmap
+              pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
+            needle = do
+              pm <- pmap
+              pure $ fromMaybe "" $ join (M.lookup qParam pm)
+            newSearch = leftmost [pb, () <$ updated pmap]
+        res <- searchTxs dbh (constDyn $ QParamSome $ Limit itemsPerPage)
+                             (QParamSome . Offset . (*itemsPerPage) <$> page)
+                             (QParamSome <$> needle) newSearch
+
+        divClass "ui pagination menu" $ do
+          let setSearchRoute f e = setRoute $
+                tag (current $ mkTxSearchRoute n <$> needle <*> fmap (Just . f) page) e
+              prevAttrs p = if p == 1
+                              then "class" =: "disabled item"
+                              else "class" =: "item"
+          (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
+          setSearchRoute pred (domEvent Click p)
+          divClass "disabled item" $ display page
+          (n,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
+          setSearchRoute succ (domEvent Click n)
+
+        let f = either text (txTable n)
+        void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
+
+mkTxSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
+mkTxSearchRoute netId str page =
+  case netId of
+    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxSearch :/ (qParam =: Just str <> p )
+    NetId_Testnet -> FR_Testnet :/ NetRoute_TxSearch :/ (qParam =: Just str <> p)
+    NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxSearch :/ (qParam =: Just str <> p)))
+  where
+    p = maybe mempty ((pageParam =:) . Just . tshow) page
+
+
+uiPagination :: DomBuilder t m => m ()
+uiPagination = do
+  divClass "ui pagination menu" $ do
+    divClass "item" blank
 
 txTable
   :: (DomBuilder t m,
@@ -89,7 +163,7 @@ txTable net txs = do
       elClass "th" "two wide" $ text "Sender"
       el "th" $ text "Transaction Code"
     el "tbody" $ do
-      forM_ (take 5 txs) $ \tx -> el "tr" $ do
+      forM_ txs $ \tx -> el "tr" $ do
         let chain = _txSummary_chain tx
         let height = _txSummary_height tx
         let route = addNetRoute net chain $ Chain_BlockHeight :/ height :. Block_Header :/ ()
