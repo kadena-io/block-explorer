@@ -115,7 +115,7 @@ transactionSearch si netId = do
               pure $ fromMaybe "" $ join (M.lookup qParam pm)
             newSearch = leftmost [pb, () <$ updated pmap]
         res <- searchTxs dbh (constDyn $ QParamSome $ Limit itemsPerPage)
-                             (QParamSome . Offset . (*itemsPerPage) <$> page)
+                             (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
                              (QParamSome <$> needle) newSearch
 
         divClass "ui pagination menu" $ do
