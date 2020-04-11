@@ -141,3 +141,11 @@ div.summary-inner {
     box-shadow: none!important;
     -webkit-box-shadow: none!important;
 }
+
+.pagination .item {
+    cursor: pointer;
+}
+
+.pagination .disabled.item {
+    cursor: auto;
+}

@@ -76,7 +76,11 @@ recentTransactions
 recentTransactions txs = do
   net <- asks _as_network
   pb <- getPostBuild
-  txTable net $ take 5 $ getSummaries txs
+  if S.null (_recentTxs_txs txs)
+    then blank
+    else do
+      el "h4" $ text "Recent Transactions"
+      txTable net $ take 5 $ getSummaries txs
 
 qParam :: Text
 qParam = "q"
