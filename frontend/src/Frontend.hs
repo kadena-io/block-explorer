@@ -430,7 +430,7 @@ blockWidget0 ti hoveredBlock hs height cid = do
                     , Nothing <$ domEvent Mouseleave e]
 
 diffStr :: Double -> Text
-diffStr d = T.pack $ printf "%.2f %s" (d / divisor) units
+diffStr d = T.pack $ printf "%.1f %s" (d / divisor) units
   where
     (divisor, units :: String)
       | d >= 1e18 = (1e18, "EH")
