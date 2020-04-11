@@ -212,8 +212,7 @@ showTps :: Double -> Text
 showTps = T.pack . printf "%.2f"
 
 initBlockTable
-  :: (MonadAppIO r t m, HasJSContext (Performable m), MonadJSM (Performable m),
-      Prerender js t m)
+  :: (MonadAppIO r t m, Prerender js t m)
   => NetId
   -> BlockHeight
   -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Maybe (Dynamic t RecentTxs))
@@ -270,6 +269,10 @@ initBlockTable netId height = do
 data SearchType = RequestKeySearch | TxSearch
   deriving (Eq,Ord,Show,Read,Enum)
 
+searchTypeText :: SearchType -> Text
+searchTypeText RequestKeySearch = "Request Key"
+searchTypeText TxSearch = "Tx Code"
+
 searchWidget
   :: (PostBuild t m, PerformEvent t m, DomBuilder t m,
       DomBuilder t m, MonadHold t m, MonadFix m,
@@ -279,15 +282,19 @@ searchWidget
   -> App r t m ()
 searchWidget netId = do
   divClass "ui fluid action input" $ do
-    let opts = M.fromList
-          [ (RequestKeySearch, "Request Key")
-          , (TxSearch, "Tx Code")
-          ]
-        dcfg = def & attributes .~ constDyn ("class" =: "ui compact selection dropdown search__dropdown" <> "style" =: "border-top-right-radius: 0!important; border-bottom-right-radius: 0!important;")
-    d <- dropdown RequestKeySearch (constDyn opts) dcfg
+    st <- divClass "ui compact menu search__dropdown" $ do
+      divClass "ui simple dropdown item" $ mdo
+        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc]
+        dynText $ searchTypeText <$> curSearchType
+        elClass "i" "dropdown icon" blank
+        (rk, txc) <- divClass "menu" $ do
+          (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
+          (t,_) <- elAttr' "div" ("class" =: "item") $ text "Tx Code"
+          return (RequestKeySearch <$ domEvent Click r, TxSearch <$ domEvent Click t)
+        return curSearchType
     ti <- textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
     (e,click) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
-    setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> value d) (domEvent Click e))
+    setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> st) (domEvent Click e))
     return ()
 
 mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
@@ -300,7 +307,6 @@ mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 
 mainPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
-      MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId

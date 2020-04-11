@@ -136,4 +136,8 @@ div.summary-inner {
     -moz-border-bottom-right-radius: 0!important;
     -webkit-border-top-right-radius: 0!important;
     -webkit-border-bottom-right-radius: 0!important;
+
+    border-right: none!important;
+    box-shadow: none!important;
+    -webkit-box-shadow: none!important;
 }
