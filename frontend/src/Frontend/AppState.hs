@@ -131,7 +131,11 @@ addHashrateData (cid, hrd) gs = gs { _gs_hashrates = M.insert cid hrd hrs }
     hrs = _gs_hashrates gs
 
 addTxCount :: BlockHeaderTx -> GlobalStats -> GlobalStats
-addTxCount bhtx = gs_txCount +~ (maybe 0 fromIntegral (_blockHeaderTx_txCount bhtx))
+addTxCount bhtx gs = gs
+    & gs_txCount +~ newCount
+    & gs_totalTxCount . _Just +~ newCount
+  where
+    newCount = (maybe 0 fromIntegral (_blockHeaderTx_txCount bhtx))
 
 addModuleCount :: BlockHeaderTx -> GlobalStats -> GlobalStats
 addModuleCount bhtx gs = gs { _gs_moduleCount = _gs_moduleCount gs + moduleCount }
