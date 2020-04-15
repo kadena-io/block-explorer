@@ -13,12 +13,14 @@
 module Frontend where
 
 ------------------------------------------------------------------------------
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Maybe
 import           Data.Ord
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -206,12 +208,6 @@ statistic label val = do
     divClass "value" $ val
     divClass "label" $ text label
 
-calcTps :: GlobalStats -> NominalDiffTime -> Double
-calcTps gs elapsed = fromIntegral (_gs_txCount gs) / realToFrac elapsed
-
-showTps :: Double -> Text
-showTps = T.pack . printf "%.2f"
-
 initBlockTable
   :: (MonadAppIO r t m, Prerender js t m)
   => NetId
@@ -241,19 +237,13 @@ initBlockTable netId height = do
     let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
     pb <- getPostBuild
     now <- liftIO getCurrentTime
-    stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0) $ mergeWith (.)
-      [ maybe id addTxCount <$> downEvent
-      , setStartTime now <$ pb
-      , addHashrateData <$> filterRight newHrd
-      , maybe id addModuleCount <$> downEvent
-      ]
 
     let onlyTxs (Just t) = if _blockHeaderTx_txCount t == Just 0 then Nothing else Just t
         onlyTxs Nothing = Nothing
         blocksWithTxs = fmapMaybe onlyTxs downEvent
 
-    recentTxs <- case mdbh of
-      Nothing -> return Nothing
+    (recentTxs, ecds) <- case mdbh of
+      Nothing -> return (Nothing, never)
       Just dbh -> do
         eRecentTxs <- getRecentTxs dbh (_eventSource_open es)
         ebp <- getBlockPayload2 ch blocksWithTxs
@@ -262,7 +252,19 @@ initBlockTable netId height = do
           [ either (const id) mergeRecentTxs <$> eRecentTxs
           , addNewTransaction <$> filterRight ebp
           ]
-        return $ Just recent
+
+        ecds <- getChainwebStats dbh pb
+        return $ (Just recent, ecds)
+
+    stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0 Nothing Nothing) $ mergeWith (.)
+      [ maybe id addTxCount <$> downEvent
+      , setStartTime now <$ pb
+      , addHashrateData <$> filterRight newHrd
+      , maybe id addModuleCount <$> downEvent
+      , set gs_totalTxCount <$> ((_cds_transactionCount <=< hush) <$> ecds)
+      , set gs_circulatingCoins <$> ((_cds_coinsInCirculation <=< hush) <$> ecds)
+      ]
+
     return (blockTable, stats, recentTxs)
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
@@ -326,21 +328,28 @@ mainPageWidget netId (Just height) = do
     hashrate <- holdDyn Nothing $ attachWith
       (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
       (current dti) (updated dbt)
-    divClass "ui segment" $ do
-      divClass "ui mini three statistics" $ do
-          statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-          case mdbh of
-            Nothing -> statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
-            Just dbh -> do
-              ecds <- getChainwebStats dbh pb
-              void $ networkHold blank $ ffor ecds $ \cds -> do
-                case _cds_transactionCount =<< hush cds of
-                  Nothing -> blank
-                  Just tc -> statistic "Transactions" (text $ tshow tc)
-                case _cds_coinsInCirculation =<< hush cds of
-                  Nothing -> blank
-                  Just cc -> statistic "Circulating Coins" (text $ siOneDecimal cc)
 
+    let statsList s =
+            if null slist
+              then [("Recent Transactions", tshow $ _gs_txCount s)]
+              else slist
+          where
+            slist = catMaybes
+              [ ("Transactions",) . tshow <$> _gs_totalTxCount s
+              , ("Circulating Coins",) . siOneDecimal <$> _gs_circulatingCoins s
+              ]
+    let statAttrs s = "class" =: ("ui mini " <> count <> "statistics")
+          where
+            count = case length (statsList s) of
+                      1 -> "two "
+                      2 -> "three "
+                      _ -> ""
+
+    divClass "ui segment" $ do
+      elDynAttr "div" (statAttrs <$> stats) $ do
+          statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+          networkView $ ffor (statsList <$> stats) $ \pairs -> do
+            forM pairs $ \(n,v) -> statistic n $ text v
 
     divClass "block-table" $ do
       divClass "header-row" $ do

@@ -82,11 +82,15 @@ data HashrateData = HashrateData
     } deriving (Eq,Ord,Show)
 
 data GlobalStats = GlobalStats
-    { _gs_txCount   :: Word64
+    { _gs_txCount :: Int
     , _gs_startTime :: UTCTime
     , _gs_hashrates :: Map ChainId HashrateData
     , _gs_moduleCount :: Word64
+    , _gs_totalTxCount :: Maybe Int
+    , _gs_circulatingCoins :: Maybe Double
     } deriving (Eq,Ord,Show)
+
+makeLenses ''GlobalStats
 
 calcNetworkHashrate :: POSIXTime -> BlockTable -> Maybe Double
 calcNetworkHashrate now bt =
@@ -127,7 +131,7 @@ addHashrateData (cid, hrd) gs = gs { _gs_hashrates = M.insert cid hrd hrs }
     hrs = _gs_hashrates gs
 
 addTxCount :: BlockHeaderTx -> GlobalStats -> GlobalStats
-addTxCount bhtx gs = gs { _gs_txCount = _gs_txCount gs + maybe 0 fromIntegral (_blockHeaderTx_txCount bhtx) }
+addTxCount bhtx = gs_txCount +~ (maybe 0 fromIntegral (_blockHeaderTx_txCount bhtx))
 
 addModuleCount :: BlockHeaderTx -> GlobalStats -> GlobalStats
 addModuleCount bhtx gs = gs { _gs_moduleCount = _gs_moduleCount gs + moduleCount }
