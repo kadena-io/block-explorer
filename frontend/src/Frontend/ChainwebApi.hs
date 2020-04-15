@@ -333,7 +333,6 @@ getSummaries (RecentTxs s) = toList s
 
 mergeRecentTxs :: [TxSummary] -> RecentTxs -> RecentTxs
 mergeRecentTxs tx (RecentTxs s1) = RecentTxs (s1 <> S.fromList tx)
-  where
 
 addNewTransaction :: BlockHeaderTx -> RecentTxs -> RecentTxs
 addNewTransaction bhtx (RecentTxs s1) = RecentTxs s2
@@ -414,10 +413,10 @@ getRecentTxs
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
 getRecentTxs h evt = do
-    let (go :<|> _) = client chainwebDataApi
-                             (Proxy :: Proxy m)
-                             (Proxy :: Proxy ())
-                             (constDyn $ mkDataUrl h)
+    let ((go :<|> _) :<|> _) = client chainwebDataApi
+                                 (Proxy :: Proxy m)
+                                 (Proxy :: Proxy ())
+                                 (constDyn $ mkDataUrl h)
     txResp <- go evt
     return $ r2e <$> txResp
 
@@ -431,9 +430,23 @@ searchTxs
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
 searchTxs h lim off needle evt = do
-    let (_ :<|> go) = client chainwebDataApi
-                             (Proxy :: Proxy m)
-                             (Proxy :: Proxy ())
-                             (constDyn $ mkDataUrl h)
+    let ((_ :<|> go) :<|> _) = client chainwebDataApi
+                                 (Proxy :: Proxy m)
+                                 (Proxy :: Proxy ())
+                                 (constDyn $ mkDataUrl h)
     txResp <- go lim off needle evt
+    return $ r2e <$> txResp
+
+getChainwebStats
+    :: forall t m. (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m))
+    => Host
+    -> Event t ()
+    -> m (Event t (Either Text ChainwebDataStats))
+getChainwebStats h evt = do
+    let ((_ :<|> _) :<|> go) = client chainwebDataApi
+                                 (Proxy :: Proxy m)
+                                 (Proxy :: Proxy ())
+                                 (constDyn $ mkDataUrl h)
+    txResp <- go evt
     return $ r2e <$> txResp

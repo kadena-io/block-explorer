@@ -44,6 +44,7 @@ import           Chainweb.Api.ChainTip
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
+import           ChainwebData.Api
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -314,6 +315,8 @@ mainPageWidget
   -> App r t m ()
 mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
+    pb <- getPostBuild
+    mdbh <- asks _as_dataHost
     (dbt, stats, mrecent) <- initBlockTable netId height
 
     searchWidget netId
@@ -324,9 +327,20 @@ mainPageWidget netId (Just height) = do
       (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
       (current dti) (updated dbt)
     divClass "ui segment" $ do
-      divClass "ui mini two statistics" $ do
+      divClass "ui mini three statistics" $ do
           statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-          statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
+          case mdbh of
+            Nothing -> statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
+            Just dbh -> do
+              ecds <- getChainwebStats dbh pb
+              void $ networkHold blank $ ffor ecds $ \cds -> do
+                case _cds_transactionCount =<< hush cds of
+                  Nothing -> blank
+                  Just tc -> statistic "Transactions" (text $ tshow tc)
+                case _cds_coinsInCirculation =<< hush cds of
+                  Nothing -> blank
+                  Just cc -> statistic "Circulating Coins" (text $ siOneDecimal cc)
+
 
     divClass "block-table" $ do
       divClass "header-row" $ do
@@ -440,6 +454,18 @@ diffStr d = T.pack $ printf "%.1f %s" (d / divisor) units
       | d >= 1e6 = (1e6, "MH")
       | d >= 1e3 = (1e3, "KH")
       | otherwise = (1, "H")
+
+siOneDecimal :: Double -> Text
+siOneDecimal d = T.pack $ printf "%.1f%s" (d / divisor) units
+  where
+    (divisor, units :: String)
+      | d >= 1e18 = (1e18, "E")
+      | d >= 1e15 = (1e15, "P")
+      | d >= 1e12 = (1e12, "T")
+      | d >= 1e9 = (1e9, "G")
+      | d >= 1e6 = (1e6, "M")
+      | d >= 1e3 = (1e3, "K")
+      | otherwise = (1, "")
 
 pastTimeWidget
   :: (DomBuilder t m, PostBuild t m)
