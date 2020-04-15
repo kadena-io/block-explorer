@@ -54,7 +54,7 @@ getStarted = mdo
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
       linkItem "Start Mining" "https://github.com/kadena-io/chainweb-miner/blob/master/README.org"
-      linkItem "Download Wallet" "http://testnet.chainweb.com/wallet/"
+      linkItem "Download Wallet" "https://www.kadena.io/chainweaver"
       linkItem "Play Testnet Games" "http://testnet.chainweb.com/games/"
       linkItem "See Chains in 3D (experimental)" (static @"chains-3d.html")
   dropdownVisible <- holdDyn False $ leftmost
