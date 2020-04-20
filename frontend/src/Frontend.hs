@@ -17,6 +17,7 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson
+import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -319,6 +320,7 @@ mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
     pb <- getPostBuild
     mdbh <- asks _as_dataHost
+    si <- asks _as_serverInfo
     (dbt, stats, mrecent) <- initBlockTable netId height
 
     searchWidget netId
@@ -328,6 +330,8 @@ mainPageWidget netId (Just height) = do
     hashrate <- holdDyn Nothing $ attachWith
       (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
       (current dti) (updated dbt)
+    let getDiff bt c = fmap (blockDifficulty . _blockHeaderTx_header) $ M.lookup c $ _blockTable_cut bt
+    let totalDifficulty bt = sum $ catMaybes $ map (getDiff bt) (toList $ _siChains si)
 
     let statsList s =
             if null slist
@@ -341,13 +345,15 @@ mainPageWidget netId (Just height) = do
     let statAttrs s = "class" =: ("ui mini " <> count <> "statistics")
           where
             count = case length (statsList s) of
-                      1 -> "two "
-                      2 -> "three "
+                      1 -> "three "
+                      2 -> "four "
                       _ -> ""
 
     divClass "ui segment" $ do
       elDynAttr "div" (statAttrs <$> stats) $ do
           statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+          statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
+
           networkView $ ffor (statsList <$> stats) $ \pairs -> do
             forM pairs $ \(n,v) -> statistic n $ text v
 
