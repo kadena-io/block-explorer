@@ -275,7 +275,7 @@ data SearchType = RequestKeySearch | TxSearch
 
 searchTypeText :: SearchType -> Text
 searchTypeText RequestKeySearch = "Request Key"
-searchTypeText TxSearch = "Tx Code"
+searchTypeText TxSearch = "Code"
 
 searchWidget
   :: (PostBuild t m, PerformEvent t m, DomBuilder t m,
@@ -293,7 +293,7 @@ searchWidget netId = do
         elClass "i" "dropdown icon" blank
         (rk, txc) <- divClass "menu" $ do
           (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
-          (t,_) <- elAttr' "div" ("class" =: "item") $ text "Tx Code"
+          (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
           return (RequestKeySearch <$ domEvent Click r, TxSearch <$ domEvent Click t)
         return curSearchType
     ti <- textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
