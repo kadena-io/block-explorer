@@ -17,8 +17,6 @@ module Frontend.Transactions where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
-import           Data.Aeson
-import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -38,7 +36,6 @@ import           ChainwebData.TxSummary
 import           Common.Route
 import           Common.Types
 import           Common.Utils
-import           Frontend.About
 import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
@@ -110,8 +107,8 @@ transactionSearch = do
           (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
           setSearchRoute pred (domEvent Click p)
           divClass "disabled item" $ display page
-          (n,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
-          setSearchRoute succ (domEvent Click n)
+          (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
+          setSearchRoute succ (domEvent Click next)
 
         let f = either text (txTable n)
         void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
@@ -137,7 +134,7 @@ txTable
   => NetId
   -> [TxSummary]
   -> m ()
-txTable net [] = blank
+txTable _ [] = blank
 txTable net txs = do
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do

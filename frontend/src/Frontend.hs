@@ -211,10 +211,9 @@ statistic label val = do
 
 initBlockTable
   :: (MonadAppIO r t m, Prerender js t m)
-  => NetId
-  -> BlockHeight
+  => BlockHeight
   -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Maybe (Dynamic t RecentTxs))
-initBlockTable netId height = do
+initBlockTable height = do
     (AppState n si mdbh) <- ask
     let cfg = EventSourceConfig never True
     let ch = ChainwebHost (netHost n) (_siChainwebVer si)
@@ -296,8 +295,10 @@ searchWidget netId = do
           (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
           return (RequestKeySearch <$ domEvent Click r, TxSearch <$ domEvent Click t)
         return curSearchType
-    ti <- textInput (def & attributes .~ constDyn ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;"))
-    (e,click) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
+    ti <- inputElement $ def
+      & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+        ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;")
+    (e,_) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
     setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> st) (domEvent Click e))
     return ()
 
@@ -318,10 +319,8 @@ mainPageWidget
   -> App r t m ()
 mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
-    pb <- getPostBuild
-    mdbh <- asks _as_dataHost
     si <- asks _as_serverInfo
-    (dbt, stats, mrecent) <- initBlockTable netId height
+    (dbt, stats, mrecent) <- initBlockTable height
 
     searchWidget netId
 
@@ -343,20 +342,20 @@ mainPageWidget netId (Just height) = do
               [ ("Transactions",) . tshow <$> _gs_totalTxCount s
               , ("Circulating Coins",) . siOneDecimal <$> _gs_circulatingCoins s
               ]
-    let statAttrs s = "class" =: ("ui mini " <> count <> "statistics")
+    let statAttrs s = "class" =: ("ui mini " <> c <> "statistics")
           where
-            count = case length (statsList s) of
+            c = case length (statsList s) of
                       1 -> "three "
                       2 -> "four "
                       _ -> ""
 
-    divClass "ui segment" $ do
+    _ <- divClass "ui segment" $ do
       elDynAttr "div" (statAttrs <$> stats) $ do
           statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
           statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
 
-          networkView $ ffor (statsList <$> stats) $ \pairs -> do
-            forM pairs $ \(n,v) -> statistic n $ text v
+          networkView $ ffor (statsList <$> stats) $ \ps -> do
+            forM ps $ \(n,v) -> statistic n $ text v
 
     divClass "block-table" $ do
       divClass "header-row" $ do
@@ -375,7 +374,6 @@ mainPageWidget netId (Just height) = do
       Nothing -> blank
       Just recent -> void $ networkView (recentTransactions <$> recent)
   where
-    dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
     _f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
     format :: (Int, Int, Int, Int) -> Text
     format (d, h, m, s) = T.pack $ printf "%d days %02d:%02d:%02d" d h m s
@@ -602,8 +600,8 @@ linksFromBlock
   -> BlockRef
   -> m ()
 linksFromBlock cs hoveredBlock fromBlock = do
-  let from = unChainId $ snd fromBlock
-  let toBlocks = petersonGraph M.! from
+  let fromChain = unChainId $ snd fromBlock
+  let toBlocks = petersonGraph M.! fromChain
       mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
         where
           stroke =
@@ -618,8 +616,8 @@ linksFromBlock cs hoveredBlock fromBlock = do
                               "stroke-width" =: "1.0"
                          else "stroke" =: "rgb(220,220,220)"
   svgElDynAttr "g" (mkAttrs <$> cs <*> hoveredBlock) $ do
-    linkFromTo from from
-    mapM_ (linkFromTo from) toBlocks
+    linkFromTo fromChain fromChain
+    mapM_ (linkFromTo fromChain) toBlocks
 
 linkFromTo :: (DomBuilder t m, PostBuild t m) => Int -> Int -> m ()
 linkFromTo f t =
