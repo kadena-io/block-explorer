@@ -46,7 +46,6 @@ transactionPage
   :: ( MonadApp r t m
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
-     , Prerender js t m
      )
   => NetId
   -> ChainId

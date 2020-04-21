@@ -84,8 +84,6 @@ requestKeyWidget si netId = do
       case decodeXhrResponse resp of
         Nothing -> Nothing
         Just (PollResponses pr) -> if HM.null pr then Nothing else Just pr
-    nothingMessage s =
-      "Unknown error returned while polling for request key: " <> tshow s
     reqKeyMessage s =
       T.pack $ printf "Your request key %s is not associated with an already processed transaction on any chain." (show s)
 
@@ -94,7 +92,6 @@ requestKeyResultPage
     :: ( MonadApp r t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
-       , Prerender js t m
        )
     => NetId
     -> ChainId

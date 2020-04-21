@@ -49,8 +49,7 @@ import           Frontend.Page.Transaction
 
 blockHashWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
-      Prerender js t m
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m)
      )
   => ServerInfo
   -> NetId
@@ -69,8 +68,7 @@ blockHashWidget si netId cid = do
 
 blockHeightWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
-      Prerender js t m
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m)
      )
   => ServerInfo
   -> NetId
@@ -89,8 +87,7 @@ blockHeightWidget si netId cid = do
 
 blockLink
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m
      )
   => NetId
   -> ChainId
@@ -102,8 +99,7 @@ blockLink netId chainId height linkText =
 
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
-      Prerender js t m
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m)
      )
   => NetId
   -> ChainwebHost
@@ -123,8 +119,7 @@ blockPageNoPayload netId h c bh = do
 
 blockHeaderPage
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m
      )
   => NetId
   -> ChainwebHost
@@ -163,8 +158,7 @@ blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
 
 blockPayloadWidget
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m
      )
   => NetId
   -> ChainId
@@ -186,8 +180,7 @@ blockPayloadWidget netId c bh bp = do
 
 blockPayloadWithOutputsWidget
   :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m
      )
   => NetId
   -> ChainId

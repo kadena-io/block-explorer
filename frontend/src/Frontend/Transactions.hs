@@ -17,65 +17,39 @@ module Frontend.Transactions where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
-import           Data.Aeson
-import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
-import           Data.Ord
 import qualified Data.Sequence as S
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding.Error as T
-import           Data.Time
-import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
-import           Obelisk.Configs
-import           Obelisk.Frontend
-import           Obelisk.Generated.Static
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
-import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Servant.Reflex
-import           Text.Printf
 import           Text.Read
 ------------------------------------------------------------------------------
-import           Chainweb.Api.BlockHeader
-import           Chainweb.Api.BlockHeaderTx
-import           Chainweb.Api.ChainId
-import           Chainweb.Api.ChainTip
-import           Chainweb.Api.Common
-import           Chainweb.Api.Cut
-import           Chainweb.Api.Hash
 import           ChainwebData.Pagination
 import           ChainwebData.TxSummary
 import           Common.Route
 import           Common.Types
 import           Common.Utils
-import           Frontend.About
 import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
-import           Frontend.Nav
-import           Frontend.Page.Block
-import           Frontend.Page.ReqKey
 ------------------------------------------------------------------------------
 
 recentTransactions
   :: (SetRoute t (R FrontendRoute) m,
       RouteToUrl (R FrontendRoute) m, MonadReader (AppState t1) m,
-      HasJSContext (Performable m), MonadJSM (Performable m),
-      DomBuilder t m, PerformEvent t m, TriggerEvent t m, PostBuild t m,
-      MonadHold t m)
+      DomBuilder t m)
   => RecentTxs
   -> m ()
 recentTransactions txs = do
   net <- asks _as_network
-  pb <- getPostBuild
   if S.null (_recentTxs_txs txs)
     then blank
     else do
@@ -101,11 +75,9 @@ transactionSearch
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        )
-    => ServerInfo
-    -> NetId
-    -> App (Map Text (Maybe Text)) t m ()
-transactionSearch si netId = do
-    (AppState n si mdbh) <- ask
+    => App (Map Text (Maybe Text)) t m ()
+transactionSearch = do
+    (AppState n _ mdbh) <- ask
     case mdbh of
       Nothing -> text "Transaction search feature not available for this network"
       Just dbh -> do
@@ -131,8 +103,8 @@ transactionSearch si netId = do
           (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
           setSearchRoute pred (domEvent Click p)
           divClass "disabled item" $ display page
-          (n,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
-          setSearchRoute succ (domEvent Click n)
+          (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
+          setSearchRoute succ (domEvent Click next)
 
         let f = either text (txTable n)
         void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
@@ -158,7 +130,7 @@ txTable
   => NetId
   -> [TxSummary]
   -> m ()
-txTable net [] = blank
+txTable _ [] = blank
 txTable net txs = do
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do
