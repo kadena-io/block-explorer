@@ -12,6 +12,7 @@ import           Obelisk.Generated.Static
 aboutWidget :: DomBuilder t m => m ()
 aboutWidget = divClass "ui text container" $ do
   el "p" $ text "Block Explorer is an analytics tool for the Kadena platform which visualizes the mining, propagation and braiding of blocks across multiple Kadena chains in real time and allows you to search for transactions and explore the contents of blocks."
+
   elAttr "img" ("src" =: static @"AboutBlockExplorer.png" <> "style" =: "width: 100%;") blank
   elClass "ol" "ui list" $ do
     el "li" $ text "The name of the network that is currently displaying block explorer data"
