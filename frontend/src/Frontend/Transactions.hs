@@ -22,34 +22,17 @@ import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
-import           Data.Ord
 import qualified Data.Sequence as S
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding.Error as T
-import           Data.Time
-import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
-import           Obelisk.Configs
-import           Obelisk.Frontend
-import           Obelisk.Generated.Static
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
-import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Servant.Reflex
-import           Text.Printf
 import           Text.Read
 ------------------------------------------------------------------------------
-import           Chainweb.Api.BlockHeader
-import           Chainweb.Api.BlockHeaderTx
-import           Chainweb.Api.ChainId
-import           Chainweb.Api.ChainTip
-import           Chainweb.Api.Common
-import           Chainweb.Api.Cut
-import           Chainweb.Api.Hash
 import           ChainwebData.Pagination
 import           ChainwebData.TxSummary
 import           Common.Route
@@ -60,9 +43,6 @@ import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
-import           Frontend.Nav
-import           Frontend.Page.Block
-import           Frontend.Page.ReqKey
 ------------------------------------------------------------------------------
 
 recentTransactions
@@ -70,12 +50,12 @@ recentTransactions
       RouteToUrl (R FrontendRoute) m, MonadReader (AppState t1) m,
       HasJSContext (Performable m), MonadJSM (Performable m),
       DomBuilder t m, PerformEvent t m, TriggerEvent t m, PostBuild t m,
+      Prerender js t m,
       MonadHold t m)
   => RecentTxs
   -> m ()
 recentTransactions txs = do
   net <- asks _as_network
-  pb <- getPostBuild
   if S.null (_recentTxs_txs txs)
     then blank
     else do
@@ -96,16 +76,15 @@ itemsPerPage = 20
 
 transactionSearch
     :: ( MonadApp r t m
+       , Prerender js t m
        , MonadJSM (Performable m)
        , HasJSContext (Performable m)
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        )
-    => ServerInfo
-    -> NetId
-    -> App (Map Text (Maybe Text)) t m ()
-transactionSearch si netId = do
-    (AppState n si mdbh) <- ask
+    => App (Map Text (Maybe Text)) t m ()
+transactionSearch = do
+    (AppState n _ mdbh) <- ask
     case mdbh of
       Nothing -> text "Transaction search feature not available for this network"
       Just dbh -> do
@@ -153,7 +132,7 @@ uiPagination = do
     divClass "item" blank
 
 txTable
-  :: (DomBuilder t m,
+  :: (DomBuilder t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => NetId
   -> [TxSummary]

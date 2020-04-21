@@ -112,7 +112,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
           void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
         NetRoute_Chain -> chainRouteHandler si netId
         NetRoute_TxReqKey -> requestKeyWidget si netId
-        NetRoute_TxSearch -> transactionSearch si netId
+        NetRoute_TxSearch -> transactionSearch
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -333,7 +333,8 @@ mainPageWidget netId (Just height) = do
     let getDiff bt c = fmap (blockDifficulty . _blockHeaderTx_header) $ M.lookup c $ _blockTable_cut bt
     let totalDifficulty bt = sum $ catMaybes $ map (getDiff bt) (toList $ _siChains si)
 
-    let statsList s =
+    let statsList :: GlobalStats -> [(Text, Text)]
+        statsList s =
             if null slist
               then [("Recent Transactions", tshow $ _gs_txCount s)]
               else slist
@@ -649,7 +650,7 @@ petersonGraph = M.fromList
     ]
 
 shortestPath :: Int -> Int -> Int
-shortestPath from to = shortestPaths M.! (from * 10 + to)
+shortestPath f t = shortestPaths M.! (f * 10 + t)
 
 shortestPaths :: M.Map Int Int
 shortestPaths = M.fromList $ zip [0..]
