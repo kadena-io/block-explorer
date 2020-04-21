@@ -20,6 +20,8 @@ project ./. ({ pkgs, hackGet, ... }: {
     let inherit (pkgs) lib;
     in {
       bytes = dontCheck super.bytes;
+      chainweb-api = self.callCabal2nix "chainweb-api" (hackGet ./deps/chainweb-api) {};
+
       formattable = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "formattable";
         ver = "0.1.1";
@@ -38,6 +40,12 @@ project ./. ({ pkgs, hackGet, ... }: {
         '';
       });
       reflex-dom-core = dontCheck super.reflex-dom-core; #webdriver fails to build
+      servant-reflex = dontCheck (self.callCabal2nix "servant-reflex" (pkgs.fetchFromGitHub {
+        owner = "imalsogreg";
+        repo = "servant-reflex";
+        rev = "37a3e8f2566627d910df140982bd49bf4dba171e";
+        sha256 = "1yqxf6f81n4y4527rl69hfqymrnmj7lskgns2qsh59ibisp3y9rg";
+      }) {});
   };
 
   packages = {};

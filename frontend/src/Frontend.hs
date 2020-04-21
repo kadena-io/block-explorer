@@ -13,12 +13,15 @@
 module Frontend where
 
 ------------------------------------------------------------------------------
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson
+import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import           Data.Maybe
 import           Data.Ord
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -46,6 +49,7 @@ import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
 import           Chainweb.Api.MinerData
+import           ChainwebData.Api
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -57,6 +61,7 @@ import           Frontend.Common
 import           Frontend.Nav
 import           Frontend.Page.Block
 import           Frontend.Page.ReqKey
+import           Frontend.Transactions
 ------------------------------------------------------------------------------
 
 frontend :: Frontend (R FrontendRoute)
@@ -64,36 +69,41 @@ frontend = Frontend
   { _frontend_head = appHead
   , _frontend_body = do
       route <- getAppRoute
-      mainDispatch route
+      ndbs <- getJsonCfg "frontend/data-backends"
+      mainDispatch route (either error id ndbs)
       footer
   }
 
 mainDispatch
   :: ObeliskWidget js t (R FrontendRoute) m
   => Text
+  -> DataBackends
   -> App (R FrontendRoute) t m ()
-mainDispatch route = do
+mainDispatch route ndbs = do
   pb <- getPostBuild
   subRoute_ $ \case
     FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
     FR_About -> do
       divClass "ui fixed inverted menu" $ nav NetId_Mainnet
       aboutWidget
-    FR_Mainnet -> networkDispatch route NetId_Mainnet
-    FR_Testnet -> networkDispatch route NetId_Testnet
+    FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
+    FR_Testnet -> networkDispatch route ndbs NetId_Testnet
     FR_Customnet -> subPairRoute_ $ \host ->
-      networkDispatch route (NetId_Custom host)
+      networkDispatch route ndbs (NetId_Custom host)
 
 networkDispatch
-  :: ObeliskWidget js t (R FrontendRoute) m
-  => Text -> NetId -> App (R NetRoute) t m ()
-networkDispatch route netId = prerender_ blank $ do
+  :: (ObeliskWidget js t (R FrontendRoute) m)
+  => Text
+  -> DataBackends
+  -> NetId
+  -> App (R NetRoute) t m ()
+networkDispatch route ndbs netId = prerender_ blank $ do
   divClass "ui fixed inverted menu" $ nav netId
   elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
     dsi <- getServerInfo $ netHost netId
     dyn_ $ ffor dsi $ \case
       Nothing -> inlineLoader "Loading..."
-      Just si -> runApp route netId si $ subRoute_ $ \case
+      Just si -> runApp route ndbs netId si $ subRoute_ $ \case
         NetRoute_Chainweb -> do
           as <- ask
           pb <- getPostBuild
@@ -101,8 +111,10 @@ networkDispatch route netId = prerender_ blank $ do
           let ch = ChainwebHost h $ _siChainwebVer $ _as_serverInfo as
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
-          void $ networkHold (inlineLoader "Getting latest cut...") (blockTableWidget <$> height)
+          void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
         NetRoute_Chain -> chainRouteHandler si netId
+        NetRoute_TxReqKey -> requestKeyWidget si netId
+        NetRoute_TxSearch -> transactionSearch
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -116,7 +128,6 @@ chainRouteHandler si netId = do
     subPairRoute_ $ \cid -> subRoute_ $ \case
       Chain_BlockHash -> blockHashWidget si netId cid
       Chain_BlockHeight -> blockHeightWidget si netId cid
-      Chain_TxReqKey -> requestKeyWidget si netId cid
 
 footer
   :: (DomBuilder t m)
@@ -139,6 +150,13 @@ footer = do
 
 getTextCfg :: HasConfigs m => Text -> m (Maybe Text)
 getTextCfg p = fmap (T.strip . T.decodeUtf8With T.lenientDecode) <$> getConfig p
+
+getJsonCfg :: (HasConfigs m, FromJSON a) => Text -> m (Either String a)
+getJsonCfg p = f <$> getConfig p
+  where
+    f mbs = do
+      bs <- note ("Config file missing: " <> T.unpack p) mbs
+      eitherDecodeStrict bs
 
 appHead :: (DomBuilder t m, HasConfigs m) => m ()
 appHead = do
@@ -189,37 +207,16 @@ showResp = show
 
 statistic :: (DomBuilder t m) => Text -> m () -> m ()
 statistic label val = do
-  divClass "statistic" $ do
+  divClass "ui statistic" $ do
     divClass "value" $ val
     divClass "label" $ text label
 
-calcTps :: GlobalStats -> NominalDiffTime -> Double
-calcTps gs elapsed = fromIntegral (_gs_txCount gs) / realToFrac elapsed
-
-showTps :: Double -> Text
-showTps = T.pack . printf "%.2f"
-
-calcCoinsLeft :: UTCTime -> BlockTable -> Maybe Double
-calcCoinsLeft now bt =
-    case M.lookupMax (_blockTable_blocks bt) of
-      Nothing -> Nothing
-      Just (cur, _) ->
-        let traunch1 = firstAdjust - fromIntegral cur
-            traunch2 = realToFrac blocksLeft - traunch1
-         in Just $ traunch1 * reward1 * 10 + traunch2 * reward2 * 10
-  where
-    blocksLeft = diffUTCTime launchTime now / 30
-    firstAdjust = 87600
-    reward1 = 2.304523
-    reward2 = 2.297878
-
 initBlockTable
-  :: (MonadApp r t m, HasJSContext (Performable m), MonadJSM (Performable m),
-      Prerender js t m)
+  :: (MonadAppIO r t m, Prerender js t m)
   => BlockHeight
-  -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats)
+  -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Maybe (Dynamic t RecentTxs))
 initBlockTable height = do
-    (AppState n si) <- ask
+    (AppState n si mdbh) <- ask
     let cfg = EventSourceConfig never True
     let ch = ChainwebHost (netHost n) (_siChainwebVer si)
     es <- startEventSource ch cfg
@@ -248,14 +245,36 @@ initBlockTable height = do
 
     let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
     pb <- getPostBuild
-    now <- prerender (return t0) (liftIO getCurrentTime)
-    stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0) $ mergeWith (.)
+    now <- liftIO getCurrentTime
+
+    let onlyTxs (Just t) = if _blockHeaderTx_txCount t == Just 0 then Nothing else Just t
+        onlyTxs Nothing = Nothing
+        blocksWithTxs = fmapMaybe onlyTxs downEvent
+
+    (recentTxs, ecds) <- case mdbh of
+      Nothing -> return (Nothing, never)
+      Just dbh -> do
+        eRecentTxs <- getRecentTxs dbh (_eventSource_open es)
+        ebp <- getBlockPayload2 ch blocksWithTxs
+
+        recent <- foldDyn ($) (RecentTxs mempty) $ leftmost
+          [ either (const id) mergeRecentTxs <$> eRecentTxs
+          , addNewTransaction <$> filterRight ebp
+          ]
+
+        ecds <- getChainwebStats dbh pb
+        return $ (Just recent, ecds)
+
+    stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0 Nothing Nothing) $ mergeWith (.)
       [ maybe id addTxCount <$> downEvent
-      , setStartTime <$> tag (current now) pb
+      , setStartTime now <$ pb
       , addHashrateData <$> filterRight newHrd
       , maybe id addModuleCount <$> downEvent
+      , set gs_totalTxCount <$> ((_cds_transactionCount <=< hush) <$> ecds)
+      , set gs_circulatingCoins <$> ((_cds_coinsInCirculation <=< hush) <$> ecds)
       ]
-    return (blockTable, stats)
+
+    return (blockTable, stats, recentTxs)
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
 
@@ -272,43 +291,111 @@ getPayload ch h = do
   e <- getBlockPayload ch (_blockHeader_chainId h) (_blockHeader_payloadHash h)
   return $ (,h) <$$> e
 
+data SearchType = RequestKeySearch | TxSearch
+  deriving (Eq,Ord,Show,Read,Enum)
 
-blockTableWidget
-  :: forall js r t m. (MonadApp r t m, Prerender js t m,
-      MonadJSM (Performable m), HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
-  => Maybe BlockHeight
+searchTypeText :: SearchType -> Text
+searchTypeText RequestKeySearch = "Request Key"
+searchTypeText TxSearch = "Code"
+
+searchWidget
+  :: (PostBuild t m, PerformEvent t m, DomBuilder t m,
+      DomBuilder t m, MonadHold t m, MonadFix m,
+      SetRoute t (R FrontendRoute) m,
+      DomBuilderSpace m ~ GhcjsDomSpace)
+  => NetId
   -> App r t m ()
-blockTableWidget Nothing = text "Error getting cut from server"
-blockTableWidget (Just height) = do
-  (dbt, stats) <- initBlockTable height
-
-  dti <- fmap join $ prerender (return $ constDyn dummy) $ do
-    t <- liftIO getCurrentTime
-    clockLossy 1 t
-
-  hashrate <- holdDyn Nothing $ attachWith
-    (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
-    (current dti) (updated dbt)
-  divClass "ui segment" $ do
-    divClass "ui small two statistics" $ do
-        statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-        statistic "Recent Transactions" (dynText $ tshow . _gs_txCount <$> stats)
-  divClass "block-table" $ do
-    divClass "header-row" $ do
-      elClass "span" "table-header" $ text "Height"
-      chains <- asks (_siChains . _as_serverInfo)
-      forM_ chains $ \cid -> elClass "span" "table-header" $ do
-        el "div" $ text $ "Chain " <> tshow cid
-        elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
-                      "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
-
-    rec hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
-                                    (rowsWidget dti hoveredBlock)
-        hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
+searchWidget netId = do
+  divClass "ui fluid action input" $ do
+    st <- divClass "ui compact menu search__dropdown" $ do
+      divClass "ui simple dropdown item" $ mdo
+        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc]
+        dynText $ searchTypeText <$> curSearchType
+        elClass "i" "dropdown icon" blank
+        (rk, txc) <- divClass "menu" $ do
+          (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
+          (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
+          return (RequestKeySearch <$ domEvent Click r, TxSearch <$ domEvent Click t)
+        return curSearchType
+    ti <- inputElement $ def
+      & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+        ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;")
+    (e,_) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
+    setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> st) (domEvent Click e))
     return ()
+
+mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
+mkSearchRoute netId str RequestKeySearch =
+  case netId of
+    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxReqKey :/ str
+    NetId_Testnet -> FR_Testnet :/ NetRoute_TxReqKey :/ str
+    NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxReqKey :/ str))
+mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
+
+mainPageWidget
+  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilderSpace m ~ GhcjsDomSpace)
+  => NetId
+  -> Maybe BlockHeight
+  -> App r t m ()
+mainPageWidget _ Nothing = text "Error getting cut from server"
+mainPageWidget netId (Just height) = do
+    si <- asks _as_serverInfo
+    (dbt, stats, mrecent) <- initBlockTable height
+
+    searchWidget netId
+
+    t <- liftIO getCurrentTime
+    dti <- clockLossy 1 t
+    hashrate <- holdDyn Nothing $ attachWith
+      (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
+      (current dti) (updated dbt)
+    let getDiff bt c = fmap (blockDifficulty . _blockHeaderTx_header) $ M.lookup c $ _blockTable_cut bt
+    let totalDifficulty bt = sum $ catMaybes $ map (getDiff bt) (toList $ _siChains si)
+
+    let statsList :: GlobalStats -> [(Text, Text)]
+        statsList s =
+            if null slist
+              then [("Recent Transactions", tshow $ _gs_txCount s)]
+              else slist
+          where
+            slist = catMaybes
+              [ ("Transactions",) . tshow <$> _gs_totalTxCount s
+              , ("Circulating Coins",) . siOneDecimal <$> _gs_circulatingCoins s
+              ]
+    let statAttrs s = "class" =: ("ui mini " <> c <> "statistics")
+          where
+            c = case length (statsList s) of
+                      1 -> "three "
+                      2 -> "four "
+                      _ -> ""
+
+    _ <- divClass "ui segment" $ do
+      elDynAttr "div" (statAttrs <$> stats) $ do
+          statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+          statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
+
+          networkView $ ffor (statsList <$> stats) $ \ps -> do
+            forM ps $ \(n,v) -> statistic n $ text v
+
+    divClass "block-table" $ do
+      divClass "header-row" $ do
+        elClass "span" "table-header" $ text "Height"
+        chains <- asks (_siChains . _as_serverInfo)
+        forM_ chains $ \cid -> elClass "span" "table-header" $ do
+          el "div" $ text $ "Chain " <> tshow cid
+          elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
+                        "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
+
+      rec hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
+                                      (rowsWidget dti hoveredBlock)
+          hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
+      return ()
+    case mrecent of
+      Nothing -> blank
+      Just recent -> void $ networkView (recentTransactions <$> recent)
   where
-    dummy = TickInfo (UTCTime (ModifiedJulianDay 0) 0) 0 0
     _f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
     format :: (Int, Int, Int, Int) -> Text
     format (d, h, m, s) = T.pack $ printf "%d days %02d:%02d:%02d" d h m s
@@ -400,7 +487,7 @@ blockWidget0 ti hoveredBlock hs height cid = do
   switch <$> hold never res
 
 diffStr :: Double -> Text
-diffStr d = T.pack $ printf "%.2f %s" (d / divisor) units
+diffStr d = T.pack $ printf "%.1f %s" (d / divisor) units
   where
     (divisor, units :: String)
       | d >= 1e18 = (1e18, "EH")
@@ -410,6 +497,18 @@ diffStr d = T.pack $ printf "%.2f %s" (d / divisor) units
       | d >= 1e6 = (1e6, "MH")
       | d >= 1e3 = (1e3, "KH")
       | otherwise = (1, "H")
+
+siOneDecimal :: Double -> Text
+siOneDecimal d = T.pack $ printf "%.1f%s" (d / divisor) units
+  where
+    (divisor, units :: String)
+      | d >= 1e18 = (1e18, "E")
+      | d >= 1e15 = (1e15, "P")
+      | d >= 1e12 = (1e12, "T")
+      | d >= 1e9 = (1e9, "G")
+      | d >= 1e6 = (1e6, "M")
+      | d >= 1e3 = (1e3, "K")
+      | otherwise = (1, "")
 
 pastTimeWidget
   :: (DomBuilder t m, PostBuild t m)
@@ -530,8 +629,8 @@ linksFromBlock
   -> BlockRef
   -> m ()
 linksFromBlock cs hoveredBlock fromBlock = do
-  let from = unChainId $ snd fromBlock
-  let toBlocks = petersonGraph M.! from
+  let fromChain = unChainId $ snd fromBlock
+  let toBlocks = petersonGraph M.! fromChain
       mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
         where
           stroke =
@@ -546,8 +645,8 @@ linksFromBlock cs hoveredBlock fromBlock = do
                               "stroke-width" =: "1.0"
                          else "stroke" =: "rgb(220,220,220)"
   svgElDynAttr "g" (mkAttrs <$> cs <*> hoveredBlock) $ do
-    linkFromTo from from
-    mapM_ (linkFromTo from) toBlocks
+    linkFromTo fromChain fromChain
+    mapM_ (linkFromTo fromChain) toBlocks
 
 linkFromTo :: (DomBuilder t m, PostBuild t m) => Int -> Int -> m ()
 linkFromTo f t =
@@ -578,7 +677,7 @@ petersonGraph = M.fromList
     ]
 
 shortestPath :: Int -> Int -> Int
-shortestPath from to = shortestPaths M.! (from * 10 + to)
+shortestPath f t = shortestPaths M.! (f * 10 + t)
 
 shortestPaths :: M.Map Int Int
 shortestPaths = M.fromList $ zip [0..]

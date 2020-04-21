@@ -20,6 +20,7 @@ module Common.Route where
 import           Prelude hiding ((.), id)
 import           Control.Category (Category (..))
 import           Data.Functor.Identity
+import           Data.Map (Map)
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
@@ -50,22 +51,24 @@ blockRouteEncoder = pathComponentEncoder $ \case
 data ChainRoute :: * -> * where
   Chain_BlockHash :: ChainRoute (Text :. R BlockRoute)
   Chain_BlockHeight :: ChainRoute (Int :. R BlockRoute)
-  Chain_TxReqKey :: ChainRoute Text
 
 blockIndexRouteEncoder :: Encoder (Either Text) (Either Text) (R ChainRoute) PageName
 blockIndexRouteEncoder = pathComponentEncoder $ \case
   Chain_BlockHash -> PathSegment "block" $ pathParamEncoder id blockRouteEncoder
   Chain_BlockHeight -> PathSegment "height" $ pathParamEncoder unsafeTshowEncoder blockRouteEncoder
-  Chain_TxReqKey -> PathSegment "tx" singlePathSegmentEncoder
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
   NetRoute_Chain :: NetRoute (Int :. R ChainRoute)
+  NetRoute_TxReqKey :: NetRoute Text
+  NetRoute_TxSearch :: NetRoute (Map Text (Maybe Text))
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_Chainweb -> PathEnd $ unitEncoder mempty
   NetRoute_Chain -> PathSegment "chain" $ pathParamEncoder unsafeTshowEncoder blockIndexRouteEncoder
+  NetRoute_TxReqKey -> PathSegment "tx" singlePathSegmentEncoder
+  NetRoute_TxSearch -> PathSegment "txsearch" queryOnlyEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()

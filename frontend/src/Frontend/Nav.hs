@@ -53,10 +53,10 @@ getStarted = mdo
     text "Get Started"
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      linkItem "Start Mining" "https://github.com/kadena-io/chainweb-miner/blob/master/README.org"
-      linkItem "Download Wallet" "http://testnet.chainweb.com/wallet/"
-      linkItem "Play Testnet Games" "http://testnet.chainweb.com/games/"
-      linkItem "See Chains in 3D (experimental)" (static @"chains-3d.html")
+      linkItemNewTab "Start Mining" "https://github.com/kadena-io/chainweb-miner/blob/master/README.org"
+      linkItemNewTab "Download Wallet" "https://www.kadena.io/chainweaver"
+      linkItemNewTab "Play Testnet Games" "http://testnet.chainweb.com/games/"
+      linkItemNewTab "See Chains in 3D (experimental)" (static @"chains-3d.html")
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
     , False <$ domEvent Mouseleave e
@@ -71,8 +71,9 @@ learnMore = mdo
     text "Learn More"
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      linkItem "Pact Smart Contract Tutorials" "https://pactlang.org"
-      linkItem "Kadena Whitepapers" "https://kadena.io/en/whitepapers/"
+      linkItemNewTab "Kadena Docs" "https://kadena-io.github.io/kadena-docs/"
+      linkItemNewTab "Pact Smart Contract Tutorials" "https://pactlang.org"
+      linkItemNewTab "Kadena Whitepapers" "https://kadena.io/en/whitepapers/"
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
     , False <$ domEvent Mouseleave e
@@ -86,6 +87,14 @@ linkItem
   -> m ()
 linkItem nm url = do
     elAttr "a" ("href" =: url <> "class" =: "item") $ text nm
+
+linkItemNewTab
+  :: DomBuilder t m
+  => Text
+  -> Text
+  -> m ()
+linkItemNewTab nm url = do
+    elAttr "a" ("href" =: url <> "target" =: "_blank" <> "class" =: "item") $ text nm
 
 networkName :: NetId -> Text
 networkName NetId_Mainnet = "Mainnet"

@@ -15,8 +15,10 @@ import Control.Monad.Reader
 import Data.Aeson as A
 import Data.Bifunctor
 import Data.Foldable (traverse_)
-import Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Map as M
+import qualified Data.Set as S
+import Data.Text (Text)
 import qualified Data.Text as T (pack)
 
 import GHCJS.DOM.Types (MonadJSM)
@@ -56,35 +58,34 @@ requestKeyWidget
        , Prerender js t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
-       , Monad (Client m)
        )
     => ServerInfo
     -> NetId
-    -> Int
     -> App Text t m ()
-requestKeyWidget si netId cid = do
+requestKeyWidget si netId = do
     as <- ask
+    reqKey <- askRoute
     let n = _as_network as
         chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
-        c = ChainId cid
+        xhrs rk = M.fromList $ map (\c -> (c, requestKeyXhr chainwebHost c rk)) $
+                      S.toList $ _siChains si
 
-    reqKey <- askRoute
-    cmdResult <- fromRequestKey chainwebHost c reqKey
-    void $ networkHold (inlineLoader "Retrieving command result...") $ ffor cmdResult $ \case
-      Nothing -> dynText (nothingMessage <$> reqKey)
-      Just v@Object{} -> case fromJSON v of
-        Success (PollResponses m)
-          | HM.null m -> dynText (reqKeyMessage <$> reqKey)
-          | otherwise -> traverse_ (requestKeyResultPage netId c) m
-        A.Error e -> text (aesonMessage e)
-      _ -> text $ nothingMessage "Poll fetch failed with wrong type"
+    pb <- getPostBuild
+    results <- performRequestsAsync $ tag (current $ xhrs <$> reqKey) pb
+    void $ networkHold (inlineLoader "Retrieving command result...") $
+      ffor results $ \resmap -> do
+        case M.toList $ M.mapMaybe decodeAndDropEmpty resmap of
+          [] -> dynText (reqKeyMessage <$> reqKey)
+          rs -> do
+            let go (c,v) = traverse_ (requestKeyResultPage netId c) v
+            mapM_ go rs
   where
-    nothingMessage s =
-      "Unknown error returned while polling for request key: " <> tshow s
-    aesonMessage s =
-      "Unexpected result returned while polling for request key: " <> tshow s
+    decodeAndDropEmpty resp =
+      case decodeXhrResponse resp of
+        Nothing -> Nothing
+        Just (PollResponses pr) -> if HM.null pr then Nothing else Just pr
     reqKeyMessage s =
-      T.pack $ printf "Your request key %s is not associated with an already processed transaction." (show s)
+      T.pack $ printf "Your request key %s is not associated with an already processed transaction on any chain." (show s)
 
 
 requestKeyResultPage
@@ -101,6 +102,7 @@ requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
     el "h2" $ text "Transaction Results"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
+        tfield "Chain" $ text $ tshow $ unChainId cid
         tfield "Request Key" $ text $ requestKeyToB16Text rk
         tfield "Transaction Id" $ text $ maybe "" tshow txid
         tfield "Result" $ renderPactResult pr
