@@ -36,6 +36,8 @@ library
     , reflex
     , reflex-dom
     , reflex-dom-core
+    , servant
+    , servant-reflex
     , stm
     , text
     , time
@@ -57,6 +59,7 @@ library
     Frontend.Page.Transaction
     Frontend.Page.Types
     Frontend.Storage
+    Frontend.Transactions
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign
   ghc-options: -Wall

@@ -151,13 +151,13 @@ renderPayload
 renderPayload = \case
     ExecPayload (Exec _ d) -> do
       detailsSection $ do
-        voidMaybe (tfield "Data" . renderRichObject) d
+        voidMaybe (tfield "Data" . text . unwrapJSON) d
     ContPayload (Cont pid rb step d p) -> do
       detailsSection $ do
         tfield "Pact Id" $ text pid
         tfield "Rollback" $ text $ tshow rb
         tfield "Step" $ text $ tshow step
-        tfield "Data" $ renderRichObject d
+        tfield "Data" $ text $ unwrapJSON d
         tfield "Cont Proof" $ text p
 
 -- | Render a 'PactExec' object in a 'CommandResult'

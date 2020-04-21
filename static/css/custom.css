@@ -27,6 +27,10 @@ table#blockheaders th {
     text-align: center;
 }
 
+.block-table {
+    margin-top: 1em;
+}
+
 div.block-table div.spacer-row:last-child {
     display: none;
 }
@@ -123,4 +127,25 @@ div.summary-inner {
     white-space: -pre-wrap;      /* Opera 4-6 */
     white-space: -o-pre-wrap;    /* Opera 7 */
     word-wrap: break-word;       /* Internet Explorer 5.5+ */
+}
+
+.search__dropdown {
+    border-top-right-radius: 0!important;
+    border-bottom-right-radius: 0!important;
+    -moz-border-top-right-radius: 0!important;
+    -moz-border-bottom-right-radius: 0!important;
+    -webkit-border-top-right-radius: 0!important;
+    -webkit-border-bottom-right-radius: 0!important;
+
+    border-right: none!important;
+    box-shadow: none!important;
+    -webkit-box-shadow: none!important;
+}
+
+.pagination .item {
+    cursor: pointer;
+}
+
+.pagination .disabled.item {
+    cursor: auto;
 }

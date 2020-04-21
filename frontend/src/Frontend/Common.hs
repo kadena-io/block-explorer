@@ -12,8 +12,10 @@ module Frontend.Common where
 
 ------------------------------------------------------------------------------
 import           Control.Monad.Fix
+import           Data.Char
 import           Data.Maybe
 import           Data.Text (Text)
+import qualified Data.Text as T
 import qualified GHCJS.DOM as DOM
 import qualified "ghcjs-dom" GHCJS.DOM.Document as Document
 import qualified GHCJS.DOM.HTMLElement as HTMLElement
@@ -34,6 +36,9 @@ infixl 4 <$$>
 (<$$$>) :: (Functor f1, Functor f2, Functor f3) => (a -> b) -> f1 (f2 (f3 a)) -> f1 (f2 (f3 b))
 f <$$$> a = fmap f <$$> a
 infixl 4 <$$$>
+
+isPublicKey :: Text -> Bool
+isPublicKey t = T.all isHexDigit t && T.length t == 64
 
 data ListState = EmptyPlaceholder | AddForm | ListTable
   deriving (Eq,Ord,Show,Read)

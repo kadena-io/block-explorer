@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -10,6 +11,7 @@ import           Control.Lens
 import           Control.Monad
 import           Data.Aeson
 import           Data.Readable
+import           Data.Map (Map)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Text (Text)
@@ -51,6 +53,11 @@ hostToText h =
     if hostPort h == 443
       then hostAddress h
       else hostAddress h <> ":" <> tshow (hostPort h)
+
+newtype DataBackends = DataBackends
+  { dataBackendMap :: Map Text Host
+  } deriving (Eq,Ord,Show,Read)
+    deriving newtype (FromJSON, ToJSON)
 
 type ChainwebVersion = Text
 
