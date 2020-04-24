@@ -23,6 +23,7 @@ aboutWidget = divClass "ui text container" $ do
     el "li" $ text "Estimate of total coins circulating in the blockchain"
     el "li" $ text "Block Height indicates the length of the blockchain"
     el "li" $ text "The expected number of hashes to mine a block on this chain"
+    el "li" $ text "Visual representation of the cryptographic link between a block and its neighbor blocks"
     el "li" $ text "The first few hex characters of the hash of the block header"
     el "li" $ text "How long ago the block was mined"
     el "li" $ text "The number of transactions in the block"
