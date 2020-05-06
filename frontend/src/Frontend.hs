@@ -357,17 +357,23 @@ mainPageWidget netId (Just height) = do
           networkView $ ffor (statsList <$> stats) $ \ps -> do
             forM ps $ \(n,v) -> statistic n $ text v
 
+    chains <- asks (siChainsList . _as_serverInfo)
+    let numChains = length chains
     divClass "block-table" $ do
       divClass "header-row" $ do
-        elClass "span" "table-header" $ text "Height"
-        chains <- asks (_siChains . _as_serverInfo)
-        forM_ chains $ \cid -> elClass "span" "table-header" $ do
+        elClass "span" "table-header block-height" $ text "Height"
+        let mkTooltip cid bt = "class" =: "table-header" <>
+              if numChains <= 10
+                then mempty
+                else "data-tooltip" =: chainDifficulty cid bt <>
+                     "data-variation" =: "narrow"
+
+        forM_ chains $ \cid -> elDynAttr "span" (mkTooltip cid <$> dbt) $ do
           el "div" $ text $ "Chain " <> tshow cid
-          elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
-                        "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
+          when (numChains <= 10) $
+            elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
+                          "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
 
-
-      chains <- asks (siChainsList . _as_serverInfo)
       let mgi = case length chains of
                   10 -> Just $ GraphInfo chains petersonGraph shortestPath10
                   20 -> Just $ GraphInfo chains twentyChainGraph shortestPath20
@@ -449,13 +455,17 @@ blockWidget0 ti gi hoveredBlock hs height cid = do
       let getHeight = _blockHeader_height . _blockHeaderTx_header
       let mkRoute h = addNetRoute net (unChainId cid) $ Chain_BlockHeight :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
-        el "div" $ do
-          elClass "span" "blockheight" $ do
+        let numChains = length (giChains gi)
+        when (numChains <= 10) $ el "div" $ do
+          elClass "span" "block-hash" $ do
               dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 
         let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
-        void $ prerender blank $ divClass "blockdiv" $
-          pastTimeWidget ti (Just . getCreationTime <$> bh)
+        void $ prerender blank $ divClass "blockdiv" $ do
+          let dt = Just . getCreationTime <$> bh
+          let diffTimeToSecsAgo delta = tshow (roundInt delta) <> if numChains <= 10 then "s ago" else "s"
+          let calcDiff lastTick t = maybe "" (diffTimeToSecsAgo . diffUTCTime (_tickInfo_lastUTC lastTick)) t
+          dynText (calcDiff <$> ti <*> dt)
 
         divClass "blockdiv" $ do
           dynText $ maybe "" (\c -> tshow c <> " txs") . _blockHeaderTx_txCount <$> bh
@@ -491,19 +501,6 @@ siOneDecimal d = T.pack $ printf "%.1f%s" (d / divisor) units
       | d >= 1e3 = (1e3, "K")
       | otherwise = (1, "")
 
-pastTimeWidget
-  :: (DomBuilder t m, PostBuild t m)
-  => Dynamic t TickInfo
-  -> Dynamic t (Maybe UTCTime)
-  -> m ()
-pastTimeWidget ti dt = do
-  let calcDiff lastTick t = maybe "" (diffTimeToSecsAgo . diffUTCTime (_tickInfo_lastUTC lastTick)) t
-  dynText (calcDiff <$> ti <*> dt)
-
-
-diffTimeToSecsAgo :: NominalDiffTime -> Text
-diffTimeToSecsAgo delta = tshow (roundInt delta) <> "s ago"
-
 --diffTimeToRelativeEnglish :: NominalDiffTime -> Text
 --diffTimeToRelativeEnglish delta
 --  | delta < 5 = "Just now"
@@ -536,9 +533,6 @@ oneMonth = oneDay * 30
 oneYear :: NominalDiffTime
 oneYear = oneDay * 365
 
-blockWidth :: Int
-blockWidth = 110
-
 blockSeparation :: Int
 blockSeparation = 50
 
@@ -550,7 +544,7 @@ spacerRow
   -> BlockHeight
   -> m ()
 spacerRow gi cs hoveredBlock bh = do
-  let sty = "margin-left: 102px; height: " <> tshow blockSeparation <> "px; " <>
+  let sty = "margin-left: 80px; height: " <> tshow blockSeparation <> "px; " <>
             "border: 0; padding: 0;"
   elAttr "div" ("class" =: "spacer-row" <>
                 "style" =: sty ) $ do
@@ -581,63 +575,73 @@ chainweb
   -> m ()
 chainweb gi cs hoveredBlock bh = do
   let chains = giChains gi
-  let attrs = ("viewBox" =: ("0 0 1100 " <> tshow (blockSeparation + 4)) <>
+      numChains = length chains
+      totalWidth = 1100
+      blockWidth = totalWidth `div` numChains
+      attrs = ("viewBox" =: ("0 0 " <> tshow totalWidth <> " " <> tshow (blockSeparation + 4)) <>
                "style" =: "vertical-align: middle;")
   svgElAttr "svg" attrs $ do
-    forM_ chains (\c -> linksFromBlock gi cs hoveredBlock (bh, c))
-    void $ networkView $ lastLinesForActiveBlock gi cs hoveredBlock bh <$> hoveredBlock
+    forM_ chains (\c -> linksFromBlock gi blockWidth cs hoveredBlock (bh, c))
+    void $ networkView $ lastLinesForActiveBlock gi blockWidth cs hoveredBlock bh <$> hoveredBlock
 
 lastLinesForActiveBlock
   :: (DomBuilder t m, PostBuild t m)
   => GraphInfo
+  -> Int
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
   -> BlockHeight
   -> Maybe BlockRef
   -> m ()
-lastLinesForActiveBlock _ _ _ _ Nothing = blank
-lastLinesForActiveBlock gi cs hoveredBlock curBH (Just b) =
-  if curBH > fst b then blank else linksFromBlock gi cs hoveredBlock b
+lastLinesForActiveBlock _ _ _ _ _ Nothing = blank
+lastLinesForActiveBlock gi blockWidth cs hoveredBlock curBH (Just b) =
+  if curBH > fst b then blank else linksFromBlock gi blockWidth cs hoveredBlock b
 
-fromPos :: Int -> Int
-fromPos f = blockWidth `div` 2 + f * blockWidth
+--blockWidth :: Int
+--blockWidth = 110
 
-toPos :: Int -> Int
-toPos t = blockWidth `div` 2 + t * blockWidth
 
 linksFromBlock
   :: (DomBuilder t m, PostBuild t m)
   => GraphInfo
+  -> Int
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
   -> BlockRef
   -> m ()
-linksFromBlock gi cs hoveredBlock fromBlock = do
-  let fromChain = unChainId $ snd fromBlock
-  let toBlocks = giGraph gi M.! fromChain
-      mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
-        where
-          stroke =
-            case mhb of
-              Nothing -> "stroke" =: "rgb(220,220,220)"
-              Just hb ->
-                if fst fromBlock > fst hb
-                  then "stroke" =: "rgb(220,220,220)"
-                  else if hb == fromBlock ||
-                          isDownstreamFrom (giShortestPath gi) hb fromBlock
-                         then "stroke" =: "rgb(100,100,100)" <>
-                              "stroke-width" =: "1.0"
-                         else "stroke" =: "rgb(220,220,220)"
-  svgElDynAttr "g" (mkAttrs <$> cs <*> hoveredBlock) $ do
-    linkFromTo fromChain fromChain
-    mapM_ (linkFromTo fromChain) toBlocks
+linksFromBlock gi blockWidth cs hoveredBlock fromBlock = do
+    let fromChain = unChainId $ snd fromBlock
+    let toBlocks = giGraph gi M.! fromChain
+        mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
+          where
+            stroke =
+              case mhb of
+                Nothing -> "stroke" =: "rgb(220,220,220)"
+                Just hb ->
+                  if fst fromBlock > fst hb
+                    then "stroke" =: "rgb(220,220,220)"
+                    else if hb == fromBlock ||
+                            isDownstreamFrom (giShortestPath gi) hb fromBlock
+                           then "stroke" =: "rgb(100,100,100)" <>
+                                "stroke-width" =: "1.0"
+                           else "stroke" =: "rgb(220,220,220)"
+    svgElDynAttr "g" (mkAttrs <$> cs <*> hoveredBlock) $ do
+      linkFromTo fromChain fromChain
+      mapM_ (linkFromTo fromChain) toBlocks
+  where
+    linkFromTo :: (DomBuilder t m, PostBuild t m) => Int -> Int -> m ()
+    linkFromTo f t =
+        svgElAttr "line" ("x1" =: (tshow $ fromPos f) <>
+                          "y1" =: "0" <>
+                          "x2" =: (tshow $ toPos t) <>
+                          "y2" =: (tshow (blockSeparation + 4)) ) blank
 
-linkFromTo :: (DomBuilder t m, PostBuild t m) => Int -> Int -> m ()
-linkFromTo f t =
-    svgElAttr "line" ("x1" =: (tshow $ fromPos f) <>
-                      "y1" =: "0" <>
-                      "x2" =: (tshow $ toPos t) <>
-                      "y2" =: (tshow (blockSeparation + 4)) ) blank
+    fromPos :: Int -> Int
+    fromPos f = blockWidth `div` 2 + f * blockWidth
+
+    toPos :: Int -> Int
+    toPos t = blockWidth `div` 2 + t * blockWidth
+
 
 type BlockRef = (BlockHeight, ChainId)
 
