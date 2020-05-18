@@ -15,8 +15,11 @@
 module Frontend.Transactions where
 
 ------------------------------------------------------------------------------
+import           Control.Applicative
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
+import           Data.Aeson.Lens
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -58,6 +61,7 @@ recentTransactions txs = do
     else do
       el "h4" $ text "Recent Transactions"
       txTable net $ take 5 $ getSummaries txs
+
 
 qParam :: Text
 qParam = "q"
@@ -150,7 +154,14 @@ txTable net txs = do
         elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
         elAttr "td" ("data-label" =: "Height") $ routeLink route $ text $ tshow height
         elAttr "td" ("data-label" =: "Sender") $ senderWidget tx
-        elAttr "td" ("data-label" =: "Code") $ text $ fromMaybe "" $ _txSummary_code tx
+        elAttr "td" ("data-label" =: "Code") $ do
+          let contents = case (_txSummary_code tx, _txSummary_continuation tx) of
+                           (Just c, _) -> c
+                           (_, Just v) -> showCont v
+                           (_, _) -> ""
+          text contents
+
+showCont v = "<continuation> " <> fromMaybe "" (v ^? key "continuation" . key "def" . _String)
 
 senderWidget :: DomBuilder t m => TxSummary -> m ()
 senderWidget tx = text $

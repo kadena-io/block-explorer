@@ -58,11 +58,12 @@ transactionPage netId cid bp = do
     divClass "ui accordion" $ do
       forM_ txs $ \(t, tout) -> mdo
         open <- toggle False $ domEvent Click e
+        let cmd = _transaction_cmd t
         let addActive cls active =
               ("class" =: if active then ("active " <> cls) else cls)
         (e,_) <- elDynAttr' "div" (addActive "title" <$> open) $ do
           elClass "i" "dropdown icon" blank
-          elClass "pre" "custombreak" $ text $ payloadCode $ _pactCommand_payload $ _transaction_cmd t
+          elClass "pre" "custombreak" $ text $ payloadCode $ _pactCommand_payload cmd
         elDynAttr "div" (addActive "content" <$> open) $ do
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
@@ -70,10 +71,11 @@ transactionPage netId cid bp = do
                 let reqKey = hashB64U $ _transaction_hash t
                 text reqKey
               tfield "Payload" $ do
-                let payload = _pactCommand_payload $ _transaction_cmd t
+                let payload = _pactCommand_payload cmd
                 renderPayload payload
+              tfield "Nonce" $ text $ _pactCommand_nonce cmd
               tfield "Meta" $ do
-                let meta = _pactCommand_meta $ _transaction_cmd t
+                let meta = _pactCommand_meta cmd
                 elClass "table" "ui definition table" $ el "tbody" $ do
                   tfield "Chain" $ text $ _chainwebMeta_chainId meta
                   tfield "Sender" $ text $ _chainwebMeta_sender meta
@@ -82,7 +84,7 @@ transactionPage netId cid bp = do
                   tfield "TTL" $ text $ tshow $ _chainwebMeta_ttl meta
                   tfield "Creation Time" $ text $ tshow $ _chainwebMeta_creationTime meta
               tfield "Signers" $ do
-                forM_ (_pactCommand_signers $ _transaction_cmd t) $ \s -> do
+                forM_ (_pactCommand_signers cmd) $ \s -> do
                   elClass "table" "ui definition table" $ el "tbody" $ do
                     tfield "Public Key" $ text $ _signer_pubKey s
                     tfield "Account" $ text $ fromMaybe "" $ _signer_addr s

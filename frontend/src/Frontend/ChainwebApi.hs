@@ -208,7 +208,7 @@ getBlockPayload2
   :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
   => ChainwebHost
   -> Event t BlockHeaderTx
-  -> m (Event t (Either String BlockHeaderTx))
+  -> m (Event t (Either String (BlockHeaderTx, BlockPayloadWithOutputs)))
 getBlockPayload2 ch trigger = do
     resp <- performRequestsAsync $ req <$> trigger
     return (decodeBhtx <$> resp)
@@ -221,7 +221,7 @@ getBlockPayload2 ch trigger = do
       , _blockPayload_transactions = map fst $ _blockPayloadWithOutputs_transactionsWithOutputs bpwo
       }
     f bhtx bpwo = bhtx { _blockHeaderTx_payload = Just $ bpwo2bp bpwo }
-    decodeBhtx (bhtx,resp) = f bhtx <$> decodeXhr resp
+    decodeBhtx (bhtx,resp) = (bhtx,) <$> decodeXhr resp
     req bhtx =
       (bhtx, XhrRequest "GET" (payloadWithOutputsUrl ch c ph)
         (def { _xhrRequestConfig_headers = "accept" =: "application/json" }))
@@ -326,7 +326,7 @@ modifyBlockInTable (BlockTable bs cut) h c func = BlockTable bs2 cut2
 
 data RecentTxs = RecentTxs
   { _recentTxs_txs :: Seq TxSummary
-  } deriving (Eq,Ord,Show)
+  } deriving (Eq,Show)
 
 getSummaries :: RecentTxs -> [TxSummary]
 getSummaries (RecentTxs s) = toList s
@@ -334,27 +334,15 @@ getSummaries (RecentTxs s) = toList s
 mergeRecentTxs :: [TxSummary] -> RecentTxs -> RecentTxs
 mergeRecentTxs tx (RecentTxs s1) = RecentTxs (s1 <> S.fromList tx)
 
-addNewTransaction :: BlockHeaderTx -> RecentTxs -> RecentTxs
-addNewTransaction bhtx (RecentTxs s1) = RecentTxs s2
+addNewTransaction :: (BlockHeaderTx, BlockPayloadWithOutputs) -> RecentTxs -> RecentTxs
+addNewTransaction (bhtx, bpwo) (RecentTxs s1) = RecentTxs s2
   where
     maxTransactions = 10
     s2 = S.take maxTransactions $ S.fromList txs <> s1
 
     bh = _blockHeaderTx_header bhtx
-    f = mkSummary (_blockHeader_chainId bh) (_blockHeader_height bh) (_blockHeader_hash bh)
-    txs = maybe [] (map f . _blockPayload_transactions) $ _blockHeaderTx_payload bhtx
-
-mkSummary :: ChainId -> BlockHeight -> Hash -> Transaction -> TxSummary
-mkSummary (ChainId chain) height (Hash bh) (Transaction h _ pc) =
-    TxSummary chain height (T.decodeUtf8 bh) t (T.decodeUtf8 $ unHash h) s c r
-  where
-    meta = _pactCommand_meta pc
-    t = posixSecondsToUTCTime $ _chainwebMeta_creationTime meta
-    s = _chainwebMeta_sender meta
-    c = case _pactCommand_payload pc of
-          ExecPayload e -> Just $ _exec_code e
-          ContPayload _ -> Nothing
-    r = TxUnexpected
+    f (t,to) = mkTxSummary (_blockHeader_chainId bh) (_blockHeader_height bh) (_blockHeader_hash bh) t to
+    txs = map f $ _blockPayloadWithOutputs_transactionsWithOutputs bpwo
 
 data BlockTable = BlockTable
   { _blockTable_blocks :: Map BlockHeight (Map ChainId BlockHeaderTx)
