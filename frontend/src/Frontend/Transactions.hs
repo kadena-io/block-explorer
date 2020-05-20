@@ -85,7 +85,7 @@ transactionSearch
        )
     => App (Map Text (Maybe Text)) t m ()
 transactionSearch = do
-    (AppState n _ mdbh) <- ask
+    (AppState n _ mdbh _) <- ask
     case mdbh of
       Nothing -> text "Transaction search feature not available for this network"
       Just dbh -> do

@@ -11,8 +11,15 @@
 module Frontend.Common where
 
 ------------------------------------------------------------------------------
+import           Control.Monad
 import           Control.Monad.Fix
+import qualified Data.Array.IArray as IA
+import           Data.Array.MArray
+import           Data.Array.IO
+import           Data.Array.ST
+import           Data.Array.Unboxed
 import           Data.Char
+import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -26,6 +33,8 @@ import           Language.Javascript.JSaddle (MonadJSM)
 import qualified Language.Javascript.JSaddle as JS
 import           Reflex.Dom
 import           Reflex.Network
+------------------------------------------------------------------------------
+import           Common.Types
 ------------------------------------------------------------------------------
 
 
@@ -132,3 +141,27 @@ copyToClipboard copy = performEvent $ ffor copy $ \t -> do
   success <- Document.execCommand doc ("copy" :: Text) False (Nothing :: Maybe Text)
   _ <- Node.removeChild body ta
   pure success
+
+floydWarshall :: Graph -> [Int]
+floydWarshall g = IA.elems arr
+  where
+    pairs = M.toList g
+    vertices = M.keys g
+    low = minimum vertices
+    high = maximum vertices
+    inf = 1000
+    arr = runSTUArray $ do
+      dist <- newArray ((low,low), (high,high)) inf
+      forM_ pairs $ \(u, vs) -> do
+        writeArray dist (u,u) 0
+        forM_ vs $ \v -> writeArray dist (u,v) 1
+
+      forM_ vertices $ \k ->
+        forM_ vertices $ \i ->
+          forM_ vertices $ \j -> do
+            a <- readArray dist (i,j)
+            b <- readArray dist (i,k)
+            c <- readArray dist (k,j)
+            when (a > b + c) $ do
+              writeArray dist (i,j) (b+c)
+      return dist

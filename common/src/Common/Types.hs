@@ -90,6 +90,13 @@ netHost (NetId_Custom h) = h
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
 humanReadableTextPrism = prism' humanize fromText
 
+type Graph = Map Int [Int]
+data GraphInfo = GraphInfo
+  { giChains :: [ChainId]
+  , giGraph :: Graph
+  , giShortestPath :: Int -> Int -> Int
+  }
+
 data CServerInfo = CServerInfo
   { _csiServerInfo        :: ServerInfo -- TODO use this properly
   , _csiNewestBlockHeight :: BlockHeight
@@ -100,6 +107,7 @@ data ServerInfo = ServerInfo
   , _siApiVer      :: Text -- TODO use this properly
   , _siChains      :: Set ChainId
   , _siNumChains   :: Int
+  , _siGraphs      :: Maybe [(BlockHeight, [(Int, [Int])])]
   } deriving (Eq,Ord,Show)
 
 siChainsList :: ServerInfo -> [ChainId]
@@ -111,3 +119,4 @@ instance FromJSON ServerInfo where
     <*> o .: "nodeApiVersion"
     <*> o .: "nodeChains"
     <*> o .: "nodeNumberOfChains"
+    <*> o .:? "nodeGraphHistory"

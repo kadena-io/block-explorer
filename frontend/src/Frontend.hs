@@ -19,6 +19,7 @@ import           Control.Monad.Reader
 import           Data.Aeson
 import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
+import           Data.List
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -214,7 +215,7 @@ initBlockTable
   => BlockHeight
   -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Maybe (Dynamic t RecentTxs))
 initBlockTable height = do
-    (AppState n si mdbh) <- ask
+    (AppState n si mdbh _) <- ask
     let cfg = EventSourceConfig never True
     let ch = ChainwebHost (netHost n) (_siChainwebVer si)
     es <- startEventSource ch cfg
@@ -319,7 +320,8 @@ mainPageWidget
   -> App r t m ()
 mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
-    si <- asks _as_serverInfo
+    appState <- ask
+    let si = _as_serverInfo appState
     (dbt, stats, mrecent) <- initBlockTable height
 
     searchWidget netId
@@ -374,10 +376,14 @@ mainPageWidget netId (Just height) = do
             elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
                           "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
 
-      let mgi = case length chains of
-                  10 -> Just $ GraphInfo chains petersonGraph shortestPath10
-                  20 -> Just $ GraphInfo chains twentyChainGraph shortestPath20
-                  _  -> Nothing
+      let numChains = length chains
+          defaultGraph = if length chains == 10
+                           then Just $ GraphInfo chains petersenGraph (shortestPath petersenGraph)
+                           else Nothing
+          adjFunc f t = _as_graphAdjacencies appState M.! (f * numChains + t)
+          mkGi ((_,adjs):_) = let g = M.fromList adjs
+                               in Just $ GraphInfo chains g adjFunc
+          mgi = maybe defaultGraph mkGi $ _siGraphs si
       case mgi of
         Nothing -> text "Unknown chain graph"
         Just gi -> mdo
@@ -597,10 +603,6 @@ lastLinesForActiveBlock _ _ _ _ _ Nothing = blank
 lastLinesForActiveBlock gi blockWidth cs hoveredBlock curBH (Just b) =
   if curBH > fst b then blank else linksFromBlock gi blockWidth cs hoveredBlock b
 
---blockWidth :: Int
---blockWidth = 110
-
-
 linksFromBlock
   :: (DomBuilder t m, PostBuild t m)
   => GraphInfo
@@ -645,19 +647,13 @@ linksFromBlock gi blockWidth cs hoveredBlock fromBlock = do
 
 type BlockRef = (BlockHeight, ChainId)
 
-data GraphInfo = GraphInfo
-  { giChains :: [ChainId]
-  , giGraph :: M.Map Int [Int]
-  , giShortestPath :: Int -> Int -> Int
-  }
-
 isDownstreamFrom :: (Int -> Int -> Int) -> BlockRef -> BlockRef -> Bool
-isDownstreamFrom shortestPath (ph, ChainId pc) (h, ChainId c)
+isDownstreamFrom sp (ph, ChainId pc) (h, ChainId c)
   | h > ph = False
-  | otherwise = shortestPath pc c <= ph - h
+  | otherwise = sp pc c <= ph - h
 
-petersonGraph :: M.Map Int [Int]
-petersonGraph = M.fromList
+petersenGraph :: Graph
+petersenGraph = M.fromList
     [ (0, [2,3,5])
     , (1, [3,4,6])
     , (2, [4,0,7])
@@ -670,70 +666,7 @@ petersonGraph = M.fromList
     , (9, [4,8,5])
     ]
 
-shortestPath10 :: Int -> Int -> Int
-shortestPath10 f t = shortestPaths10 M.! (f * 10 + t)
-
-shortestPaths10 :: M.Map Int Int
-shortestPaths10 = M.fromList $ zip [0..]
-    [ 0, 2, 1, 1, 2, 1, 2, 2, 2, 2
-    , 2, 0, 2, 1, 1, 2, 1, 2, 2, 2
-    , 1, 2, 0, 2, 1, 2, 2, 1, 2, 2
-    , 1, 1, 2, 0, 2, 2, 2, 2, 1, 2
-    , 2, 1, 1, 2, 0, 2, 2, 2, 2, 1
-    , 1, 2, 2, 2, 2, 0, 1, 2, 2, 1
-    , 2, 1, 2, 2, 2, 1, 0, 1, 2, 2
-    , 2, 2, 1, 2, 2, 2, 1, 0, 1, 2
-    , 2, 2, 2, 1, 2, 2, 2, 1, 0, 1
-    , 2, 2, 2, 2, 1, 1, 2, 2, 1, 0
-    ]
-
-twentyChainGraph :: M.Map Int [Int]
-twentyChainGraph = M.fromList
-    [ (0, [5,10,15])
-    , (1, [16,6,11])
-    , (2, [17,7,12])
-    , (3, [18,8,13])
-    , (4, [19,9,14])
-    , (5, [0,7,8])
-    , (6, [1,8,9])
-    , (7, [2,5,9])
-    , (8, [3,5,6])
-    , (9, [4,6,7])
-    , (10, [0,11,14])
-    , (11, [1,10,12])
-    , (12, [2,11,13])
-    , (13, [3,12,14])
-    , (14, [4,10,13])
-    , (15, [0,16,19])
-    , (16, [1,17,15])
-    , (17, [16,2,18])
-    , (18, [17,3,19])
-    , (19, [18,4,15])
-    ]
-
-shortestPath20 :: Int -> Int -> Int
-shortestPath20 f t = shortestPaths20 M.! (f * 20 + t)
-
-shortestPaths20 :: M.Map Int Int
-shortestPaths20 = M.fromList $ zip [0..]
-    [0,3,3,3,3,1,3,2,2,3,1,2,3,3,2,1,2,3,3,2
-    ,3,0,3,3,3,3,1,3,2,2,2,1,2,3,3,2,1,2,3,3
-    ,3,3,0,3,3,2,3,1,3,2,3,2,1,2,3,3,2,1,2,3
-    ,3,3,3,0,3,2,2,3,1,3,3,3,2,1,2,3,3,2,1,2
-    ,3,3,3,3,0,3,2,2,3,1,2,3,3,2,1,2,3,3,2,1
-    ,1,3,2,2,3,0,2,1,1,2,2,3,3,3,3,2,3,3,3,3
-    ,3,1,3,2,2,2,0,2,1,1,3,2,3,3,3,3,2,3,3,3
-    ,2,3,1,3,2,1,2,0,2,1,3,3,2,3,3,3,3,2,3,3
-    ,2,2,3,1,3,1,1,2,0,2,3,3,3,2,3,3,3,3,2,3
-    ,3,2,2,3,1,2,1,1,2,0,3,3,3,3,2,3,3,3,3,2
-    ,1,2,3,3,2,2,3,3,3,3,0,1,2,2,1,2,3,4,4,3
-    ,2,1,2,3,3,3,2,3,3,3,1,0,1,2,2,3,2,3,4,4
-    ,3,2,1,2,3,3,3,2,3,3,2,1,0,1,2,4,3,2,3,4
-    ,3,3,2,1,2,3,3,3,2,3,2,2,1,0,1,4,4,3,2,3
-    ,2,3,3,2,1,3,3,3,3,2,1,2,2,1,0,3,4,4,3,2
-    ,1,2,3,3,2,2,3,3,3,3,2,3,4,4,3,0,1,2,2,1
-    ,2,1,2,3,3,3,2,3,3,3,3,2,3,4,4,1,0,1,2,2
-    ,3,2,1,2,3,3,3,2,3,3,4,3,2,3,4,2,1,0,1,2
-    ,3,3,2,1,2,3,3,3,2,3,4,4,3,2,3,2,2,1,0,1
-    ,2,3,3,2,1,3,3,3,3,2,3,4,4,3,2,1,2,2,1,0
-    ]
+shortestPath :: Graph -> Int -> Int -> Int
+shortestPath g f t = adjs M.! (f * 10 + t)
+  where
+    adjs = M.fromList $ zip [0..] $ floydWarshall g
