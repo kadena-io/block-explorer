@@ -22,11 +22,6 @@ body {
     margin: auto;
 }
 
-table#blockheaders th {
-    width: 110px; /* Needs to match the blockWidth constant in Haskell */
-    text-align: center;
-}
-
 .block-table {
     margin-top: 1em;
 }
@@ -67,16 +62,20 @@ div.block-row:last-child {
     border-bottom: 1px solid rgba(34, 36, 38, 0.1);
 }
 
+.block-height {
+    flex: 0 0 80px;
+}
+
 span.block-height {
     display: flex;
     justify-content: center;
     align-content: center;
     flex-direction: column;
 
-    width: 102px;
     padding: 5px;
     background: rgba(0,0,0,.03);
     font-weight: bold;
+    border-left: 0!important;
 }
 
 span.table-header {
@@ -85,7 +84,7 @@ span.table-header {
     align-content: center;
     flex-direction: column;
 
-    width: 102px;
+    width: 104px;
     border-left: 1px solid rgba(34, 36, 38, 0.1);
     padding: 5px;
     font-weight: bold;
@@ -93,8 +92,12 @@ span.table-header {
 }
 
 span.summary-details {
-    display: inline-block;
-    width: 102px;
+    display: flex;
+    justify-content: center;
+    align-content: center;
+    flex-direction: column;
+
+    width: 104px;
     border-left: 1px solid rgba(34, 36, 38, 0.1);
     padding: 0;
     margin: 0;
