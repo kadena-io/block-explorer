@@ -257,13 +257,14 @@ initBlockTable height = do
         ecds <- getChainwebStats dbh pb
         return $ (Just recent, ecds)
 
-    stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0 Nothing Nothing) $ mergeWith (.)
+    stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0 Nothing Nothing Nothing) $ mergeWith (.)
       [ maybe id addTxCount <$> downEvent
       , setStartTime now <$ pb
       , addHashrateData <$> filterRight newHrd
       , maybe id addModuleCount <$> downEvent
       , set gs_totalTxCount <$> ((_cds_transactionCount <=< hush) <$> ecds)
       , set gs_circulatingCoins <$> ((_cds_coinsInCirculation <=< hush) <$> ecds)
+      , set gs_possibleCoins <$> ((fmap _cds_maxPossibleCoins . hush) <$> ecds)
       ]
 
     return (blockTable, stats, recentTxs)
@@ -343,12 +344,15 @@ mainPageWidget netId (Just height) = do
             slist = catMaybes
               [ ("Transactions",) . tshow <$> _gs_totalTxCount s
               , ("Circulating Coins",) . siOneDecimal <$> _gs_circulatingCoins s
+              , ("Possible Coins",) . siOneDecimal <$> _gs_possibleCoins s
+              --, circulatingText <$> _gs_circulatingCoins s <*> _gs_possibleCoins s
               ]
     let statAttrs s = "class" =: ("ui mini " <> c <> "statistics")
           where
             c = case length (statsList s) of
                       1 -> "three "
                       2 -> "four "
+                      3 -> "five "
                       _ -> ""
 
     _ <- divClass "ui segment" $ do
@@ -403,6 +407,11 @@ mainPageWidget netId (Just height) = do
           (h', m) = divMod m' 60
           (d, h) = divMod h' 24
       in (d, h, m , s)
+
+circulatingText :: Double -> Double -> (Text,Text)
+circulatingText circulating possible = ("Circulating Coins", msg)
+  where
+    msg = siOneDecimal circulating <> " of " <> siOneDecimal possible
 
 chainDifficulty :: ChainId -> BlockTable -> Text
 chainDifficulty cid bt =

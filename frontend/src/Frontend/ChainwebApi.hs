@@ -432,7 +432,7 @@ getChainwebStats
     -> Event t ()
     -> m (Event t (Either Text ChainwebDataStats))
 getChainwebStats h evt = do
-    let ((_ :<|> _) :<|> go) = client chainwebDataApi
+    let ((_ :<|> _) :<|> go :<|> _) = client chainwebDataApi
                                  (Proxy :: Proxy m)
                                  (Proxy :: Proxy ())
                                  (constDyn $ mkDataUrl h)

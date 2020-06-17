@@ -90,6 +90,7 @@ data GlobalStats = GlobalStats
     , _gs_moduleCount :: Word64
     , _gs_totalTxCount :: Maybe Int
     , _gs_circulatingCoins :: Maybe Double
+    , _gs_possibleCoins :: Maybe Double
     } deriving (Eq,Ord,Show)
 
 makeLenses ''GlobalStats
