@@ -345,9 +345,8 @@ mainPageWidget netId (Just height) = do
               [ ("Transactions",) . tshow <$> _gs_totalTxCount s
               , ("Circulating Coins",) . siOneDecimal <$> _gs_circulatingCoins s
               , ("Possible Coins",) . siOneDecimal <$> _gs_possibleCoins s
-              --, circulatingText <$> _gs_circulatingCoins s <*> _gs_possibleCoins s
               ]
-    let statAttrs s = "class" =: ("ui mini " <> c <> "statistics")
+        statAttrs s = "class" =: ("ui mini " <> c <> "statistics")
           where
             c = case length (statsList s) of
                       1 -> "three "
@@ -407,11 +406,6 @@ mainPageWidget netId (Just height) = do
           (h', m) = divMod m' 60
           (d, h) = divMod h' 24
       in (d, h, m , s)
-
-circulatingText :: Double -> Double -> (Text,Text)
-circulatingText circulating possible = ("Circulating Coins", msg)
-  where
-    msg = siOneDecimal circulating <> " of " <> siOneDecimal possible
 
 chainDifficulty :: ChainId -> BlockTable -> Text
 chainDifficulty cid bt =
