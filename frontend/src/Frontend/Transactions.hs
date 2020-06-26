@@ -142,6 +142,7 @@ txTable _ [] = blank
 txTable net txs = do
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do
+      el "th" $ text "Status"
       el "th" $ text "Chain"
       el "th" $ text "Height"
       elClass "th" "two wide" $ text "Sender"
@@ -151,6 +152,11 @@ txTable net txs = do
         let chain = _txSummary_chain tx
         let height = _txSummary_height tx
         let route = addNetRoute net chain $ Chain_BlockHeight :/ height :. Block_Header :/ ()
+        let status = case _txSummary_result tx of
+                       TxSucceeded -> elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
+                       TxFailed -> elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
+                       TxUnexpected -> elAttr "i" ("class" =: "question icon" <> "title" =: "Unknown") blank
+        elAttr "td" ("class" =: "center aligned" <> "data-label" =: "Status") status
         elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
         elAttr "td" ("data-label" =: "Height") $ routeLink route $ text $ tshow height
         elAttr "td" ("data-label" =: "Sender") $ senderWidget tx
