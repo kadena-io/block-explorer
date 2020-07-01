@@ -266,7 +266,7 @@ mkHeaderRequest he h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh 
   where
     cfg = def { _xhrRequestConfig_headers = headerEncoding he }
     maxh = _csiNewestBlockHeight csi
-    minh = maxh - blockTableNumRows
+    minh = max 0 (maxh - blockTableNumRows)
 
 mkSingleHeightRequest :: HeaderEncoding -> ChainwebHost -> ChainId -> BlockHeight -> XhrRequest ()
 mkSingleHeightRequest he h c blockHeight = XhrRequest "GET" (headersUrl h blockHeight blockHeight c) cfg
