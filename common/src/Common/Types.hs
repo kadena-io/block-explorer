@@ -12,6 +12,7 @@ import           Control.Monad
 import           Data.Aeson
 import           Data.Readable
 import           Data.Map (Map)
+import qualified Data.Map as M
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Text (Text)
@@ -92,15 +93,16 @@ humanReadableTextPrism = prism' humanize fromText
 
 type Graph = Map Int [Int]
 data GraphInfo = GraphInfo
-  { giChains :: [ChainId]
+  { giChains :: Set ChainId
   , giGraph :: Graph
-  , giShortestPath :: Int -> Int -> Int
   }
 
 data CServerInfo = CServerInfo
   { _csiServerInfo        :: ServerInfo -- TODO use this properly
   , _csiNewestBlockHeight :: BlockHeight
   } deriving (Eq,Ord,Show)
+
+type AllGraphs = [(BlockHeight, GraphInfo)]
 
 data ServerInfo = ServerInfo
   { _siChainwebVer :: ChainwebVersion
@@ -110,8 +112,16 @@ data ServerInfo = ServerInfo
   , _siGraphs      :: Maybe [(BlockHeight, [(Int, [Int])])]
   } deriving (Eq,Ord,Show)
 
-siChainsList :: ServerInfo -> [ChainId]
-siChainsList = S.toAscList . _siChains
+getGraphAt :: BlockHeight -> AllGraphs -> GraphInfo
+getGraphAt _ [] = error "Empty list of graphs (should never happen)"
+getGraphAt _ [(_,g)] = g
+getGraphAt bh ((h,g):gs) = if bh >= h then g else getGraphAt bh gs
+
+siCurChains :: BlockHeight -> ServerInfo -> Set ChainId
+siCurChains bh si = maybe (_siChains si) (S.fromList . map (ChainId . fst) . snd . head . dropWhile (\(h,_) -> bh < h)) $ _siGraphs si
+
+siCurNumChains :: BlockHeight -> ServerInfo -> Int
+siCurNumChains h si = maybe (_siNumChains si) (length . snd . head . dropWhile (\(h,_) -> h > h)) $ _siGraphs si
 
 instance FromJSON ServerInfo where
   parseJSON = withObject "ServerInfo" $ \o -> ServerInfo

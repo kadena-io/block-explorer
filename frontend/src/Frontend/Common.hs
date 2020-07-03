@@ -21,6 +21,7 @@ import           Data.Array.Unboxed
 import           Data.Char
 import qualified Data.Map as M
 import           Data.Maybe
+import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified GHCJS.DOM as DOM
@@ -34,6 +35,8 @@ import qualified Language.Javascript.JSaddle as JS
 import           Reflex.Dom
 import           Reflex.Network
 ------------------------------------------------------------------------------
+import           Chainweb.Api.ChainId
+import           Chainweb.Api.Common
 import           Common.Types
 ------------------------------------------------------------------------------
 
@@ -165,3 +168,41 @@ floydWarshall g = IA.elems arr
             when (a > b + c) $ do
               writeArray dist (i,j) (b+c)
       return dist
+
+petersenGraph :: Graph
+petersenGraph = M.fromList
+    [ (0, [2,3,5])
+    , (1, [3,4,6])
+    , (2, [4,0,7])
+    , (3, [0,1,8])
+    , (4, [1,2,9])
+    , (5, [0,6,9])
+    , (6, [1,5,7])
+    , (7, [2,6,8])
+    , (8, [3,7,9])
+    , (9, [4,8,5])
+    ]
+
+shortestPath :: Graph -> Int -> Int -> Int
+shortestPath g f t = adjs M.! (f * 10 + t)
+  where
+    adjs = M.fromList $ zip [0..] $ floydWarshall g
+
+rawGraphToGraphInfo :: [(Int, [Int])] -> GraphInfo
+rawGraphToGraphInfo adjs = GraphInfo cs (M.fromList adjs)
+  where
+    cs = S.fromList $ map (ChainId . fst) adjs
+
+type BlockRef = (BlockHeight, ChainId)
+
+isDownstreamFrom :: AllGraphs -> BlockRef -> BlockRef -> Bool
+isDownstreamFrom gs (ph, ChainId pc) (h, ChainId c) =
+    if h > ph then False else go gs
+  where
+    go ((gh,GraphInfo _ g):gs)
+      | h >= gh = isDownstream g
+      | ph >= gh = case M.lookup c g of
+                     Nothing -> False
+                     Just _ -> isDownstream g
+      | otherwise = go gs
+    isDownstream g = shortestPath g pc c < ph - h

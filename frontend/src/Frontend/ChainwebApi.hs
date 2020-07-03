@@ -11,6 +11,7 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens hiding ((.=))
 import           Control.Monad
+import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
@@ -27,6 +28,8 @@ import qualified Data.Map as M
 import           Data.Proxy
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
+import           Data.Set (Set)
+import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import           Data.Time.Clock.POSIX
@@ -137,7 +140,8 @@ getBlockTable
   -> m (Event t BlockTable)
 getBlockTable h csi = do
   pb <- getPostBuild
-  resp <- performRequestsAsync $ mkHeaderRequest HeaderJson h csi <$ pb
+  performEvent_ (liftIO (putStrLn $ "CSI: " <> show csi) <$ pb)
+  resp <- performRequestsAsync $ mkHeaderRequests HeaderJson h csi <$ pb
   return (foldl' (\bt val -> combineBlockTables bt val) mempty <$> (fmap decodeXhrResponse <$> resp))
 
 getBlockHeader
@@ -260,9 +264,9 @@ headerEncoding :: HeaderEncoding -> Map Text Text
 headerEncoding HeaderBinary = "accept" =: "application/json"
 headerEncoding HeaderJson = "accept" =: "application/json;blockheader-encoding=object"
 
-mkHeaderRequest :: HeaderEncoding -> ChainwebHost -> CServerInfo -> [XhrRequest ()]
-mkHeaderRequest he h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
-                         $ siChainsList $ _csiServerInfo csi
+mkHeaderRequests :: HeaderEncoding -> ChainwebHost -> CServerInfo -> [XhrRequest ()]
+mkHeaderRequests he h csi = map (\c -> (XhrRequest "GET" (headersUrl h minh maxh c) cfg))
+                         $ Set.toList $ siCurChains maxh $ _csiServerInfo csi
   where
     cfg = def { _xhrRequestConfig_headers = headerEncoding he }
     maxh = _csiNewestBlockHeight csi
@@ -361,6 +365,11 @@ instance Semigroup BlockTable where
 
 instance Monoid BlockTable where
   mempty = BlockTable mempty mempty
+
+blockTableMaxHeight :: BlockTable -> BlockHeight
+blockTableMaxHeight bt = case M.keys $ _blockTable_blocks bt of
+                           [] -> 0
+                           hs -> maximum hs
 
 blockTableNumRows :: Int
 blockTableNumRows = 4

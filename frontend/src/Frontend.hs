@@ -17,6 +17,7 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson
+import           Data.Bifunctor
 import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.List
@@ -24,6 +25,7 @@ import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
 import           Data.Ord
+import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -110,10 +112,11 @@ networkDispatch route ndbs netId = prerender_ blank $ do
           let ch = ChainwebHost h $ _siChainwebVer $ _as_serverInfo as
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
-          void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
+          void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> traceEvent "Initial height" height)
         NetRoute_Chain -> chainRouteHandler si netId
         NetRoute_TxReqKey -> requestKeyWidget si netId
         NetRoute_TxSearch -> transactionSearch
+
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -324,6 +327,7 @@ mainPageWidget netId (Just height) = do
     appState <- ask
     let si = _as_serverInfo appState
     (dbt, stats, mrecent) <- initBlockTable height
+    let maxBlockHeight = blockTableMaxHeight <$> dbt
 
     searchWidget netId
 
@@ -333,7 +337,7 @@ mainPageWidget netId (Just height) = do
       (\ti s -> calcNetworkHashrate (utcTimeToPOSIXSeconds $ _tickInfo_lastUTC ti) s)
       (current dti) (updated dbt)
     let getDiff bt c = fmap (blockDifficulty . _blockHeaderTx_header) $ M.lookup c $ _blockTable_cut bt
-    let totalDifficulty bt = sum $ catMaybes $ map (getDiff bt) (toList $ _siChains si)
+    let totalDifficulty bt = sum $ catMaybes $ map (getDiff bt) (toList $ siCurChains (blockTableMaxHeight bt) si)
 
     let statsList :: GlobalStats -> [(Text, Text)]
         statsList s =
@@ -362,38 +366,35 @@ mainPageWidget netId (Just height) = do
           networkView $ ffor (statsList <$> stats) $ \ps -> do
             forM ps $ \(n,v) -> statistic n $ text v
 
-    chains <- asks (siChainsList . _as_serverInfo)
-    let numChains = length chains
-    divClass "block-table" $ do
-      divClass "header-row" $ do
-        elClass "span" "table-header block-height" $ text "Height"
-        let mkTooltip cid bt = "class" =: "table-header" <>
-              if numChains <= 10
-                then mempty
-                else "data-tooltip" =: chainDifficulty cid bt <>
-                     "data-variation" =: "narrow"
+    dChains <- holdUniqDyn $ (\h -> Set.toList $ siCurChains h si) <$> traceDyn "maxBlockHeight" maxBlockHeight
+    networkView $ ffor (traceDyn "dynWidestChains" dChains) $ \widestChains -> do
+      let maxNumChains = length widestChains
+      divClass "block-table" $ do
+        divClass "header-row" $ do
+          elClass "span" "table-header block-height" $ text "Height"
+          let mkTooltip cid bt = "class" =: "table-header" <>
+                if maxNumChains <= 10
+                  then mempty
+                  else "data-tooltip" =: chainDifficulty cid bt <>
+                       "data-variation" =: "narrow"
 
-        forM_ chains $ \cid -> elDynAttr "span" (mkTooltip cid <$> dbt) $ do
-          el "div" $ text $ "Chain " <> tshow cid
-          when (numChains <= 10) $
-            elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
-                          "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
+          forM_ widestChains $ \cid -> elDynAttr "span" (mkTooltip cid <$> dbt) $ do
+            el "div" $ text $ "Chain " <> tshow cid
+            when (maxNumChains <= 10) $
+              elAttr "div" ("data-tooltip" =: "The expected number of hashes to mine a block on this chain" <>
+                            "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
 
-      let numChains = length chains
-          defaultGraph = if length chains == 10
-                           then Just $ GraphInfo chains petersenGraph (shortestPath petersenGraph)
-                           else Nothing
-          adjFunc f t = _as_graphAdjacencies appState M.! (f * numChains + t)
-          mkGi ((_,adjs):_) = let g = M.fromList adjs
-                               in Just $ GraphInfo chains g adjFunc
-          mgi = maybe defaultGraph mkGi $ _siGraphs si
-      case mgi of
-        Nothing -> text "Unknown chain graph"
-        Just gi -> mdo
-          hoverChanges <- listWithKey (M.mapKeys Down . _blockTable_blocks <$> dbt)
-                                      (rowsWidget dti gi hoveredBlock)
-          hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
-          return ()
+        let defaultGraphs = if maxNumChains == 10
+                             then [(0, GraphInfo (Set.fromList widestChains) petersenGraph)]
+                             else []
+            gis = maybe defaultGraphs (map (second rawGraphToGraphInfo)) $ _siGraphs si
+        case gis of
+          [] -> text "Unknown chain graph"
+          _ -> mdo
+            hoverChanges <- listWithKey (downHeightWithMax <$> dbt)
+                                        (rowsWidget dti gis hoveredBlock maxNumChains)
+            hoveredBlock <- holdDyn Nothing (switch $ current $ leftmost . M.elems <$> hoverChanges)
+            return ()
     case mrecent of
       Nothing -> blank
       Just recent -> void $ networkView (recentTransactions <$> recent)
@@ -407,6 +408,12 @@ mainPageWidget netId (Just height) = do
           (d, h) = divMod h' 24
       in (d, h, m , s)
 
+downHeightWithMax :: BlockTable -> Map (Down (BlockHeight, BlockHeight)) (Map ChainId BlockHeaderTx)
+downHeightWithMax bt = M.mapKeys (\a -> Down (a, fromMaybe a mh)) btm
+  where
+    btm = _blockTable_blocks bt
+    mh = fst <$> M.lookupMax btm
+
 chainDifficulty :: ChainId -> BlockTable -> Text
 chainDifficulty cid bt =
   maybe "" (\b -> diffStr (blockDifficulty $ _blockHeaderTx_header b)) $
@@ -416,46 +423,55 @@ rowsWidget
   :: (MonadApp r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
-  -> GraphInfo
+  -> AllGraphs
   -> Dynamic t (Maybe BlockRef)
-  -> Down BlockHeight
+  -> Int
+  -> Down (BlockHeight, BlockHeight)
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe BlockRef))
-rowsWidget ti gi hoveredBlock (Down bh) cs = mdo
-  hoverChanges <- blockHeightRow ti gi hoveredBlock bh cs
-  spacerRow gi cs hoveredBlock bh
+rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
+  hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains bh cs
+  spacerRow gis cs hoveredBlock maxNumChains bh
   return hoverChanges
 
 blockHeightRow
   :: (MonadApp r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
-  -> GraphInfo
+  -> AllGraphs
   -> Dynamic t (Maybe BlockRef)
-  -> BlockHeight
+  -> Int
+  -> (BlockHeight, BlockHeight)
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe BlockRef))
-blockHeightRow ti gi hoveredBlock height headers = do
+blockHeightRow ti gis hoveredBlock maxNumChains hp@(height, _) headers = do
   divClass "block-row" $ do
     elClass "span" "block-height" $ text $ tshow height
-    es <- forM (giChains gi) $ blockWidget0 ti gi hoveredBlock headers height
+    let chains = giChains $ getGraphAt height gis
+    es <- forM (Set.toList chains) $
+      blockWidget0 ti gis hoveredBlock maxNumChains headers hp
+
+    -- Fill in the rest of the row with placeholder blocks
+    replicateM_ (maxNumChains - Set.size chains) $ do
+      elClass "span" "summary-details" $ divClass "empty-summary-inner" blank
     return $ (height,) <$$> leftmost es
 
 blockWidget0
   :: (MonadApp r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
-  -> GraphInfo
+  -> AllGraphs
   -> Dynamic t (Maybe BlockRef)
+  -> Int
   -> Dynamic t (Map ChainId BlockHeaderTx)
-  -> BlockHeight
+  -> (BlockHeight, BlockHeight)
   -> ChainId
   -> m (Event t (Maybe ChainId))
-blockWidget0 ti gi hoveredBlock hs height cid = do
+blockWidget0 ti gis hoveredBlock maxNumChains hs (height, mbh) cid = do
   net <- asks _as_network
   let mkAttrs = \case
         Nothing -> "class" =: "summary-details"
-        Just hb -> if isDownstreamFrom (giShortestPath gi) hb (height, cid)
+        Just hb -> if isDownstreamFrom gis hb (height, cid)
                      then "class" =: "summary-details hovered-block"
                      else "class" =: "summary-details"
   let mbh = M.lookup cid <$> hs
@@ -464,15 +480,14 @@ blockWidget0 ti gi hoveredBlock hs height cid = do
       let getHeight = _blockHeader_height . _blockHeaderTx_header
       let mkRoute h = addNetRoute net (unChainId cid) $ Chain_BlockHeight :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
-        let numChains = length (giChains gi)
-        when (numChains <= 10) $ el "div" $ do
+        when (maxNumChains <= 10) $ el "div" $ do
           elClass "span" "block-hash" $ do
               dynText $ T.take 8 . hashHex . _blockHeader_hash . _blockHeaderTx_header <$> bh
 
         let getCreationTime = posixSecondsToUTCTime . _blockHeader_creationTime . _blockHeaderTx_header
         void $ prerender blank $ divClass "blockdiv" $ do
           let dt = Just . getCreationTime <$> bh
-          let diffTimeToSecsAgo delta = tshow (roundInt delta) <> if numChains <= 10 then "s ago" else "s"
+          let diffTimeToSecsAgo = diffTimeToRelativeEnglish maxNumChains
           let calcDiff lastTick t = maybe "" (diffTimeToSecsAgo . diffUTCTime (_tickInfo_lastUTC lastTick)) t
           dynText (calcDiff <$> ti <*> dt)
 
@@ -510,21 +525,42 @@ siOneDecimal d = T.pack $ printf "%.1f%s" (d / divisor) units
       | d >= 1e3 = (1e3, "K")
       | otherwise = (1, "")
 
---diffTimeToRelativeEnglish :: NominalDiffTime -> Text
---diffTimeToRelativeEnglish delta
---  | delta < 5 = "Just now"
---  | delta < oneMinute * 2 = tshow (roundInt delta) <> " secs ago"
---  | delta < oneHour = tshow (roundInt $ delta / oneMinute) <> " min ago"
---  | delta < oneHour * 2 = "an hour ago"
---  | delta < oneDay = tshow (roundInt $ delta / oneHour) <> " hours ago"
---  | delta < oneDay * 2 = "1 day ago"
---  | delta < oneWeek = tshow (roundInt $ delta / oneDay) <> " days ago"
---  | delta < oneWeek * 2 = "1 week ago"
---  | delta < oneMonth = tshow (roundInt $ delta / oneWeek) <> " weeks ago"
---  | delta < oneMonth * 2 = "1 month ago"
---  | delta < oneYear = tshow (roundInt $ delta / oneMonth) <> " months ago"
---  | delta < oneYear * 2 = "a year ago"
---  | otherwise = tshow (roundInt $ delta / oneYear) <> " years ago"
+diffTimeToRelativeEnglish :: Int -> NominalDiffTime -> Text
+diffTimeToRelativeEnglish numChains delta = tshow amt <> ptext
+  where
+    (amt, period) = diffTimeToRoundedQuantity delta
+    ptext = if numChains <= 10
+              then shortPeriodText period <> " ago"
+              else shortPeriodText period
+
+diffTimeToRoundedQuantity :: NominalDiffTime -> (Int, TimePeriod)
+diffTimeToRoundedQuantity delta
+  | delta < oneMinute * 2 = (roundInt delta, Seconds)
+  | delta < oneHour = (roundInt $ delta / oneMinute, Minutes)
+  | delta < oneDay = (roundInt $ delta / oneHour, Hours)
+  | delta < oneWeek = (roundInt $ delta / oneDay, Days)
+  | delta < oneYear = (roundInt $ delta / oneWeek, Weeks)
+--  | delta < oneYear = (roundInt $ delta / oneMonth, Months)
+  | otherwise = (roundInt $ delta / oneYear, Years)
+
+data TimePeriod
+  = Seconds
+  | Minutes
+  | Hours
+  | Days
+  | Weeks
+--  | Months
+  | Years
+
+shortPeriodText :: TimePeriod -> Text
+shortPeriodText = \case
+  Seconds -> "s"
+  Minutes -> "m"
+  Hours -> "h"
+  Days -> "d"
+  Weeks -> "w"
+--  Months -> "s"
+  Years -> "y"
 
 roundInt :: NominalDiffTime -> Int
 roundInt = round
@@ -546,18 +582,19 @@ blockSeparation :: Int
 blockSeparation = 50
 
 spacerRow
-  :: (DomBuilder t m, PostBuild t m)
-  => GraphInfo
+  :: (MonadApp r t m, DomBuilder t m, PostBuild t m)
+  => AllGraphs
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
-  -> BlockHeight
+  -> Int
+  -> (BlockHeight, BlockHeight)
   -> m ()
-spacerRow gi cs hoveredBlock bh = do
+spacerRow gis cs hoveredBlock maxNumChains bhp = do
   let sty = "margin-left: 80px; height: " <> tshow blockSeparation <> "px; " <>
             "border: 0; padding: 0;"
   elAttr "div" ("class" =: "spacer-row" <>
                 "style" =: sty ) $ do
-    chainweb gi cs hoveredBlock bh
+    chainweb gis cs hoveredBlock maxNumChains bhp
 
 svgElDynAttr
   :: (DomBuilder t m, PostBuild t m)
@@ -576,26 +613,27 @@ svgElAttr
 svgElAttr elTag attrs child = svgElDynAttr elTag (constDyn attrs) child
 
 chainweb
-  :: (DomBuilder t m, PostBuild t m)
-  => GraphInfo
+  :: (MonadApp r t m, DomBuilder t m, PostBuild t m)
+  => AllGraphs
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
-  -> BlockHeight
+  -> Int
+  -> (BlockHeight, BlockHeight)
   -> m ()
-chainweb gi cs hoveredBlock bh = do
-  let chains = giChains gi
-      numChains = length chains
+chainweb gis cs hoveredBlock maxNumChains (bh,mbh) = do
+  si <- asks _as_serverInfo
+  let chains = giChains $ getGraphAt bh gis
       totalWidth = 1100
-      blockWidth = totalWidth `div` numChains
+      blockWidth = totalWidth `div` maxNumChains
       attrs = ("viewBox" =: ("0 0 " <> tshow totalWidth <> " " <> tshow (blockSeparation + 4)) <>
                "style" =: "vertical-align: middle;")
   svgElAttr "svg" attrs $ do
-    forM_ chains (\c -> linksFromBlock gi blockWidth cs hoveredBlock (bh, c))
-    void $ networkView $ lastLinesForActiveBlock gi blockWidth cs hoveredBlock bh <$> hoveredBlock
+    forM_ chains (\c -> linksFromBlock gis blockWidth cs hoveredBlock (bh, c))
+    void $ networkView $ lastLinesForActiveBlock gis blockWidth cs hoveredBlock bh <$> hoveredBlock
 
 lastLinesForActiveBlock
   :: (DomBuilder t m, PostBuild t m)
-  => GraphInfo
+  => AllGraphs
   -> Int
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
@@ -603,36 +641,42 @@ lastLinesForActiveBlock
   -> Maybe BlockRef
   -> m ()
 lastLinesForActiveBlock _ _ _ _ _ Nothing = blank
-lastLinesForActiveBlock gi blockWidth cs hoveredBlock curBH (Just b) =
-  if curBH > fst b then blank else linksFromBlock gi blockWidth cs hoveredBlock b
+lastLinesForActiveBlock gis blockWidth cs hoveredBlock curBH (Just b) =
+  if curBH > fst b then blank else linksFromBlock gis blockWidth cs hoveredBlock b
 
 linksFromBlock
   :: (DomBuilder t m, PostBuild t m)
-  => GraphInfo
+  => AllGraphs
   -> Int
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
   -> BlockRef
   -> m ()
-linksFromBlock gi blockWidth cs hoveredBlock fromBlock = do
-    let fromChain = unChainId $ snd fromBlock
-    let toBlocks = giGraph gi M.! fromChain
-        mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
+linksFromBlock gis blockWidth cs hoveredBlock fromBlock = do
+    let bh = fst fromBlock
+    let fromChainId = snd fromBlock
+    let fromChainInt = unChainId fromChainId
+    let mkAttrs bs mhb = stroke <> (maybe ("style" =: "display: none;") mempty (M.lookup (snd fromBlock) bs))
           where
             stroke =
               case mhb of
                 Nothing -> "stroke" =: "rgb(220,220,220)"
                 Just hb ->
-                  if fst fromBlock > fst hb
+                  if bh > fst hb
                     then "stroke" =: "rgb(220,220,220)"
                     else if hb == fromBlock ||
-                            isDownstreamFrom (giShortestPath gi) hb fromBlock
+                            isDownstreamFrom gis hb fromBlock
                            then "stroke" =: "rgb(100,100,100)" <>
                                 "stroke-width" =: "1.0"
                            else "stroke" =: "rgb(220,220,220)"
     svgElDynAttr "g" (mkAttrs <$> cs <*> hoveredBlock) $ do
-      linkFromTo fromChain fromChain
-      mapM_ (linkFromTo fromChain) toBlocks
+      linkFromTo fromChainInt fromChainInt
+      _ <- networkView $ ffor cs $ \cmap -> do
+        case M.lookup fromChainId cmap of
+          Nothing -> blank
+          Just b -> mapM_ (linkFromTo fromChainInt . unChainId) $
+            M.keys $ _blockHeader_neighbors $ _blockHeaderTx_header b
+      return ()
   where
     linkFromTo :: (DomBuilder t m, PostBuild t m) => Int -> Int -> m ()
     linkFromTo f t =
@@ -646,30 +690,3 @@ linksFromBlock gi blockWidth cs hoveredBlock fromBlock = do
 
     toPos :: Int -> Int
     toPos t = blockWidth `div` 2 + t * blockWidth
-
-
-type BlockRef = (BlockHeight, ChainId)
-
-isDownstreamFrom :: (Int -> Int -> Int) -> BlockRef -> BlockRef -> Bool
-isDownstreamFrom sp (ph, ChainId pc) (h, ChainId c)
-  | h > ph = False
-  | otherwise = sp pc c <= ph - h
-
-petersenGraph :: Graph
-petersenGraph = M.fromList
-    [ (0, [2,3,5])
-    , (1, [3,4,6])
-    , (2, [4,0,7])
-    , (3, [0,1,8])
-    , (4, [1,2,9])
-    , (5, [0,6,9])
-    , (6, [1,5,7])
-    , (7, [2,6,8])
-    , (8, [3,7,9])
-    , (9, [4,8,5])
-    ]
-
-shortestPath :: Graph -> Int -> Int -> Int
-shortestPath g f t = adjs M.! (f * 10 + t)
-  where
-    adjs = M.fromList $ zip [0..] $ floydWarshall g
