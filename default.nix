@@ -20,7 +20,6 @@ project ./. ({ pkgs, hackGet, ... }: {
     let inherit (pkgs) lib;
     in {
       bytes = dontCheck super.bytes;
-      chainweb-api = self.callCabal2nix "chainweb-api" (hackGet ./deps/chainweb-api) {};
 
       formattable = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "formattable";
@@ -48,5 +47,7 @@ project ./. ({ pkgs, hackGet, ... }: {
       }) {});
   };
 
-  packages = {};
+  packages = {
+    chainweb-api = hackGet ./deps/chainweb-api;
+  };
 })
