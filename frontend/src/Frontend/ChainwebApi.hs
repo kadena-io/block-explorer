@@ -170,7 +170,7 @@ getBlockHeaderByHeight h c blockHeight = do
                   ]
   resp <- performRequestsAsync $ mkReqs <$> fmapMaybe id cutHash
   let eRes = decodeHeightResults <$> resp
-  return (hush <$> traceEvent "eRes" eRes)
+  return (hush <$> eRes)
 
 decodeHeightResults :: [XhrResponse] -> Either String (BlockHeader, Text)
 decodeHeightResults [bh, bhBin] = do
