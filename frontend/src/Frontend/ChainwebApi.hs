@@ -11,7 +11,6 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens hiding ((.=))
 import           Control.Monad
-import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
@@ -28,11 +27,9 @@ import qualified Data.Map as M
 import           Data.Proxy
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
-import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
-import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value)
 import           Servant.API
@@ -45,14 +42,10 @@ import           Chainweb.Api.BlockPayload
 import           Chainweb.Api.BlockPayloadWithOutputs
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainTip
-import           Chainweb.Api.ChainwebMeta
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
-import           Chainweb.Api.PactCommand
-import           Chainweb.Api.Payload
 import           Chainweb.Api.RespItems
-import           Chainweb.Api.Transaction
 import           ChainwebData.Api
 import           ChainwebData.Pagination
 import           ChainwebData.TxSummary
@@ -140,7 +133,6 @@ getBlockTable
   -> m (Event t BlockTable)
 getBlockTable h csi = do
   pb <- getPostBuild
-  performEvent_ (liftIO (putStrLn $ "CSI: " <> show csi) <$ pb)
   resp <- performRequestsAsync $ mkHeaderRequests HeaderJson h csi <$ pb
   return (foldl' (\bt val -> combineBlockTables bt val) mempty <$> (fmap decodeXhrResponse <$> resp))
 
@@ -217,14 +209,6 @@ getBlockPayload2 ch trigger = do
     resp <- performRequestsAsync $ req <$> trigger
     return (decodeBhtx <$> resp)
   where
-    bpwo2bp bpwo = BlockPayload
-      { _blockPayload_minerData = _blockPayloadWithOutputs_minerData bpwo
-      , _blockPayload_transactionsHash = _blockPayloadWithOutputs_transactionsHash bpwo
-      , _blockPayload_outputsHash = _blockPayloadWithOutputs_outputsHash bpwo
-      , _blockPayload_payloadHash = _blockPayloadWithOutputs_payloadHash bpwo
-      , _blockPayload_transactions = map fst $ _blockPayloadWithOutputs_transactionsWithOutputs bpwo
-      }
-    f bhtx bpwo = bhtx { _blockHeaderTx_payload = Just $ bpwo2bp bpwo }
     decodeBhtx (bhtx,resp) = (bhtx,) <$> decodeXhr resp
     req bhtx =
       (bhtx, XhrRequest "GET" (payloadWithOutputsUrl ch c ph)
@@ -345,7 +329,7 @@ addNewTransaction (bhtx, bpwo) (RecentTxs s1) = RecentTxs s2
     s2 = S.take maxTransactions $ S.fromList txs <> s1
 
     bh = _blockHeaderTx_header bhtx
-    f (t,to) = mkTxSummary (_blockHeader_chainId bh) (_blockHeader_height bh) (_blockHeader_hash bh) t to
+    f (t,tout) = mkTxSummary (_blockHeader_chainId bh) (_blockHeader_height bh) (_blockHeader_hash bh) t tout
     txs = map f $ _blockPayloadWithOutputs_transactionsWithOutputs bpwo
 
 data BlockTable = BlockTable

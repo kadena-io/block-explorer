@@ -15,15 +15,14 @@ import           Control.Monad
 import           Control.Monad.Fix
 import qualified Data.Array.IArray as IA
 import           Data.Array.MArray
-import           Data.Array.IO
 import           Data.Array.ST
-import           Data.Array.Unboxed
 import           Data.Char
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Vector as V
 import qualified GHCJS.DOM as DOM
 import qualified "ghcjs-dom" GHCJS.DOM.Document as Document
 import qualified GHCJS.DOM.HTMLElement as HTMLElement
@@ -183,26 +182,31 @@ petersenGraph = M.fromList
     , (9, [4,8,5])
     ]
 
-shortestPath :: Graph -> Int -> Int -> Int
-shortestPath g f t = adjs M.! (f * 10 + t)
+shortestPath :: GraphInfo -> Int -> Int -> Int
+shortestPath gi f t = (giShortestPaths gi) V.! (f * numChains + t)
   where
-    adjs = M.fromList $ zip [0..] $ floydWarshall g
+    numChains = S.size (giChains gi)
 
 rawGraphToGraphInfo :: [(Int, [Int])] -> GraphInfo
-rawGraphToGraphInfo adjs = GraphInfo cs (M.fromList adjs)
+rawGraphToGraphInfo adjs = GraphInfo cs g (V.fromList $ floydWarshall g)
   where
+    g = M.fromList adjs
     cs = S.fromList $ map (ChainId . fst) adjs
 
 type BlockRef = (BlockHeight, ChainId)
 
 isDownstreamFrom :: AllGraphs -> BlockRef -> BlockRef -> Bool
-isDownstreamFrom gs (ph, ChainId pc) (h, ChainId c) =
-    if h > ph then False else go gs
+isDownstreamFrom allGraphs (ph, ChainId pc) (h, ChainId c) =
+    if h > ph
+      then False
+      else if h == ph then pc == c else go allGraphs
   where
-    go ((gh,GraphInfo _ g):gs)
-      | h >= gh = isDownstream g
-      | ph >= gh = case M.lookup c g of
+    go [] = False
+    go ((gh,gi):gs)
+      | h >= gh = isDownstream gi
+      | ph >= gh = case M.lookup c (giGraph gi) of
                      Nothing -> False
-                     Just _ -> isDownstream g
+                     Just _ -> isDownstream gi
       | otherwise = go gs
-    isDownstream g = shortestPath g pc c < ph - h
+    isDownstream gi = shortestPath gi pc c <= ph - h
+

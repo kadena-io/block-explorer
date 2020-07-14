@@ -20,7 +20,6 @@ import           Data.Aeson
 import           Data.Bifunctor
 import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
-import           Data.List
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -32,6 +31,7 @@ import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
+import qualified Data.Vector as V
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Configs
 import           Obelisk.Frontend
@@ -112,7 +112,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
           let ch = ChainwebHost h $ _siChainwebVer $ _as_serverInfo as
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
-          void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> traceEvent "Initial height" height)
+          void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
         NetRoute_Chain -> chainRouteHandler si netId
         NetRoute_TxReqKey -> requestKeyWidget si netId
         NetRoute_TxSearch -> transactionSearch
@@ -366,8 +366,8 @@ mainPageWidget netId (Just height) = do
           networkView $ ffor (statsList <$> stats) $ \ps -> do
             forM ps $ \(n,v) -> statistic n $ text v
 
-    dChains <- holdUniqDyn $ (\h -> Set.toList $ siCurChains h si) <$> traceDyn "maxBlockHeight" maxBlockHeight
-    networkView $ ffor (traceDyn "dynWidestChains" dChains) $ \widestChains -> do
+    dChains <- holdUniqDyn $ (\h -> Set.toList $ siCurChains h si) <$> maxBlockHeight
+    _ <- networkView $ ffor dChains $ \widestChains -> do
       let maxNumChains = length widestChains
       divClass "block-table" $ do
         divClass "header-row" $ do
@@ -385,7 +385,7 @@ mainPageWidget netId (Just height) = do
                             "data-variation" =: "narrow") $ dynText $ chainDifficulty cid <$> dbt
 
         let defaultGraphs = if maxNumChains == 10
-                             then [(0, GraphInfo (Set.fromList widestChains) petersenGraph)]
+                             then [(0, GraphInfo (Set.fromList widestChains) petersenGraph (V.fromList $ floydWarshall petersenGraph))]
                              else []
             gis = maybe defaultGraphs (map (second rawGraphToGraphInfo)) $ _siGraphs si
         case gis of
@@ -408,6 +408,10 @@ mainPageWidget netId (Just height) = do
           (d, h) = divMod h' 24
       in (d, h, m , s)
 
+--mkGrid n [] = []
+--mkGrid n xs = let (x,rest) = splitAt n xs
+--               in x : mkGrid n rest
+
 downHeightWithMax :: BlockTable -> Map (Down (BlockHeight, BlockHeight)) (Map ChainId BlockHeaderTx)
 downHeightWithMax bt = M.mapKeys (\a -> Down (a, fromMaybe a mh)) btm
   where
@@ -419,8 +423,10 @@ chainDifficulty cid bt =
   maybe "" (\b -> diffStr (blockDifficulty $ _blockHeaderTx_header b)) $
     M.lookup cid $ _blockTable_cut bt
 
+
 rowsWidget
-  :: (MonadApp r t m, Prerender js t m,
+  :: (MonadAppIO r t m, Prerender js t m,
+      HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> AllGraphs
@@ -430,26 +436,28 @@ rowsWidget
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe BlockRef))
 rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
-  hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains bh cs
+  hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
   spacerRow gis cs hoveredBlock maxNumChains bh
   return hoverChanges
 
 blockHeightRow
-  :: (MonadApp r t m, Prerender js t m,
+  :: (MonadAppIO r t m, Prerender js t m,
+      HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> AllGraphs
   -> Dynamic t (Maybe BlockRef)
   -> Int
-  -> (BlockHeight, BlockHeight)
+  -> BlockHeight
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe BlockRef))
-blockHeightRow ti gis hoveredBlock maxNumChains hp@(height, _) headers = do
+blockHeightRow ti gis hoveredBlock maxNumChains height headers = do
   divClass "block-row" $ do
     elClass "span" "block-height" $ text $ tshow height
     let chains = giChains $ getGraphAt height gis
-    es <- forM (Set.toList chains) $
-      blockWidget0 ti gis hoveredBlock maxNumChains headers hp
+        chainList = Set.toAscList chains
+    es <- forM chainList $
+      blockWidget0 ti gis hoveredBlock maxNumChains headers height
 
     -- Fill in the rest of the row with placeholder blocks
     replicateM_ (maxNumChains - Set.size chains) $ do
@@ -457,26 +465,28 @@ blockHeightRow ti gis hoveredBlock maxNumChains hp@(height, _) headers = do
     return $ (height,) <$$> leftmost es
 
 blockWidget0
-  :: (MonadApp r t m, Prerender js t m,
+  :: (MonadAppIO r t m, Prerender js t m,
+      HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> AllGraphs
   -> Dynamic t (Maybe BlockRef)
   -> Int
   -> Dynamic t (Map ChainId BlockHeaderTx)
-  -> (BlockHeight, BlockHeight)
+  -> BlockHeight
   -> ChainId
   -> m (Event t (Maybe ChainId))
-blockWidget0 ti gis hoveredBlock maxNumChains hs (height, mbh) cid = do
+blockWidget0 ti gis hoveredBlock maxNumChains hs height cid = do
   net <- asks _as_network
   let mkAttrs = \case
-        Nothing -> "class" =: "summary-details"
+        Nothing -> "class" =: ("blk" <> tshow cid <> " summary-details")
         Just hb -> if isDownstreamFrom gis hb (height, cid)
-                     then "class" =: "summary-details hovered-block"
-                     else "class" =: "summary-details"
+                     then "class" =: ("blk" <> tshow cid <> " summary-details hovered-block")
+                     else "class" =: ("blk" <> tshow cid <> " summary-details")
   let mbh = M.lookup cid <$> hs
   (e,_) <- elDynAttr' "span" (mkAttrs <$> hoveredBlock) $ do
     viewIntoMaybe mbh blank $ \bh -> do
+      text (tshow cid <> ": ")
       let getHeight = _blockHeader_height . _blockHeaderTx_header
       let mkRoute h = addNetRoute net (unChainId cid) $ Chain_BlockHeight :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
@@ -582,7 +592,7 @@ blockSeparation :: Int
 blockSeparation = 50
 
 spacerRow
-  :: (MonadApp r t m, DomBuilder t m, PostBuild t m)
+  :: (MonadAppIO r t m, DomBuilder t m, PostBuild t m)
   => AllGraphs
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
@@ -594,7 +604,7 @@ spacerRow gis cs hoveredBlock maxNumChains bhp = do
             "border: 0; padding: 0;"
   elAttr "div" ("class" =: "spacer-row" <>
                 "style" =: sty ) $ do
-    chainweb gis cs hoveredBlock maxNumChains bhp
+    chainweb gis cs hoveredBlock maxNumChains (fst bhp)
 
 svgElDynAttr
   :: (DomBuilder t m, PostBuild t m)
@@ -613,15 +623,14 @@ svgElAttr
 svgElAttr elTag attrs child = svgElDynAttr elTag (constDyn attrs) child
 
 chainweb
-  :: (MonadApp r t m, DomBuilder t m, PostBuild t m)
+  :: (MonadAppIO r t m, DomBuilder t m, PostBuild t m)
   => AllGraphs
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> Dynamic t (Maybe BlockRef)
   -> Int
-  -> (BlockHeight, BlockHeight)
+  -> BlockHeight
   -> m ()
-chainweb gis cs hoveredBlock maxNumChains (bh,mbh) = do
-  si <- asks _as_serverInfo
+chainweb gis cs hoveredBlock maxNumChains bh = do
   let chains = giChains $ getGraphAt bh gis
       totalWidth = 1100
       blockWidth = totalWidth `div` maxNumChains
@@ -664,8 +673,7 @@ linksFromBlock gis blockWidth cs hoveredBlock fromBlock = do
                 Just hb ->
                   if bh > fst hb
                     then "stroke" =: "rgb(220,220,220)"
-                    else if hb == fromBlock ||
-                            isDownstreamFrom gis hb fromBlock
+                    else if isDownstreamFrom gis hb fromBlock
                            then "stroke" =: "rgb(100,100,100)" <>
                                 "stroke-width" =: "1.0"
                            else "stroke" =: "rgb(220,220,220)"

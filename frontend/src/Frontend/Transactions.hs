@@ -15,7 +15,6 @@
 module Frontend.Transactions where
 
 ------------------------------------------------------------------------------
-import           Control.Applicative
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
@@ -167,6 +166,7 @@ txTable net txs = do
                            (_, _) -> ""
           text contents
 
+showCont :: AsValue s => s -> Text
 showCont v = "<continuation> " <> fromMaybe "" (v ^? key "continuation" . key "def" . _String)
 
 senderWidget :: DomBuilder t m => TxSummary -> m ()
