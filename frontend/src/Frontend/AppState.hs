@@ -24,6 +24,7 @@ module Frontend.AppState where
 import           Control.Lens
 import           Data.Map (Map)
 import qualified Data.Map as M
+import qualified Data.Map.Strict as SM
 import           Data.Text (Text)
 import           Data.Time
 import           Data.Time.Clock.POSIX
@@ -42,6 +43,7 @@ import           Chainweb.Api.Hash
 import           Common.Types
 import           Common.Utils
 import           Frontend.ChainwebApi
+import           Frontend.Common
 ------------------------------------------------------------------------------
 
 -- TODO Move into common later
@@ -88,6 +90,7 @@ data GlobalStats = GlobalStats
     , _gs_moduleCount :: Word64
     , _gs_totalTxCount :: Maybe Int
     , _gs_circulatingCoins :: Maybe Double
+    , _gs_possibleCoins :: Maybe Double
     } deriving (Eq,Ord,Show)
 
 makeLenses ''GlobalStats
@@ -150,6 +153,7 @@ data AppState t = AppState
     { _as_network    :: NetId
     , _as_serverInfo :: ServerInfo
     , _as_dataHost   :: Maybe Host
+    , _as_graphAdjacencies :: SM.Map Int Int
     } deriving Generic
 
 getMissing :: BlockTable -> BlockHeaderTx -> [(ChainId, Hash)]
@@ -174,7 +178,8 @@ stateManager
     -- ^ Not in use yet
     -> m (AppState t)
 stateManager _ (DataBackends ndbs) n si _ = do
-    return $ AppState n si (M.lookup (_siChainwebVer si) ndbs)
+    let adjs = maybe mempty (SM.fromList . zip [0..] . floydWarshall . M.fromList . snd . head) $ _siGraphs si
+    return $ AppState n si (M.lookup (_siChainwebVer si) ndbs) adjs
 
 pairToBhtx :: (BlockHeader, Text) -> BlockHeaderTx
 pairToBhtx (h, bhBinBase64) =

@@ -26,6 +26,7 @@ import Data.Foldable
 import Data.Functor (void)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
+import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX
@@ -158,7 +159,7 @@ renderPayload = \case
         tfield "Rollback" $ text $ tshow rb
         tfield "Step" $ text $ tshow step
         tfield "Data" $ text $ unwrapJSON d
-        tfield "Cont Proof" $ text p
+        tfield "Cont Proof" $ text $ fromMaybe "" p
 
 -- | Render a 'PactExec' object in a 'CommandResult'
 --

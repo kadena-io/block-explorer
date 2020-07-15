@@ -11,11 +11,18 @@
 module Frontend.Common where
 
 ------------------------------------------------------------------------------
+import           Control.Monad
 import           Control.Monad.Fix
+import qualified Data.Array.IArray as IA
+import           Data.Array.MArray
+import           Data.Array.ST
 import           Data.Char
+import qualified Data.Map as M
 import           Data.Maybe
+import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Vector as V
 import qualified GHCJS.DOM as DOM
 import qualified "ghcjs-dom" GHCJS.DOM.Document as Document
 import qualified GHCJS.DOM.HTMLElement as HTMLElement
@@ -26,6 +33,10 @@ import           Language.Javascript.JSaddle (MonadJSM)
 import qualified Language.Javascript.JSaddle as JS
 import           Reflex.Dom
 import           Reflex.Network
+------------------------------------------------------------------------------
+import           Chainweb.Api.ChainId
+import           Chainweb.Api.Common
+import           Common.Types
 ------------------------------------------------------------------------------
 
 
@@ -132,3 +143,70 @@ copyToClipboard copy = performEvent $ ffor copy $ \t -> do
   success <- Document.execCommand doc ("copy" :: Text) False (Nothing :: Maybe Text)
   _ <- Node.removeChild body ta
   pure success
+
+floydWarshall :: Graph -> [Int]
+floydWarshall g = IA.elems arr
+  where
+    pairs = M.toList g
+    vertices = M.keys g
+    low = minimum vertices
+    high = maximum vertices
+    inf = 1000
+    arr = runSTUArray $ do
+      dist <- newArray ((low,low), (high,high)) inf
+      forM_ pairs $ \(u, vs) -> do
+        writeArray dist (u,u) 0
+        forM_ vs $ \v -> writeArray dist (u,v) 1
+
+      forM_ vertices $ \k ->
+        forM_ vertices $ \i ->
+          forM_ vertices $ \j -> do
+            a <- readArray dist (i,j)
+            b <- readArray dist (i,k)
+            c <- readArray dist (k,j)
+            when (a > b + c) $ do
+              writeArray dist (i,j) (b+c)
+      return dist
+
+petersenGraph :: Graph
+petersenGraph = M.fromList
+    [ (0, [2,3,5])
+    , (1, [3,4,6])
+    , (2, [4,0,7])
+    , (3, [0,1,8])
+    , (4, [1,2,9])
+    , (5, [0,6,9])
+    , (6, [1,5,7])
+    , (7, [2,6,8])
+    , (8, [3,7,9])
+    , (9, [4,8,5])
+    ]
+
+shortestPath :: GraphInfo -> Int -> Int -> Int
+shortestPath gi f t = (giShortestPaths gi) V.! (f * numChains + t)
+  where
+    numChains = S.size (giChains gi)
+
+rawGraphToGraphInfo :: [(Int, [Int])] -> GraphInfo
+rawGraphToGraphInfo adjs = GraphInfo cs g (V.fromList $ floydWarshall g)
+  where
+    g = M.fromList adjs
+    cs = S.fromList $ map (ChainId . fst) adjs
+
+type BlockRef = (BlockHeight, ChainId)
+
+isDownstreamFrom :: AllGraphs -> BlockRef -> BlockRef -> Bool
+isDownstreamFrom allGraphs (ph, ChainId pc) (h, ChainId c) =
+    if h > ph
+      then False
+      else if h == ph then pc == c else go allGraphs
+  where
+    go [] = False
+    go ((gh,gi):gs)
+      | h >= gh = isDownstream gi
+      | ph >= gh = case M.lookup c (giGraph gi) of
+                     Nothing -> False
+                     Just _ -> isDownstream gi
+      | otherwise = go gs
+    isDownstream gi = shortestPath gi pc c <= ph - h
+

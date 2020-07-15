@@ -26,6 +26,7 @@ library
     , text
     , time
     , unordered-containers
+    , vector
   default-extensions:
     TypeFamilies
     PolyKinds
