@@ -280,9 +280,16 @@ mkAncestorHeaderRequest he h c cutHash minHeight maxHeight = XhrRequest "POST" u
 
 
 mkSingleHeaderRequest :: HeaderEncoding -> ChainwebHost -> ChainId -> Text -> XhrRequest ()
-mkSingleHeaderRequest he h c blockHash = XhrRequest "GET" (headerUrl h c blockHash) cfg
+mkSingleHeaderRequest he h c blockHash = XhrRequest "GET" (headerUrl h c blockHash <> qstr) cfg
   where
     cfg = def { _xhrRequestConfig_headers = headerEncoding he }
+    -- This query string is not actually necessary for the endpoint, but it
+    -- works around a Safari caching bug that doesn't work with our use of the
+    -- header to specify JSON vs base64 binary (see the headerEncoding) function
+    -- above.
+    qstr = case he of
+             HeaderBinary -> "?t=bin"
+             HeaderJson -> "?t=json"
 
 calcPowHash :: ByteString -> Either String Text
 calcPowHash bs = do
