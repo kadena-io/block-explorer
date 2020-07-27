@@ -115,7 +115,7 @@ data ServerInfo = ServerInfo
   , _siGraphs      :: Maybe [(BlockHeight, [(Int, [Int])])]
   } deriving (Eq,Ord,Show)
 
-getGraphAt :: BlockHeight -> AllGraphs -> GraphInfo
+getGraphAt :: BlockHeight -> [(BlockHeight, a)] -> a
 getGraphAt _ [] = error "Empty list of graphs (should never happen)"
 getGraphAt _ [(_,g)] = g
 getGraphAt bh ((h,g):gs) = if bh >= h then g else getGraphAt bh gs
@@ -124,7 +124,7 @@ siCurChains :: BlockHeight -> ServerInfo -> Set ChainId
 siCurChains bh si = maybe (_siChains si) (S.fromList . map (ChainId . fst) . snd . head . dropWhile (\(h,_) -> bh < h)) $ _siGraphs si
 
 siCurNumChains :: BlockHeight -> ServerInfo -> Int
-siCurNumChains h si = maybe (_siNumChains si) (length . snd . head . dropWhile (\(h,_) -> h > h)) $ _siGraphs si
+siCurNumChains bh si = maybe (_siNumChains si) (length . snd . head . dropWhile (\(h,_) -> h > bh)) $ _siGraphs si
 
 instance FromJSON ServerInfo where
   parseJSON = withObject "ServerInfo" $ \o -> ServerInfo
