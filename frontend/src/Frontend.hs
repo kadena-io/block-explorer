@@ -348,7 +348,6 @@ mainPageWidget netId (Just height) = do
             slist = catMaybes
               [ ("Transactions",) . tshow <$> _gs_totalTxCount s
               , ("Circulating Coins",) . siOneDecimal <$> _gs_circulatingCoins s
-              , ("Possible Coins",) . siOneDecimal <$> _gs_possibleCoins s
               ]
         statAttrs s = "class" =: ("ui mini " <> c <> "statistics")
           where
