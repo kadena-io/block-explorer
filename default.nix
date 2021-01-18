@@ -34,11 +34,12 @@ project ./. ({ pkgs, hackGet, ... }: {
         sha256 = "04d0f7rmr2z3nkd7l6jbl6iq2f1rc7psqyynrn9287bbv1hfrmqs";
       } {});
 
-      jsaddle-dom = overrideCabal super.jsaddle-dom (drv: {
-        preConfigure = (drv.preConfigure or "") + ''
-          sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
-        '';
-      });
+      # Comment out to see if the obelisk bump makes this unnecessary
+      # jsaddle-dom = overrideCabal super.jsaddle-dom (drv: {
+      #   preConfigure = (drv.preConfigure or "") + ''
+      #     sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
+      #   '';
+      # });
 
       #pact = haskellLib.dontCheck super.pact;
       pact = dontCheck (self.callCabal2nix "pact" (pkgs.fetchFromGitHub {
