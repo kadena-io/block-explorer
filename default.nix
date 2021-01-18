@@ -4,8 +4,7 @@
 { system ? builtins.currentSystem # TODO: Get rid of this system cruft
 , iosSdkVersion ? "10.2"
 , withHoogle ? false
-# , kpkgs ? import ./deps/kpkgs { inherit system; }
-, kpkgs ? import /Users/doug/work/kpkgs { inherit system; }
+, kpkgs ? import ./deps/kpkgs { inherit system; }
 }:
 let
   obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; inherit (kpkgs) reflex-platform-func; };
