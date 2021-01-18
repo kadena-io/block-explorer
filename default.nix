@@ -28,24 +28,45 @@ project ./. ({ pkgs, hackGet, ... }: {
         sha256 = "12ivb374zymkqzq3w9a9vhxbri5bpymi1di6kk45hp2f6b8lafpz";
       } {}));
       lens-aeson = dontCheck super.lens-aeson;
-      pact = haskellLib.dontCheck super.pact;
-      perfect-vector-shuffle = doJailbreak (dontCheck (self.callHackageDirect {
-        pkg = "perfect-vector-shuffle";
-        ver = "0.1.1";
-        sha256 = "0ddr9ksqkl9ncvih54yzr3p6rs08r5wk0yf7aj3ijlk30dg7sdwf";
-      } {}));
+
+      http-media = dontCheck (self.callHackageDirect {
+        pkg = "http-media";
+        ver = "0.7.1.3";
+        sha256 = "04d0f7rmr2z3nkd7l6jbl6iq2f1rc7psqyynrn9287bbv1hfrmqs";
+      } {});
+
       jsaddle-dom = overrideCabal super.jsaddle-dom (drv: {
         preConfigure = (drv.preConfigure or "") + ''
           sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
         '';
       });
-      reflex-dom-core = dontCheck super.reflex-dom-core; #webdriver fails to build
-      servant-reflex = dontCheck (self.callCabal2nix "servant-reflex" (pkgs.fetchFromGitHub {
-        owner = "imalsogreg";
-        repo = "servant-reflex";
-        rev = "37a3e8f2566627d910df140982bd49bf4dba171e";
-        sha256 = "1yqxf6f81n4y4527rl69hfqymrnmj7lskgns2qsh59ibisp3y9rg";
+
+      #pact = haskellLib.dontCheck super.pact;
+      pact = dontCheck (self.callCabal2nix "pact" (pkgs.fetchFromGitHub {
+        owner = "kadena-io";
+        repo = "pact";
+        rev = "7d6b89eb4ab207999553cd82b903f4e62be9cbcb";
+        sha256 = "1scls0cidqfdjrk8hbb47xmcmrm6jx4354gmr16f27lpbmnwryr3";
       }) {});
+      perfect-vector-shuffle = doJailbreak (dontCheck (self.callHackageDirect {
+        pkg = "perfect-vector-shuffle";
+        ver = "0.1.1";
+        sha256 = "0ddr9ksqkl9ncvih54yzr3p6rs08r5wk0yf7aj3ijlk30dg7sdwf";
+      } {}));
+      reflex-dom-core = dontCheck super.reflex-dom-core; #webdriver fails to build
+
+      servant-reflex = doJailbreak (dontCheck (self.callHackageDirect {
+        pkg = "servant-reflex";
+        ver = "0.3.5";
+        sha256 = "1cj5b7hl4jhsqxfg8vdw50z8zvfxkj42f41hmyx217w6bv3s3fdb";
+      } {}));
+
+      typed-process = dontCheck (self.callHackageDirect {
+        pkg = "typed-process";
+        ver = "0.2.6.0";
+        sha256 = "17m2n9ffh88nj32xc00d48phaxav92dxisprc42pipgigq7fzs5s";
+      } {});
+
   };
 
   packages = {

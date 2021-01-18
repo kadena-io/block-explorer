@@ -121,7 +121,7 @@ mkTxSearchRoute netId str page =
   case netId of
     NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxSearch :/ (qParam =: Just str <> p )
     NetId_Testnet -> FR_Testnet :/ NetRoute_TxSearch :/ (qParam =: Just str <> p)
-    NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxSearch :/ (qParam =: Just str <> p)))
+    NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_TxSearch :/ (qParam =: Just str <> p)))
   where
     p = maybe mempty ((pageParam =:) . Just . tshow) page
 

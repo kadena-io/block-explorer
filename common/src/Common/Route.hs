@@ -49,8 +49,8 @@ blockRouteEncoder = pathComponentEncoder $ \case
   Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
 
 data ChainRoute :: * -> * where
-  Chain_BlockHash :: ChainRoute (Text :. R BlockRoute)
-  Chain_BlockHeight :: ChainRoute (Int :. R BlockRoute)
+  Chain_BlockHash :: ChainRoute (Text, R BlockRoute)
+  Chain_BlockHeight :: ChainRoute (Int, R BlockRoute)
 
 blockIndexRouteEncoder :: Encoder (Either Text) (Either Text) (R ChainRoute) PageName
 blockIndexRouteEncoder = pathComponentEncoder $ \case
@@ -59,7 +59,7 @@ blockIndexRouteEncoder = pathComponentEncoder $ \case
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
-  NetRoute_Chain :: NetRoute (Int :. R ChainRoute)
+  NetRoute_Chain :: NetRoute (Int, R ChainRoute)
   NetRoute_TxReqKey :: NetRoute Text
   NetRoute_TxSearch :: NetRoute (Map Text (Maybe Text))
 
@@ -75,7 +75,7 @@ data FrontendRoute :: * -> * where
   FR_About :: FrontendRoute ()
   FR_Mainnet :: FrontendRoute (R NetRoute)
   FR_Testnet :: FrontendRoute (R NetRoute)
-  FR_Customnet :: FrontendRoute (Host :. R NetRoute)
+  FR_Customnet :: FrontendRoute (Host, R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 backendRouteEncoder
@@ -94,13 +94,13 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       FR_Customnet -> PathSegment "custom" $ pathParamEncoder hostEncoder netRouteEncoder
 
 hostEncoder :: Encoder (Either Text) (Either Text) Host Text
-hostEncoder = prismEncoder humanReadableTextPrism
+hostEncoder = reviewEncoder humanReadableTextPrism
 
 addNetRoute :: NetId -> Int -> R ChainRoute -> R FrontendRoute
 addNetRoute netId c r = case netId of
-  NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ (c :. r)
-  NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ (c :. r)
-  NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_Chain :/ (c :. r)))
+  NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ (c, r)
+  NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ (c, r)
+  NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_Chain :/ (c, r)))
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
