@@ -6,4 +6,4 @@ let fetch = { private ? false, fetchSubmodules ? false, owner, repo, rev, sha256
     inherit owner repo rev sha256 fetchSubmodules private;
   };
   json = builtins.fromJSON (builtins.readFile ./github.json);
-in if builtins.pathExists ./local then ./local else fetch json
+in fetch json
