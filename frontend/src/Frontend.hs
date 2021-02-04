@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -137,7 +138,7 @@ footer
 footer = do
     divClass "ui inverted vertical footer segment" $ do
       divClass "ui center aligned container" $ do
-        elAttr "img" ("src" =: static @"kadena-k-logo.png" <>
+        elAttr "img" ("src" =: $(static "kadena-k-logo.png") <>
                     "class" =: "ui centered mini image" <>
                     "alt" =: "Kadena" ) blank
         divClass "ui horizontal inverted small divided link list" $ do
@@ -163,7 +164,7 @@ getJsonCfg p = f <$> getConfig p
 appHead :: (DomBuilder t m, HasConfigs m) => m ()
 appHead = do
     el "title" $ text "Kadena Block Explorer"
-    elAttr "link" ("rel" =: "icon" <> "type" =: "image/png" <> "href" =: static @"img/favicon/favicon-96x96.png") blank
+    elAttr "link" ("rel" =: "icon" <> "type" =: "image/png" <> "href" =: $(static "img/favicon/favicon-96x96.png")) blank
     meta ("name" =: "description" <> "content" =: "Block Explorer is an analytics tool for the Kadena platform which visualizes the mining, propagation and braiding of blocks across multiple Kadena chains in real time.")
     meta ("name" =: "keywords" <> "content" =: "kadena, block explorer, mining, propagation, smart contracts, blockchain, chainweb")
     mTrackId <- getTextCfg "frontend/tracking-id"
@@ -172,11 +173,11 @@ appHead = do
       Just "no-tracking" -> blank
       Just tid           -> googleAnalyticsTracker tid
 
-    css (static @"semantic.min.css")
-    css (static @"css/custom.css")
+    css $(static "semantic.min.css")
+    css $(static "css/custom.css")
     --jsScript "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"
-    jsScript (static @"jquery-3.1.1.min.js")
-    jsScript (static @"semantic.min.js")
+    jsScript $(static "jquery-3.1.1.min.js")
+    jsScript $(static "semantic.min.js")
   where
     meta attrs = elAttr "meta" attrs blank
 
@@ -267,7 +268,6 @@ initBlockTable height = do
       , maybe id addModuleCount <$> downEvent
       , set gs_totalTxCount <$> ((_cds_transactionCount <=< hush) <$> ecds)
       , set gs_circulatingCoins <$> ((_cds_coinsInCirculation <=< hush) <$> ecds)
-      , set gs_possibleCoins <$> ((fmap _cds_maxPossibleCoins . hush) <$> ecds)
       ]
 
     return (blockTable, stats, recentTxs)

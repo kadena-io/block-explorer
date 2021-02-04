@@ -7,6 +7,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 module Frontend.Nav where
 
@@ -36,7 +37,7 @@ nav netId = do
                 "href" =: "/" <>
                 "style" =: "color: #e8098f;") $
       elAttr "img" ("class" =: "logo" <>
-                    "src" =: static @"kadena-k-logo.png") $
+                    "src" =: $(static "kadena-k-logo.png")) $
         text "Kadena Block Explorer"
     elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Kadena Block Explorer"
     divClass "right menu" $ do
@@ -56,7 +57,7 @@ getStarted = mdo
       linkItemNewTab "Start Mining" "https://github.com/kadena-io/chainweb-miner/blob/master/README.org"
       linkItemNewTab "Download Wallet" "https://www.kadena.io/chainweaver"
       linkItemNewTab "Play Testnet Games" "http://testnet.chainweb.com/games/"
-      linkItemNewTab "See Chains in 3D (experimental)" (static @"chains-3d.html")
+      linkItemNewTab "See Chains in 3D (experimental)" $(static "chains-3d.html")
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
     , False <$ domEvent Mouseleave e
