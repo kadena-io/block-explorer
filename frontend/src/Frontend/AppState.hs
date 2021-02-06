@@ -96,14 +96,14 @@ data GlobalStats = GlobalStats
 makeLenses ''GlobalStats
 
 calcNetworkHashrate :: POSIXTime -> BlockTable -> Maybe Double
-calcNetworkHashrate now bt =
-    if now - earliestTime < 1
+calcNetworkHashrate curTime bt =
+    if curTime - earliestTime < 1
       then Nothing
-      else Just (totalDifficulty / (realToFrac $ now - earliestTime))
+      else Just (totalDifficulty / (realToFrac $ curTime - earliestTime))
   where
-    (earliestTime, totalDifficulty) = M.foldl' f (now,0) (_blockTable_blocks bt)
+    (earliestTime, totalDifficulty) = M.foldl' f (curTime,0) (_blockTable_blocks bt)
     f (et, td) next =
-      let (etNew, tdNew) = M.foldl' g (now,0) next
+      let (etNew, tdNew) = M.foldl' g (curTime,0) next
        in (min et etNew, td + tdNew)
     g (et, td) next =
       (min et (_blockHeader_creationTime $ _blockHeaderTx_header next),

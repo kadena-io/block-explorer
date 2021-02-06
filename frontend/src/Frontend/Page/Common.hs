@@ -75,6 +75,7 @@ ppName :: Name -> Text
 ppName (Name (BareName n _)) = n
 ppName (QName (QualifiedName (ModuleName t ns) n _)) =
     maybe "" (\(NamespaceName nsn) -> nsn <> ".") ns <> t <> "." <> n
+ppName (DName dn) = tshow dn
 
 unwrapJSON :: Value -> Text
 unwrapJSON = \case
@@ -104,7 +105,7 @@ transactionsLink netId c bhash =
     routeLink route $ text $ hashHex bhash
   where
     route = addNetRoute netId (unChainId c)
-      $ Chain_BlockHash :/ (hashB64U bhash) :. Block_Transactions :/ ()
+      $ Chain_BlockHash :/ (hashB64U bhash, Block_Transactions :/ ())
 
 -- | Render 'PollMetaData' and link to its block information
 --

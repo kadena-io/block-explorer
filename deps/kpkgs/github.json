@@ -1,7 +1,8 @@
 {
   "owner": "kadena-io",
   "repo": "kpkgs",
-  "branch": "ae@nixpkgs-1909",
-  "rev": "5572c3466ba985be42838106105167e813367735",
-  "sha256": "1sq66ndbxzfs4873y5qaq7wci821yirpf7axbc7zqgiwldwbxhy0"
+  "branch": "bump-reflex-platform",
+  "private": false,
+  "rev": "a71c4263c0f1f53935d4ed9b642a672074445494",
+  "sha256": "1mccc2bl9k2a15fkj7jg48g2lmw2zwwbxwiapl6aklkvs4j7qinb"
 }

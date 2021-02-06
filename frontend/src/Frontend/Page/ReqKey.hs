@@ -98,7 +98,7 @@ requestKeyResultPage
     -> ChainId
     -> CommandResult Pact.Hash
     -> m ()
-requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
+requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta _) = do
     el "h2" $ text "Transaction Results"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
@@ -110,6 +110,7 @@ requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta) = do
         tfield "Logs" $ text $ maybe "" Pact.hashToText logs
         tfield "Continuation" $ text $ maybe "" tshow pcont
         tfield "Metadata" $ renderMetaData netId cid meta
+        -- TODO Show the events
   where
     renderPactResult (PactResult r) =
       text $ join either unwrapJSON (bimap toJSON toJSON r)
