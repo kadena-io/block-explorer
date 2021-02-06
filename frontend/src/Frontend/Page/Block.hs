@@ -55,7 +55,7 @@ blockHashWidget
   => ServerInfo
   -> NetId
   -> Int
-  -> App (Text :. R BlockRoute) t m ()
+  -> App (Text, R BlockRoute) t m ()
 blockHashWidget si netId cid = do
   as <- ask
   let n = _as_network as
@@ -75,7 +75,7 @@ blockHeightWidget
   => ServerInfo
   -> NetId
   -> Int
-  -> App (Int :. R BlockRoute) t m ()
+  -> App (Int, R BlockRoute) t m ()
 blockHeightWidget si netId cid = do
   as <- ask
   let n = _as_network as
@@ -88,8 +88,8 @@ blockHeightWidget si netId cid = do
       Just bh -> blockPageNoPayload netId chainwebHost c bh
 
 blockLink
-  :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+  :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilder t m,
       Prerender js t m
      )
   => NetId
@@ -98,7 +98,7 @@ blockLink
   -> Text
   -> m ()
 blockLink netId chainId height linkText =
-  routeLink (addNetRoute netId (unChainId chainId) $ Chain_BlockHeight :/ height :. Block_Header :/ ()) $ text linkText
+  routeLink (addNetRoute netId (unChainId chainId) $ Chain_BlockHeight :/ (height, Block_Header :/ ())) $ text linkText
 
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),

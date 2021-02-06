@@ -15,7 +15,7 @@ aboutWidget = divClass "ui text container" $ do
   el "p" $ text "Block Explorer is an analytics tool for the Kadena platform which visualizes the mining, propagation and braiding of blocks across multiple Kadena chains in real time and allows you to search for transactions and explore the contents of blocks."
 
   el "h2" $ text "Understanding the interface"
-  elAttr "img" ("src" =: static @"AboutBlockExplorer.png" <> "style" =: "width: 100%;") blank
+  elAttr "img" ("src" =: (static @"AboutBlockExplorer.png") <> "style" =: "width: 100%;") blank
 
   el "div" $ do
     text "1. The name of the network that is currently displaying block explorer data"

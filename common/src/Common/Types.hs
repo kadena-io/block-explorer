@@ -12,13 +12,11 @@ import           Control.Monad
 import           Data.Aeson
 import           Data.Readable
 import           Data.Map (Map)
-import qualified Data.Map as M
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Vector (Vector)
-import qualified Data.Vector as V
 import           GHC.Generics (Generic)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId

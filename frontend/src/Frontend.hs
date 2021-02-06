@@ -128,7 +128,7 @@ chainRouteHandler
      )
   => ServerInfo
   -> NetId
-  -> App (Int :. R ChainRoute) t m ()
+  -> App (Int, R ChainRoute) t m ()
 chainRouteHandler si netId = do
     subPairRoute_ $ \cid -> subRoute_ $ \case
       Chain_BlockHash -> blockHashWidget si netId cid
@@ -249,7 +249,7 @@ initBlockTable height = do
 
     let newHrd = attachWith getNewHashrateData (current blockTable) $ fmapMaybe id downEvent
     pb <- getPostBuild
-    now <- liftIO getCurrentTime
+    curTime <- liftIO getCurrentTime
 
     let onlyTxs (Just t) = if _blockHeaderTx_txCount t == Just 0 then Nothing else Just t
         onlyTxs Nothing = Nothing
@@ -271,12 +271,11 @@ initBlockTable height = do
 
     stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0 Nothing Nothing Nothing) $ mergeWith (.)
       [ maybe id addTxCount <$> downEvent
-      , setStartTime now <$ pb
+      , setStartTime curTime <$ pb
       , addHashrateData <$> filterRight newHrd
       , maybe id addModuleCount <$> downEvent
       , set gs_totalTxCount <$> ((_cds_transactionCount <=< hush) <$> ecds)
       , set gs_circulatingCoins <$> ((_cds_coinsInCirculation <=< hush) <$> ecds)
-      , set gs_possibleCoins <$> ((fmap _cds_maxPossibleCoins . hush) <$> ecds)
       ]
 
     return (blockTable, stats, recentTxs)
@@ -334,7 +333,7 @@ mkSearchRoute netId str RequestKeySearch =
   case netId of
     NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxReqKey :/ str
     NetId_Testnet -> FR_Testnet :/ NetRoute_TxReqKey :/ str
-    NetId_Custom host -> FR_Customnet :/ (host :. (NetRoute_TxReqKey :/ str))
+    NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_TxReqKey :/ str))
 mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 
 mainPageWidget
@@ -370,7 +369,6 @@ mainPageWidget netId (Just height) = do
             slist = catMaybes
               [ ("Transactions",) . tshow <$> _gs_totalTxCount s
               , ("Circulating Coins",) . siOneDecimal <$> _gs_circulatingCoins s
-              , ("Possible Coins",) . siOneDecimal <$> _gs_possibleCoins s
               ]
         statAttrs s = "class" =: ("ui mini " <> c <> "statistics")
           where
@@ -517,7 +515,9 @@ blockWidget0 ti gis hoveredBlock maxNumChains hs height cid = do
   res <- viewIntoMaybe mbh (elClass "span" "summary-details" $ return never) $ \bh -> do
     (e,_) <- elDynAttr' "span" (mkAttrs2 <$> bh <*> hoveredBlock) $ do
       let getHeight = _blockHeader_height . _blockHeaderTx_header
-      let mkRoute h = addNetRoute net (unChainId cid) $ Chain_BlockHeight :/ getHeight h :. Block_Header :/ () --TODO: Which NetId should it be?
+
+      --TODO: Which NetId should it be?
+      let mkRoute h = addNetRoute net (unChainId cid) $ Chain_BlockHeight :/ (getHeight h, Block_Header :/ ())
       dynRouteLink (mkRoute <$> bh) $ divClass "summary-inner" $ do
         when (maxNumChains <= 10) $ el "div" $ do
           elClass "span" "block-hash" $ do

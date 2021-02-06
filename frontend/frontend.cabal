@@ -63,7 +63,7 @@ library
     Frontend.Transactions
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-show-valid-hole-fits
 
   if impl(ghcjs)
     build-depends:
@@ -80,6 +80,9 @@ executable frontend
                , obelisk-generated-static
                , frontend
   --TODO: Make these ghc-options optional
-  ghc-options: -threaded
+  ghc-options: -threaded -fno-show-valid-hole-fits
+  if impl(ghcjs)
+    ghc-options: -dedupe
+    cpp-options: -DGHCJS_BROWSER
   if os(darwin)
-     ghc-options: -dynamic
+    ghc-options: -dynamic

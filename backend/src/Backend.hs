@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-module Backend (backend, frontend) where
+module Backend (backend) where
 
 ------------------------------------------------------------------------------
 import           Control.Monad.Trans
@@ -15,7 +15,6 @@ import           Obelisk.Route
 import           Snap.Core
 ------------------------------------------------------------------------------
 import           Common.Route
-import           Frontend                  (frontend)
 ------------------------------------------------------------------------------
 
 backend :: Backend BackendRoute FrontendRoute
