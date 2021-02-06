@@ -2,7 +2,7 @@
 # patch.
 
 { system ? builtins.currentSystem # TODO: Get rid of this system cruft
-, iosSdkVersion ? "10.2"
+, iosSdkVersion ? "13.2"
 , withHoogle ? false
 , kpkgs ? import ./deps/kpkgs { inherit system; }
 }:

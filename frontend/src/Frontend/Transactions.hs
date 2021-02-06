@@ -33,6 +33,7 @@ import           Reflex.Network
 import           Servant.Reflex
 import           Text.Read
 ------------------------------------------------------------------------------
+import           Chainweb.Api.ChainId
 import           ChainwebData.Pagination
 import           ChainwebData.TxSummary
 import           Common.Route
@@ -42,6 +43,7 @@ import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
+import           Frontend.Page.Block
 ------------------------------------------------------------------------------
 
 recentTransactions
@@ -150,14 +152,13 @@ txTable net txs = do
       forM_ txs $ \tx -> el "tr" $ do
         let chain = _txSummary_chain tx
         let height = _txSummary_height tx
-        let route = addNetRoute net chain $ Chain_BlockHeight :/ height :. Block_Header :/ ()
         let status = case _txSummary_result tx of
                        TxSucceeded -> elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
                        TxFailed -> elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
                        TxUnexpected -> elAttr "i" ("class" =: "question icon" <> "title" =: "Unknown") blank
         elAttr "td" ("class" =: "center aligned" <> "data-label" =: "Status") status
         elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
-        elAttr "td" ("data-label" =: "Height") $ routeLink route $ text $ tshow height
+        elAttr "td" ("data-label" =: "Height") $ blockLink net (ChainId chain) height $ tshow height
         elAttr "td" ("data-label" =: "Sender") $ senderWidget tx
         elAttr "td" ("data-label" =: "Code") $ do
           let contents = case (_txSummary_code tx, _txSummary_continuation tx) of

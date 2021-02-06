@@ -88,8 +88,8 @@ blockHeightWidget si netId cid = do
       Just bh -> blockPageNoPayload netId chainwebHost c bh
 
 blockLink
-  :: (MonadApp r t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+  :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilder t m,
       Prerender js t m
      )
   => NetId
