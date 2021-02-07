@@ -7,7 +7,10 @@
 , kpkgs ? import ./deps/kpkgs { inherit system; }
 }:
 let
-  obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; inherit (kpkgs) reflex-platform-func; };
+  obelisk = import ./.obelisk/impl {
+    inherit system iosSdkVersion; inherit (kpkgs) reflex-platform-func;
+    terms.security.acme.acceptTerms = true;
+  };
   pkgs = obelisk.reflex-platform.nixpkgs;
   haskellLib = pkgs.haskell.lib;
 in with obelisk;
