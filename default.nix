@@ -10,8 +10,9 @@ let
   obelisk = import ./.obelisk/impl { inherit system iosSdkVersion; inherit (kpkgs) reflex-platform-func; };
   pkgs = obelisk.reflex-platform.nixpkgs;
   haskellLib = pkgs.haskell.lib;
+  nix-thunk = import ./deps/nix-thunk {};
 in with obelisk;
-project ./. ({ pkgs, hackGet, ... }: {
+project ./. ({ pkgs, ... }: {
   android.applicationId = "systems.obsidian.obelisk.examples.minimal";
   android.displayName = "Obelisk Minimal Example";
   ios.bundleIdentifier = "systems.obsidian.obelisk.examples.minimal";
@@ -43,13 +44,7 @@ project ./. ({ pkgs, hackGet, ... }: {
 
       network = dontCheck super.network;
 
-      #pact = haskellLib.dontCheck super.pact;
-      pact = dontCheck (self.callCabal2nix "pact" (pkgs.fetchFromGitHub {
-        owner = "kadena-io";
-        repo = "pact";
-        rev = "b6bca495a685d5bef0fe3546f50137a4625193fa";
-        sha256 = "1jx1hd596r5rrx96r2v2xds6pjjmi4lfk7xm14f3gkx2gmavgyr3";
-      }) {});
+      pact = dontCheck super.pact;
       perfect-vector-shuffle = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "perfect-vector-shuffle";
         ver = "0.1.1";
@@ -79,6 +74,7 @@ project ./. ({ pkgs, hackGet, ... }: {
   };
 
   packages = {
-    chainweb-api = hackGet ./deps/chainweb-api;
+    chainweb-api = nix-thunk.thunkSource ./deps/chainweb-api;
+    pact = nix-thunk.thunkSource ./deps/pact;
   };
 })
