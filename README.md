@@ -21,6 +21,7 @@ configure a data backend.  To do that, put something like the following in
 This object will be used to look up the server given the chainwebVersion that
 is being used by the node that the explorer is talking to.
 
+
 ### Google Analytics
 
 Put the Google Analytics tracking ID in `config/frontend/tracking-id`. If you

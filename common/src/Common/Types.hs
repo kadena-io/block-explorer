@@ -85,7 +85,7 @@ netIdPathSegment = \case
 
 netHost :: NetId -> Host
 netHost NetId_Mainnet    = Host "estats.chainweb.com" 443
-netHost NetId_Testnet    = Host "us1.testnet.chainweb.com" 443
+netHost NetId_Testnet    = Host "api.testnet.chainweb.com" 443
 netHost (NetId_Custom h) = h
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
