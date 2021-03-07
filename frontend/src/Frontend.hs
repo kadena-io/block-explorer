@@ -283,7 +283,7 @@ initBlockTable height = do
     t0 = UTCTime (ModifiedJulianDay 0) 0
 
 insertPayload :: Either String (BlockPayload, BlockHeader) -> BlockTable -> BlockTable
-insertPayload (Left e) _ = error $ "Error getting block payload: " <> e
+insertPayload (Left e) bt = bt
 insertPayload (Right (p,h)) bt = addPayloadToTable (_blockHeader_height h) (_blockHeader_chainId h) p bt
 
 getPayload
