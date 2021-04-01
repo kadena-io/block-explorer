@@ -60,12 +60,17 @@ extLink href m =
 
 detailsSection :: DomBuilder t m => m a -> m a
 detailsSection c = do
-  elClass "table" "ui fixed single line definition table" $ el "tbody" c
+  elClass "table" "ui fixed line definition table" $ el "tbody" c
 
 tfield :: DomBuilder t m => Text -> m a -> m a
 tfield nm v = el "tr" $ do
   elClass "td" "two wide" $ text nm
   el "td" v
+
+tfieldPre :: DomBuilder t m => Text -> m a -> m a
+tfieldPre nm v = el "tr" $ do
+  elClass "td" "two wide" $ text nm
+  el "td" $ el "pre" v
 
 viewIntoMaybe
     :: (DomBuilder t m, PostBuild t m, MonadHold t m, MonadFix m)
@@ -209,4 +214,3 @@ isDownstreamFrom allGraphs (ph, ChainId pc) (h, ChainId c) =
                      Just _ -> isDownstream gi
       | otherwise = go gs
     isDownstream gi = shortestPath gi pc c <= ph - h
-
