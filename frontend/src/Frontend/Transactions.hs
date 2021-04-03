@@ -53,15 +53,16 @@ recentTransactions
       DomBuilder t m, PerformEvent t m, TriggerEvent t m, PostBuild t m,
       Prerender js t m,
       MonadHold t m)
-  => RecentTxs
+  => Int
+  -> RecentTxs
   -> m ()
-recentTransactions txs = do
+recentTransactions tcount txs = do
   net <- asks _as_network
   if S.null (_recentTxs_txs txs)
     then blank
     else do
       el "h4" $ text "Recent Transactions"
-      txTable net $ take 5 $ getSummaries txs
+      txTable net $ take tcount $ getSummaries txs
 
 
 qParam :: Text

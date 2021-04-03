@@ -30,6 +30,27 @@ div.block-table div.spacer-row:last-child {
     display: none;
 }
 
+td.evtd {
+
+    }
+
+table.evtable {
+    width: 100% !important;
+    }
+
+tr.evtable td {
+    border-top: 1px solid rgba(34,36,38,0.1) !important;
+    }
+tr.evtable:first-child td {
+    border-top: unset !important;
+    }
+td.evtable {
+    background: none !important;
+    font-weight: normal !important;
+    padding: unset !important;
+
+    }
+
 td {
     vertical-align: middle;
 }
