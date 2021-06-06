@@ -162,7 +162,7 @@ txTable net txs = do
         elAttr "td" ("data-label" =: "Sender") $ senderWidget tx
         elAttr "td" ("data-label" =: "Code") $ do
           let contents = case (_txSummary_code tx, _txSummary_continuation tx) of
-                           (Just c, _) -> c
+                           (Just c, _) -> _txSummary_requestKey tx
                            (_, Just v) -> showCont v
                            (_, _) -> ""
           text contents
