@@ -147,7 +147,7 @@ txTable net txs = do
       el "th" $ text "Chain"
       el "th" $ text "Height"
       elClass "th" "two wide" $ text "Sender"
-      el "th" $ text "Transaction Code"
+      el "th" $ text "Request Key"
     el "tbody" $ do
       forM_ txs $ \tx -> el "tr" $ do
         let chain = _txSummary_chain tx
@@ -160,7 +160,7 @@ txTable net txs = do
         elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
         elAttr "td" ("data-label" =: "Height") $ blockLink net (ChainId chain) height $ tshow height
         elAttr "td" ("data-label" =: "Sender") $ senderWidget tx
-        elAttr "td" ("data-label" =: "Code") $ do
+        elAttr "td" ("data-label" =: "Request Key") $ do
           let contents = case (_txSummary_code tx, _txSummary_continuation tx) of
                            (Just c, _) -> _txSummary_requestKey tx
                            (_, Just v) -> showCont v
