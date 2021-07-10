@@ -58,19 +58,16 @@ transactionPage
 transactionPage netId cid bp = do
     let txs = _blockPayloadWithOutputs_transactionsWithOutputs bp
     el "h2" $ text $ (tshow $ length txs) <> " Transactions"
-    divClass "ui" $ do
+    divClass "ui accordion" $ do
       forM_ txs $ \(t, tout) -> mdo
-        -- open <- toggle False $ domEvent Click e
+        open <- toggle False $ domEvent Click e
         let cmd = _transaction_cmd t
-        -- let addActive cls active =
-        --      ("class" =: if active then ("active " <> cls) else cls)
-        --(e,_) <- elDynAttr' "div" (addActive "title" <$> open) $ do
-        --  elClass "i" "dropdown icon" blank
-        --  elClass "pre" "custombreak" $ text $ payloadCode $ _pactCommand_payload cmd
-        el "div" $
+        let addActive cls active =
+              ("class" =: if active then ("active " <> cls) else cls)
+        (e,_) <- elDynAttr' "div" (addActive "title" <$> open) $ do
+          elClass "i" "dropdown icon" blank
           elClass "pre" "custombreak" $ text $ payloadCode $ _pactCommand_payload cmd
-        -- elDynAttr "div" (addActive "content" <$> open) $ do
-        el "div" $
+        elDynAttr "div" (addActive "content" <$> open) $ do
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
               tfield "Request Key" $ do
