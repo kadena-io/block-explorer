@@ -13,8 +13,11 @@ module Frontend.Page.Transaction where
 
 ------------------------------------------------------------------------------
 import Control.Applicative
+import Control.Lens
 import Control.Monad
 import Data.Aeson as A
+import Data.Aeson.Lens
+import Data.Foldable
 import Data.Maybe
 import qualified Data.Text as T
 import Pact.Types.Continuation (PactExec)
@@ -70,6 +73,22 @@ transactionPage netId cid bp = do
               tfield "Request Key" $ do
                 let reqKey = hashB64U $ _transaction_hash t
                 text reqKey
+              tfield "Transaction Output" $ do
+                elClass "table" "ui definition table" $ el "tbody" $ do
+                  tfield "Gas" $ text $ tshow $ _toutGas tout
+                  tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult tout
+                  tfield "Logs" $ text $ maybe "null " hashB64U $ _toutLogs tout
+                  tfield "Metadata" $ renderMetaData netId cid $ _toutMetaData tout
+                  tfield "Continuation" $ voidMaybe renderCont $ _toutContinuation tout
+                  tfield "Transaction ID" $ maybe blank (text . tshow) $  _toutTxId tout
+              tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
+                forM_ (_toutEvents tout) $ \ ev -> el "tr" $ do
+                  elClass "td" "two wide" $ text (ename ev)
+                  -- el "td" $ el "pre" $ text $ prettyJSON ev
+                  elClass "td" "evtd" $ elClass "table" "evtable" $
+                    forM_ (params ev) $ \v -> elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ pactValueJSON v
+
+
               tfield "Payload" $ do
                 let payload = _pactCommand_payload cmd
                 renderPayload payload
@@ -106,17 +125,34 @@ transactionPage netId cid bp = do
               tfield "Signatures" $ do
                 forM_ (_transaction_sigs t) $ \s -> do
                   el "div" $ text $ unSig s
-              tfield "Transaction Output" $ do
-                elClass "table" "ui definition table" $ el "tbody" $ do
-                  tfield "Gas" $ text $ tshow $ _toutGas tout
-                  tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult tout
-                  tfield "Logs" $ text $ maybe "null " hashB64U $ _toutLogs tout
-                  tfield "Metadata" $ renderMetaData netId cid $ _toutMetaData tout
-                  tfield "Continuation" $ voidMaybe renderCont $ _toutContinuation tout
-                  tfield "Transaction ID" $ maybe blank (text . tshow) $  _toutTxId tout
   where
     fromPactResult (PactResult pr) = pr
 
     renderCont v = case fromJSON v of
       Success (pe :: PactExec) -> renderPactExec pe
       A.Error e -> text $ T.pack $ "Unable to render continuation" <> e
+
+    ename :: Value -> T.Text
+    ename ev = delimView (key "module" . key "namespace" . _String) ev
+        <> delimView (key "module" . key "name" . _String) ev
+        <> mayview (key "name" . _String) ev
+
+    delimView l ev = maybe "" (<> ".") $ preview l ev
+
+    mayview l ev = fromMaybe "" $ preview l ev
+
+    params :: Value -> [Value]
+    params ev = case fmap toList $ preview (key "params" . _Array) ev of
+      Nothing -> []
+      Just l -> l
+
+    pactValueJSON :: Value -> T.Text
+    pactValueJSON v = case v of
+      Object _ -> case preview (key "refName") v of
+        (Just rn) -> delimView (key "namespace" . _String) rn <> mayview (key "name" . _String) rn
+        Nothing ->
+          case preview (key "decimal" . _String) v of
+            Just d -> d
+            Nothing -> prettyJSON v
+      String s -> s
+      _ -> prettyJSON v

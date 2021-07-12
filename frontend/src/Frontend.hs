@@ -113,6 +113,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
           void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
+        NetRoute_Search -> searchPageWidget netId
         NetRoute_Chain -> chainRouteHandler si netId
         NetRoute_TxReqKey -> requestKeyWidget si netId
         NetRoute_TxSearch -> transactionSearch
@@ -273,6 +274,32 @@ initBlockTable height = do
   where
     t0 = UTCTime (ModifiedJulianDay 0) 0
 
+initRecents
+  :: (MonadAppIO r t m, Prerender js t m)
+  => App r t m (Maybe (Dynamic t RecentTxs))
+initRecents = do
+    (AppState n si mdbh _) <- ask
+    let cfg = EventSourceConfig never True
+    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
+    es <- startEventSource ch cfg
+    let downEvent = _eventSource_recv es
+
+    let onlyTxs (Just t) = if _blockHeaderTx_txCount t == Just 0 then Nothing else Just t
+        onlyTxs Nothing = Nothing
+        blocksWithTxs = fmapMaybe onlyTxs downEvent
+
+    case mdbh of
+      Nothing -> return Nothing
+      Just dbh -> do
+        eRecentTxs <- getRecentTxs dbh (_eventSource_open es)
+        ebp <- getBlockPayload2 ch blocksWithTxs
+
+        recent <- foldDyn ($) (RecentTxs mempty) $ leftmost
+          [ either (const id) mergeRecentTxs <$> eRecentTxs
+          , addNewTransaction <$> filterRight ebp
+          ]
+        return $ Just recent
+
 data SearchType = RequestKeySearch | TxSearch
   deriving (Eq,Ord,Show,Read,Enum)
 
@@ -395,7 +422,7 @@ mainPageWidget netId (Just height) = do
             return ()
     case mrecent of
       Nothing -> blank
-      Just recent -> void $ networkView (recentTransactions <$> recent)
+      Just recent -> void $ networkView (recentTransactions 5 <$> recent)
   where
     _f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
     format :: (Int, Int, Int, Int) -> Text
@@ -409,6 +436,22 @@ mainPageWidget netId (Just height) = do
 --mkGrid n [] = []
 --mkGrid n xs = let (x,rest) = splitAt n xs
 --               in x : mkGrid n rest
+
+searchPageWidget
+  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilderSpace m ~ GhcjsDomSpace)
+  => NetId
+  -> App r t m ()
+searchPageWidget netId = do
+    mrecent <- initRecents
+
+    searchWidget netId
+
+    case mrecent of
+      Nothing -> blank
+      Just recent -> void $ networkView (recentTransactions 20 <$> recent)
+
 
 downHeightWithMax :: BlockTable -> Map (Down (BlockHeight, BlockHeight)) (Map ChainId BlockHeaderTx)
 downHeightWithMax bt = M.mapKeys (\a -> Down (a, fromMaybe a mh)) btm

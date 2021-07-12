@@ -4,6 +4,7 @@
 module Frontend.Page.Common
 ( -- * useful combinators
   unwrapJSON
+, prettyJSON
 , voidMaybe
   -- * rendering pact types
 , renderMetaData
@@ -22,6 +23,8 @@ module Frontend.Page.Common
 import Control.Lens
 ------------------------------------------------------------------------------
 import Data.Aeson as A
+import Data.Aeson.Encode.Pretty
+import Data.ByteString.Lazy (toStrict)
 import Data.Foldable
 import Data.Functor (void)
 import qualified Data.HashMap.Strict as HM
@@ -29,6 +32,7 @@ import qualified Data.Map as M
 import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.Encoding
 import Data.Time.Clock.POSIX
 
 -- ------------------------------------------------------------------------ --
@@ -87,6 +91,9 @@ unwrapJSON = \case
     Bool b  -> if b then "true" else "false"
   where
     keyvalue k v = k <> " : " <> unwrapJSON v
+
+prettyJSON :: Value -> Text
+prettyJSON = decodeUtf8 . toStrict . encodePretty
 
 
 -- | Link a 'BlockHash' to its transactions endpoint
@@ -152,8 +159,8 @@ renderPayload
     -> m ()
 renderPayload = \case
     ExecPayload (Exec _ d) -> do
-      detailsSection $ do
-        voidMaybe (tfield "Data" . text . unwrapJSON) d
+      detailsSection $
+        voidMaybe (tfieldPre "Data" . text . prettyJSON) d
     ContPayload (Cont pid rb step d p) -> do
       detailsSection $ do
         tfield "Pact Id" $ text pid
