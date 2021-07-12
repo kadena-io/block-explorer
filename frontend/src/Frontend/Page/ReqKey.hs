@@ -3,6 +3,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE RecordWildCards #-}
+
 module Frontend.Page.ReqKey
 ( requestKeyWidget
 ) where
@@ -29,6 +31,9 @@ import Obelisk.Route.Frontend
 import Pact.Types.API
 import qualified Pact.Types.Hash as Pact
 import Pact.Types.Command
+import Pact.Types.Runtime (PactEvent(..))
+import Pact.Types.Util
+
 
 import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
@@ -98,7 +103,7 @@ requestKeyResultPage
     -> ChainId
     -> CommandResult Pact.Hash
     -> m ()
-requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta _) = do
+requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta evs) = do
     el "h2" $ text "Transaction Results"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
@@ -110,7 +115,16 @@ requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta _) = 
         tfield "Logs" $ text $ maybe "" Pact.hashToText logs
         tfield "Continuation" $ text $ maybe "" tshow pcont
         tfield "Metadata" $ renderMetaData netId cid meta
-        -- TODO Show the events
+        tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
+                forM_ evs $ \ ev -> el "tr" $ do
+                  elClass "td" "two wide" $ text (ename ev)
+                  -- el "td" $ el "pre" $ text $ prettyJSON ev
+                  elClass "td" "evtd" $ elClass "table" "evtable" $
+                    forM_ (_eventParams ev) $ \v ->
+                      elClass "tr" "evtable" $ elClass "td" "evtable" $
+                        text $ unwrapJSON $ toJSON v
   where
     renderPactResult (PactResult r) =
       text $ join either unwrapJSON (bimap toJSON toJSON r)
+
+    ename PactEvent{..} = asString _eventModule <> "." <> _eventName
