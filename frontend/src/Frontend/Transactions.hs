@@ -19,6 +19,7 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson.Lens
+import Data.Dependent.Sum
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -36,6 +37,7 @@ import           Text.Read
 import           Chainweb.Api.ChainId
 import           ChainwebData.Pagination
 import           ChainwebData.TxSummary
+import           ChainwebData.EventDetail
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -119,15 +121,68 @@ transactionSearch = do
         let f = either text (txTable n)
         void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
 
+mkSearchRoute' :: NetId -> DSum NetRoute Identity -> R FrontendRoute
+mkSearchRoute' netId r = case netId of
+    NetId_Mainnet -> FR_Mainnet :/ r
+    NetId_Testnet -> FR_Testnet :/ r
+    NetId_Custom host -> FR_Customnet :/ (host, r)
+
 mkTxSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
-mkTxSearchRoute netId str page =
-  case netId of
-    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxSearch :/ (qParam =: Just str <> p )
-    NetId_Testnet -> FR_Testnet :/ NetRoute_TxSearch :/ (qParam =: Just str <> p)
-    NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_TxSearch :/ (qParam =: Just str <> p)))
+mkTxSearchRoute netId str page = mkSearchRoute' netId (NetRoute_TxSearch :/ (qParam =: Just str <> p ))
   where
     p = maybe mempty ((pageParam =:) . Just . tshow) page
 
+eventSearch
+    :: ( MonadApp r t m
+       , Prerender js t m
+       , MonadJSM (Performable m)
+       , HasJSContext (Performable m)
+       , RouteToUrl (R FrontendRoute) m
+       , SetRoute t (R FrontendRoute) m
+       )
+    => App (Map Text (Maybe Text)) t m ()
+eventSearch = do
+    (AppState n _ mdbh _) <- ask
+    case mdbh of
+      Nothing -> text "Event search feature not available for this network"
+      Just dbh -> do
+        pmap <- askRoute
+        pb <- getPostBuild
+        let page = do
+              pm <- pmap
+              pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
+            needle = do
+              pm <- pmap
+              pure $ fromMaybe "" $ join (M.lookup qParam pm)
+            newSearch = leftmost [pb, () <$ updated pmap]
+        res <- searchEvents dbh
+            (constDyn $ QParamSome $ Limit itemsPerPage)
+            (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
+            (QParamSome <$> needle)
+            (constDyn QNone)
+            (constDyn QNone)
+            (constDyn QNone)
+            newSearch
+
+        divClass "ui pagination menu" $ do
+          let setSearchRoute f e = setRoute $
+                tag (current $ mkEventSearchRoute n <$> needle <*> fmap (Just . f) page) e
+              prevAttrs p = if p == 1
+                              then "class" =: "disabled item"
+                              else "class" =: "item"
+          (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
+          setSearchRoute pred (domEvent Click p)
+          divClass "disabled item" $ display page
+          (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
+          setSearchRoute succ (domEvent Click next)
+
+        let f = either text (evTable n)
+        void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
+
+mkEventSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
+mkEventSearchRoute netId str page = mkSearchRoute' netId (NetRoute_EventSearch :/ (qParam =: Just str <> p ))
+  where
+   p = maybe mempty ((pageParam =:) . Just . tshow) page
 
 uiPagination :: DomBuilder t m => m ()
 uiPagination = do
@@ -163,10 +218,36 @@ txTable net txs = do
         elAttr "td" ("data-label" =: "Sender") $ senderWidget tx
         elAttr "td" ("data-label" =: "Request Key") $ do
           let contents = case (_txSummary_code tx, _txSummary_continuation tx) of
-                           (Just c, _) -> _txSummary_requestKey tx
+                           (Just _, _) -> _txSummary_requestKey tx
                            (_, Just v) -> showCont v
                            (_, _) -> ""
           text contents
+
+
+evTable
+  :: (DomBuilder t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+  => NetId
+  -> [EventDetail]
+  -> m ()
+evTable _ [] = text "hi"
+evTable net evs = do
+  elClass "table" "ui compact celled table" $ do
+    el "thead" $ el "tr" $ do
+      el "th" $ text "Chain"
+      el "th" $ text "Height"
+      el "th" $ text "Event"
+    el "tbody" $ do
+      forM_ evs $ \ev -> el "tr" $ do
+        let chain = _evDetail_chain ev
+        let height = _evDetail_height ev
+        elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
+        elAttr "td" ("data-label" =: "Height") $ blockLink net (ChainId chain) height $ tshow height
+        elAttr "td" ("data-label" =: "Event") $ text
+            $ "("
+            <> _evDetail_name ev
+            <> T.intercalate " " (map tshow $ _evDetail_params ev)
+            <> ")"
 
 showCont :: AsValue s => s -> Text
 showCont v = "<continuation> " <> fromMaybe "" (v ^? key "continuation" . key "def" . _String)
