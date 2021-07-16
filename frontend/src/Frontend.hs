@@ -341,10 +341,7 @@ searchWidget netId = do
 
 
 mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
-mkSearchRoute netId str RequestKeySearch = case netId of
-    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxReqKey :/ str
-    NetId_Testnet -> FR_Testnet :/ NetRoute_TxReqKey :/ str
-    NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_TxReqKey :/ str))
+mkSearchRoute netId str RequestKeySearch = mkReqKeySearchRoute netId str
 mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
 

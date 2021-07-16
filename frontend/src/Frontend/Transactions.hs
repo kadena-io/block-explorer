@@ -46,6 +46,7 @@ import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Page.Block
+import           Frontend.Page.TxDetail
 ------------------------------------------------------------------------------
 
 recentTransactions
@@ -127,6 +128,9 @@ mkSearchRoute' netId r = case netId of
     NetId_Testnet -> FR_Testnet :/ r
     NetId_Custom host -> FR_Customnet :/ (host, r)
 
+mkReqKeySearchRoute :: NetId -> Text -> R FrontendRoute
+mkReqKeySearchRoute netId str = mkSearchRoute' netId (NetRoute_TxReqKey :/ str)
+
 mkTxSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
 mkTxSearchRoute netId str page = mkSearchRoute' netId (NetRoute_TxSearch :/ (qParam =: Just str <> p ))
   where
@@ -159,7 +163,6 @@ eventSearch = do
             (constDyn $ QParamSome $ Limit itemsPerPage)
             (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
             (QParamSome <$> needle)
-            (constDyn QNone)
             (constDyn QNone)
             (constDyn QNone)
             newSearch
@@ -236,18 +239,24 @@ evTable net evs = do
     el "thead" $ el "tr" $ do
       el "th" $ text "Chain"
       el "th" $ text "Height"
+      el "th" $ text "Tx"
       el "th" $ text "Event"
+      el "th" $ text "Parameters"
     el "tbody" $ do
       forM_ evs $ \ev -> el "tr" $ do
         let chain = _evDetail_chain ev
         let height = _evDetail_height ev
-        elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
-        elAttr "td" ("data-label" =: "Height") $ blockLink net (ChainId chain) height $ tshow height
-        elAttr "td" ("data-label" =: "Event") $ text
-            $ "("
-            <> _evDetail_name ev
-            <> T.intercalate " " (map tshow $ _evDetail_params ev)
-            <> ")"
+        let rk = _evDetail_requestKey ev -- T.take 10 (_evDetail_requestKey ev) <> "..."
+        elAttr "td" ("data-label" =: "Chain") $
+            text $ tshow chain
+        elAttr "td" ("data-label" =: "Height") $
+            blockLink net (ChainId chain) height $ tshow height
+        elAttr "td" ("data-label" =: "Tx") $
+            txDetailLink net (_evDetail_requestKey ev) rk
+        elAttr "td" ("data-label" =: "Event") $
+            text $ _evDetail_name ev
+        elAttr "td" ("data-label" =: "Parameters") $
+            text $ T.intercalate " " (map pactValueJSON $ _evDetail_params ev)
 
 showCont :: AsValue s => s -> Text
 showCont v = "<continuation> " <> fromMaybe "" (v ^? key "continuation" . key "def" . _String)
@@ -261,3 +270,16 @@ senderWidget tx = text $
               else s
   where
     s = _txSummary_sender tx
+
+
+txDetailLink
+  :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilder t m,
+      Prerender js t m
+     )
+  => NetId
+  -> Text
+  -> Text
+  -> m ()
+txDetailLink netId rk linkText =
+  routeLink (mkReqKeySearchRoute netId rk) $ text linkText

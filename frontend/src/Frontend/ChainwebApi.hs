@@ -31,7 +31,7 @@ import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
 import           GHCJS.DOM.Types (MonadJSM)
-import           Reflex.Dom hiding (Cut, Value)
+import           Reflex.Dom hiding (Cut, Value, EventName)
 import           Servant.API
 import           Servant.Reflex
 ------------------------------------------------------------------------------
@@ -419,10 +419,11 @@ searchTxs
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
 searchTxs h lim off needle evt = do
-    let ((_ :<|> go :<|> _) :<|> _) = client chainwebDataApi
-                                 (Proxy :: Proxy m)
-                                 (Proxy :: Proxy ())
-                                 (constDyn $ mkDataUrl h)
+    let ((_ :<|> go :<|> _ :<|> _ ) :<|> _) =
+          client chainwebDataApi
+            (Proxy :: Proxy m)
+            (Proxy :: Proxy ())
+            (constDyn $ mkDataUrl h)
     txResp <- go lim off needle evt
     return $ r2e <$> txResp
 
@@ -432,18 +433,18 @@ searchEvents
     => Host
     -> Dynamic t (QParam Limit)
     -> Dynamic t (QParam Offset)
-    -> Dynamic t (QParam Text) -- param
-    -> Dynamic t (QParam Text) -- req key
-    -> Dynamic t (QParam Text) -- name
-    -> Dynamic t (QParam Int)  -- index
+    -> Dynamic t (QParam Text) -- search
+    -> Dynamic t (QParam EventParam)
+    -> Dynamic t (QParam EventName)
     -> Event t ()
     -> m (Event t (Either Text [EventDetail]))
-searchEvents h lim off param rk name index' evt = do
-    let ((_ :<|> _ :<|> go) :<|> _) = client chainwebDataApi
-                                 (Proxy :: Proxy m)
-                                 (Proxy :: Proxy ())
-                                 (constDyn $ mkDataUrl h)
-    txResp <- go lim off param rk name index' evt
+searchEvents h lim off search param name evt = do
+    let ((_ :<|> _ :<|> go :<|> _ ) :<|> _) =
+          client chainwebDataApi
+            (Proxy :: Proxy m)
+            (Proxy :: Proxy ())
+            (constDyn $ mkDataUrl h)
+    txResp <- go lim off search param name evt
     return $ r2e <$> txResp
 
 getChainwebStats
@@ -453,9 +454,10 @@ getChainwebStats
     -> Event t ()
     -> m (Event t (Either Text ChainwebDataStats))
 getChainwebStats h evt = do
-    let ((_ :<|> _ :<|> _) :<|> go :<|> _) = client chainwebDataApi
-                                 (Proxy :: Proxy m)
-                                 (Proxy :: Proxy ())
-                                 (constDyn $ mkDataUrl h)
+    let ((_ :<|> _ :<|> _ :<|> _ ) :<|> go :<|> _) =
+          client chainwebDataApi
+            (Proxy :: Proxy m)
+            (Proxy :: Proxy ())
+            (constDyn $ mkDataUrl h)
     txResp <- go evt
     return $ r2e <$> txResp

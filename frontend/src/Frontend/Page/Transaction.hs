@@ -137,22 +137,7 @@ transactionPage netId cid bp = do
         <> delimView (key "module" . key "name" . _String) ev
         <> mayview (key "name" . _String) ev
 
-    delimView l ev = maybe "" (<> ".") $ preview l ev
-
-    mayview l ev = fromMaybe "" $ preview l ev
-
     params :: Value -> [Value]
     params ev = case fmap toList $ preview (key "params" . _Array) ev of
       Nothing -> []
       Just l -> l
-
-    pactValueJSON :: Value -> T.Text
-    pactValueJSON v = case v of
-      Object _ -> case preview (key "refName") v of
-        (Just rn) -> delimView (key "namespace" . _String) rn <> mayview (key "name" . _String) rn
-        Nothing ->
-          case preview (key "decimal" . _String) v of
-            Just d -> d
-            Nothing -> prettyJSON v
-      String s -> s
-      _ -> prettyJSON v
