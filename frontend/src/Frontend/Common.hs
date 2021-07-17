@@ -11,17 +11,24 @@
 module Frontend.Common where
 
 ------------------------------------------------------------------------------
+import Control.Lens
 import           Control.Monad
 import           Control.Monad.Fix
+import Data.Aeson as A hiding (pairs)
+import Data.Aeson.Encode.Pretty
+import Data.Aeson.Lens
 import qualified Data.Array.IArray as IA
 import           Data.Array.MArray
 import           Data.Array.ST
+import Data.ByteString.Lazy (toStrict)
 import           Data.Char
 import qualified Data.Map as M
 import           Data.Maybe
+import Data.Monoid (First)
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.Encoding
 import qualified Data.Vector as V
 import qualified GHCJS.DOM as DOM
 import qualified "ghcjs-dom" GHCJS.DOM.Document as Document
@@ -31,7 +38,7 @@ import qualified GHCJS.DOM.Node as Node
 import qualified GHCJS.DOM.Types                   as DOM
 import           Language.Javascript.JSaddle (MonadJSM)
 import qualified Language.Javascript.JSaddle as JS
-import           Reflex.Dom
+import           Reflex.Dom hiding (Value)
 import           Reflex.Network
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
@@ -214,3 +221,23 @@ isDownstreamFrom allGraphs (ph, ChainId pc) (h, ChainId c) =
                      Just _ -> isDownstream gi
       | otherwise = go gs
     isDownstream gi = shortestPath gi pc c <= ph - h
+
+delimView :: Getting (First Text) s Text -> s -> Text
+delimView l ev = maybe "" (<> ".") $ preview l ev
+
+mayview :: Getting (First Text) s Text -> s -> Text
+mayview l ev = fromMaybe "" $ preview l ev
+
+prettyJSON :: Value -> Text
+prettyJSON = decodeUtf8 . toStrict . encodePretty
+
+pactValueJSON :: Value -> T.Text
+pactValueJSON v = case v of
+  Object _ -> case preview (key "refName") v of
+    (Just rn) -> delimView (key "namespace" . _String) rn <> mayview (key "name" . _String) rn
+    Nothing ->
+      case preview (key "decimal" . _String) v of
+        Just d -> d
+        Nothing -> prettyJSON v
+  String s -> s
+  _ -> prettyJSON v
