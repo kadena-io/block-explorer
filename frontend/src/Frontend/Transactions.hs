@@ -46,7 +46,6 @@ import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Page.Block
-import           Frontend.Page.TxDetail
 ------------------------------------------------------------------------------
 
 recentTransactions
@@ -131,6 +130,9 @@ mkSearchRoute' netId r = case netId of
 mkReqKeySearchRoute :: NetId -> Text -> R FrontendRoute
 mkReqKeySearchRoute netId str = mkSearchRoute' netId (NetRoute_TxReqKey :/ str)
 
+mkTxDetailRoute :: NetId -> Text -> R FrontendRoute
+mkTxDetailRoute netId rk = mkSearchRoute' netId (NetRoute_TxDetail :/ rk)
+
 mkTxSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
 mkTxSearchRoute netId str page = mkSearchRoute' netId (NetRoute_TxSearch :/ (qParam =: Just str <> p ))
   where
@@ -205,7 +207,6 @@ txTable net txs = do
       el "th" $ text "Status"
       el "th" $ text "Chain"
       el "th" $ text "Height"
-      elClass "th" "two wide" $ text "Sender"
       el "th" $ text "Request Key"
     el "tbody" $ do
       forM_ txs $ \tx -> el "tr" $ do
@@ -218,13 +219,7 @@ txTable net txs = do
         elAttr "td" ("class" =: "center aligned" <> "data-label" =: "Status") status
         elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
         elAttr "td" ("data-label" =: "Height") $ blockLink net (ChainId chain) height $ tshow height
-        elAttr "td" ("data-label" =: "Sender") $ senderWidget tx
-        elAttr "td" ("data-label" =: "Request Key") $ do
-          let contents = case (_txSummary_code tx, _txSummary_continuation tx) of
-                           (Just _, _) -> _txSummary_requestKey tx
-                           (_, Just v) -> showCont v
-                           (_, _) -> ""
-          text contents
+        elAttr "td" ("data-label" =: "Request Key") $ txDetailLink net (_txSummary_requestKey tx) (_txSummary_requestKey tx)
 
 
 evTable
@@ -246,7 +241,7 @@ evTable net evs = do
       forM_ evs $ \ev -> el "tr" $ do
         let chain = _evDetail_chain ev
         let height = _evDetail_height ev
-        let rk = _evDetail_requestKey ev -- T.take 10 (_evDetail_requestKey ev) <> "..."
+        let rk = T.take 10 (_evDetail_requestKey ev) <> "..."
         elAttr "td" ("data-label" =: "Chain") $
             text $ tshow chain
         elAttr "td" ("data-label" =: "Height") $
@@ -255,8 +250,8 @@ evTable net evs = do
             txDetailLink net (_evDetail_requestKey ev) rk
         elAttr "td" ("data-label" =: "Event") $
             text $ _evDetail_name ev
-        elAttr "td" ("data-label" =: "Parameters") $
-            text $ T.intercalate " " (map pactValueJSON $ _evDetail_params ev)
+        elAttr "td" ("data-label" =: "Parameters") $ el "pre" $
+            text $ T.intercalate "\n" (map pactValueJSON $ _evDetail_params ev)
 
 showCont :: AsValue s => s -> Text
 showCont v = "<continuation> " <> fromMaybe "" (v ^? key "continuation" . key "def" . _String)
@@ -282,4 +277,4 @@ txDetailLink
   -> Text
   -> m ()
 txDetailLink netId rk linkText =
-  routeLink (mkReqKeySearchRoute netId rk) $ text linkText
+  routeLink (mkTxDetailRoute netId rk) $ text linkText

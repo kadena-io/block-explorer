@@ -48,6 +48,7 @@ import           Chainweb.Api.Hash
 import           Chainweb.Api.RespItems
 import           ChainwebData.Api
 import           ChainwebData.Pagination
+import           ChainwebData.TxDetail
 import           ChainwebData.TxSummary
 import           ChainwebData.EventDetail
 import           Common.Types
@@ -445,6 +446,22 @@ searchEvents h lim off search param name evt = do
             (Proxy :: Proxy ())
             (constDyn $ mkDataUrl h)
     txResp <- go lim off search param name evt
+    return $ r2e <$> txResp
+
+getTxDetail
+    :: forall t m. (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m))
+    => Host
+    -> Dynamic t (QParam RequestKey) -- req key
+    -> Event t ()
+    -> m (Event t (Either Text TxDetail))
+getTxDetail h rk evt = do
+    let ((_ :<|> _ :<|> _ :<|> go ) :<|> _) =
+          client chainwebDataApi
+            (Proxy :: Proxy m)
+            (Proxy :: Proxy ())
+            (constDyn $ mkDataUrl h)
+    txResp <- go rk evt
     return $ r2e <$> txResp
 
 getChainwebStats

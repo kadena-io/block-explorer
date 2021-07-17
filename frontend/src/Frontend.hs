@@ -62,6 +62,7 @@ import           Frontend.Common
 import           Frontend.Nav
 import           Frontend.Page.Block
 import           Frontend.Page.ReqKey
+import           Frontend.Page.TxDetail
 import           Frontend.Transactions
 ------------------------------------------------------------------------------
 
@@ -116,6 +117,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
         NetRoute_Search -> searchPageWidget netId
         NetRoute_Chain -> chainRouteHandler si netId
         NetRoute_TxReqKey -> requestKeyWidget si netId
+        NetRoute_TxDetail -> txDetailWidget netId
         NetRoute_TxSearch -> transactionSearch
         NetRoute_EventSearch -> eventSearch
 
