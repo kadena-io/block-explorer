@@ -100,6 +100,19 @@ blockLink
 blockLink netId chainId height linkText =
   routeLink (addNetRoute netId (unChainId chainId) $ Chain_BlockHeight :/ (height, Block_Header :/ ())) $ text linkText
 
+blockHashLink
+  :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilder t m,
+      Prerender js t m
+     )
+  => NetId
+  -> ChainId
+  -> Text
+  -> Text
+  -> m ()
+blockHashLink netId chainId blockHash linkText =
+  routeLink (addNetRoute netId (unChainId chainId) $ Chain_BlockHash :/ (blockHash, Block_Header :/ ())) $ text linkText
+
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
