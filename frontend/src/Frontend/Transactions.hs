@@ -56,8 +56,7 @@ recentTransactions tcount txs = do
   if S.null (_recentTxs_txs txs)
     then blank
     else do
-      el "h4" $ text "Recent Transactions"
-      txTable net $ take tcount $ getSummaries txs
+      txTable net "Recent Transactions" $ take tcount $ getSummaries txs
 
 
 qParam :: Text
@@ -112,7 +111,7 @@ transactionSearch = do
           (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
           setSearchRoute succ (domEvent Click next)
 
-        let f = either text (txTable n)
+        let f = either text (txTable n "Transaction Search")
         void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
 
 mkSearchRoute' :: NetId -> DSum NetRoute Identity -> R FrontendRoute
@@ -162,7 +161,6 @@ eventSearch = do
             (constDyn QNone)
             (constDyn QNone)
             newSearch
-
         divClass "ui pagination menu" $ do
           let setSearchRoute f e = setRoute $
                 tag (current $ mkEventSearchRoute n <$> needle <*> fmap (Just . f) page) e
@@ -192,10 +190,14 @@ txTable
   :: (DomBuilder t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => NetId
+  -> Text
   -> [TxSummary]
   -> m ()
-txTable _ [] = blank
-txTable net txs = do
+txTable _ hdr [] = do
+  el "h4" $ text hdr
+  text "No results"
+txTable net hdr txs = do
+  el "h4" $ text hdr
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do
       el "th" $ text "Status"
@@ -246,8 +248,11 @@ evTable
   => NetId
   -> [EventDetail]
   -> m ()
-evTable _ [] = text "hi"
+evTable _ [] = do
+  el "h4" $ text "Event Search"
+  text "No results."
 evTable net evs = do
+  el "h4" $ text "Event Search"
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do
       el "th" $ text "Chain"
