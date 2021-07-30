@@ -2,19 +2,10 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 
--- {-# LANGUAGE ConstraintKinds            #-}
--- {-# LANGUAGE DataKinds                  #-}
--- {-# LANGUAGE GeneralizedNewtypeDeriving #-}
--- {-# LANGUAGE LambdaCase                 #-}
--- {-# LANGUAGE RecursiveDo                #-}
--- {-# LANGUAGE ScopedTypeVariables        #-}
--- {-# LANGUAGE TupleSections              #-}
--- {-# LANGUAGE TypeApplications           #-}
--- {-# LANGUAGE TypeFamilies               #-}
--- {-# LANGUAGE TypeOperators              #-}
 module Frontend.Transactions where
 
 ------------------------------------------------------------------------------
+import qualified Data.Aeson as A
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
@@ -29,6 +20,8 @@ import qualified Data.Text as T
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
+import           Pact.Types.Continuation (PactExec(..),PactContinuation(..))
+import           Pact.Types.Pretty
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 import           Servant.Reflex
@@ -102,6 +95,7 @@ transactionSearch = do
               pm <- pmap
               pure $ fromMaybe "" $ join (M.lookup qParam pm)
             newSearch = leftmost [pb, () <$ updated pmap]
+
         res <- searchTxs dbh (constDyn $ QParamSome $ Limit itemsPerPage)
                              (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
                              (QParamSome <$> needle) newSearch
@@ -206,21 +200,45 @@ txTable net txs = do
     el "thead" $ el "tr" $ do
       el "th" $ text "Status"
       el "th" $ text "Chain"
+      el "th" $ text "Time"
       el "th" $ text "Height"
       el "th" $ text "Request Key"
+      el "th" $ text "Preview"
     el "tbody" $ do
       forM_ txs $ \tx -> el "tr" $ do
         let chain = _txSummary_chain tx
         let height = _txSummary_height tx
+        let rk = _txSummary_requestKey tx
         let status = case _txSummary_result tx of
                        TxSucceeded -> elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
                        TxFailed -> elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
                        TxUnexpected -> elAttr "i" ("class" =: "question icon" <> "title" =: "Unknown") blank
-        elAttr "td" ("class" =: "center aligned" <> "data-label" =: "Status") status
-        elAttr "td" ("data-label" =: "Chain") $ text $ tshow chain
-        elAttr "td" ("data-label" =: "Height") $ blockLink net (ChainId chain) height $ tshow height
-        elAttr "td" ("data-label" =: "Request Key") $ txDetailLink net (_txSummary_requestKey tx) (_txSummary_requestKey tx)
-
+        elAttr "td" ("class" =: "center aligned" <> "data-label" =: "Status")
+            status
+        elAttr "td" ("data-label" =: "Chain") $
+            text $ tshow chain
+        elAttr "td" ("data-label" =: "Time") $
+            text $ T.take 19 $ tshow (_txSummary_creationTime tx)
+        elAttr "td" ("data-label" =: "Height") $
+            blockLink net (ChainId chain) height $ tshow height
+        elAttr "td" ("data-label" =: "Request Key") $
+            txDetailLink net rk (T.take 24 rk <> "...")
+        elAttr "td" ("data-label" =: "Preview") $
+            txDetailLink net rk $ txPreview (_txSummary_code tx) (_txSummary_continuation tx)
+  where
+    txPreview :: Maybe Text -> Maybe A.Value -> Text
+    txPreview (Just code) _ | openns (T.take 6 code) = elide (T.takeWhile (/= ' ') code)
+                            | otherwise = elide code
+    txPreview _ (Just cont) = case A.fromJSON cont of
+      A.Success (pe :: PactExec) ->
+        let c = _peContinuation pe in
+        elide $ "(" <> renderCompactText (_pcDef c)
+      A.Error _ -> "<unavailable>"
+    txPreview _ _ = "<unavailable>"
+    elide t = T.take 64 t <> " ..."
+    openns "(user." = True
+    openns "(free." = True
+    openns _ = False
 
 evTable
   :: (DomBuilder t m, Prerender js t m,
