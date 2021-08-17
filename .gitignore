@@ -8,3 +8,5 @@ result-exe
 ghcid-output.txt
 frontend.jsexe.assets
 static.assets
+/common/TAGS
+/frontend/TAGS

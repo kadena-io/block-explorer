@@ -7,6 +7,7 @@ library
   hs-source-dirs: src
   build-depends:
       aeson
+    , aeson-pretty
     , array
     , base
     , base16-bytestring
@@ -58,6 +59,7 @@ library
     Frontend.Page.Common
     Frontend.Page.ReqKey
     Frontend.Page.Transaction
+    Frontend.Page.TxDetail
     Frontend.Page.Types
     Frontend.Storage
     Frontend.Transactions

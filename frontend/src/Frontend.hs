@@ -65,6 +65,7 @@ import           Frontend.Common
 import           Frontend.Nav
 import           Frontend.Page.Block
 import           Frontend.Page.ReqKey
+import           Frontend.Page.TxDetail
 import           Frontend.Transactions
 ------------------------------------------------------------------------------
 
@@ -116,10 +117,12 @@ networkDispatch route ndbs netId = prerender_ blank $ do
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
           void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
+        NetRoute_Search -> searchPageWidget netId
         NetRoute_Chain -> chainRouteHandler si netId
         NetRoute_TxReqKey -> requestKeyWidget si netId
+        NetRoute_TxDetail -> txDetailWidget netId
         NetRoute_TxSearch -> transactionSearch
-
+        NetRoute_EventSearch -> eventSearch
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -295,12 +298,39 @@ getPayload ch h = do
   e <- getBlockPayload ch (_blockHeader_chainId h) (_blockHeader_payloadHash h)
   return $ (,h) <$$> e
 
-data SearchType = RequestKeySearch | TxSearch
+initRecents
+  :: (MonadAppIO r t m, Prerender js t m)
+  => App r t m (Maybe (Dynamic t RecentTxs))
+initRecents = do
+    (AppState n si mdbh _) <- ask
+    let cfg = EventSourceConfig never True
+    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
+    es <- startEventSource ch cfg
+    let downEvent = _eventSource_recv es
+
+    let onlyTxs (Just t) = if _blockHeaderTx_txCount t == Just 0 then Nothing else Just t
+        onlyTxs Nothing = Nothing
+        blocksWithTxs = fmapMaybe onlyTxs downEvent
+
+    case mdbh of
+      Nothing -> return Nothing
+      Just dbh -> do
+        eRecentTxs <- getRecentTxs dbh (_eventSource_open es)
+        ebp <- getBlockPayload2 ch blocksWithTxs
+
+        recent <- foldDyn ($) (RecentTxs mempty) $ leftmost
+          [ either (const id) mergeRecentTxs <$> eRecentTxs
+          , addNewTransaction <$> filterRight ebp
+          ]
+        return $ Just recent
+
+data SearchType = RequestKeySearch | TxSearch | EventSearch
   deriving (Eq,Ord,Show,Read,Enum)
 
 searchTypeText :: SearchType -> Text
 searchTypeText RequestKeySearch = "Request Key"
 searchTypeText TxSearch = "Code"
+searchTypeText EventSearch = "Events"
 
 searchWidget
   :: (PostBuild t m, PerformEvent t m, DomBuilder t m,
@@ -313,13 +343,18 @@ searchWidget netId = do
   divClass "ui fluid action input" $ do
     st <- divClass "ui compact menu search__dropdown" $ do
       divClass "ui simple dropdown item" $ mdo
-        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc]
+        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc, evc]
         dynText $ searchTypeText <$> curSearchType
         elClass "i" "dropdown icon" blank
-        (rk, txc) <- divClass "menu" $ do
+        (rk, txc, evc) <- divClass "menu" $ do
           (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
           (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
-          return (RequestKeySearch <$ domEvent Click r, TxSearch <$ domEvent Click t)
+          (e,_) <- elAttr' "div" ("class" =: "item") $ text "Events"
+          return
+            ( RequestKeySearch <$ domEvent Click r
+            , TxSearch <$ domEvent Click t
+            , EventSearch <$ domEvent Click e
+            )
         return curSearchType
     ti <- inputElement $ def
       & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
@@ -328,13 +363,11 @@ searchWidget netId = do
     setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> st) (domEvent Click e))
     return ()
 
+
 mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
-mkSearchRoute netId str RequestKeySearch =
-  case netId of
-    NetId_Mainnet -> FR_Mainnet :/ NetRoute_TxReqKey :/ str
-    NetId_Testnet -> FR_Testnet :/ NetRoute_TxReqKey :/ str
-    NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_TxReqKey :/ str))
+mkSearchRoute netId str RequestKeySearch = mkReqKeySearchRoute netId str
 mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
+mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
 
 mainPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
@@ -417,7 +450,7 @@ mainPageWidget netId (Just height) = do
             return ()
     case mrecent of
       Nothing -> blank
-      Just recent -> void $ networkView (recentTransactions <$> recent)
+      Just recent -> void $ networkView (recentTransactions 5 <$> recent)
   where
     _f a = format $ convertToDHMS $ max 0 $ truncate $ diffUTCTime launchTime (_tickInfo_lastUTC a)
     format :: (Int, Int, Int, Int) -> Text
@@ -431,6 +464,22 @@ mainPageWidget netId (Just height) = do
 --mkGrid n [] = []
 --mkGrid n xs = let (x,rest) = splitAt n xs
 --               in x : mkGrid n rest
+
+searchPageWidget
+  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilderSpace m ~ GhcjsDomSpace)
+  => NetId
+  -> App r t m ()
+searchPageWidget netId = do
+    mrecent <- initRecents
+
+    searchWidget netId
+
+    case mrecent of
+      Nothing -> blank
+      Just recent -> void $ networkView (recentTransactions 20 <$> recent)
+
 
 downHeightWithMax :: BlockTable -> Map (Down (BlockHeight, BlockHeight)) (Map ChainId BlockHeaderTx)
 downHeightWithMax bt = M.mapKeys (\a -> Down (a, fromMaybe a mh)) btm

@@ -4,6 +4,7 @@
 module Frontend.Page.Common
 ( -- * useful combinators
   unwrapJSON
+, prettyJSON
 , voidMaybe
   -- * rendering pact types
 , renderMetaData
@@ -38,6 +39,7 @@ import qualified Pact.Types.ChainId as Pact
 import Pact.Types.Continuation
 import Pact.Types.Names
 import Pact.Types.Term (FieldKey(..), ObjectMap(..), PactId(..))
+import Pact.Types.Pretty
 
 -- ------------------------------------------------------------------------ --
 -- Chainweb modules
@@ -89,6 +91,7 @@ unwrapJSON = \case
     keyvalue k v = k <> " : " <> unwrapJSON v
 
 
+
 -- | Link a 'BlockHash' to its transactions endpoint
 --
 transactionsLink
@@ -121,6 +124,7 @@ renderMetaData
       -- ^ Value ~ 'PollMetaData'
     -> m ()
 renderMetaData _ _ Nothing = text "None"
+renderMetaData _ _ (Just A.Null) = text ""
 renderMetaData netId cid (Just v) = case fromJSON v of
     Success (PollMetaData bh bt bhash phash) -> do
       detailsSection $ do
@@ -152,8 +156,8 @@ renderPayload
     -> m ()
 renderPayload = \case
     ExecPayload (Exec _ d) -> do
-      detailsSection $ do
-        voidMaybe (tfield "Data" . text . unwrapJSON) d
+      detailsSection $
+        voidMaybe (tfieldPre "Data" . text . prettyJSON) d
     ContPayload (Cont pid rb step d p) -> do
       detailsSection $ do
         tfield "Pact Id" $ text pid
@@ -175,7 +179,7 @@ renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
       voidMaybe (tfield "Executed" . text . tshow) x
       tfield "Step" $ text $ tshow step
       tfield "Pact Id" $ text pid
-      tfield "Metadata" $ renderContinuation pcont
+      tfield "Continuation" $ renderContinuation pcont
       tfield "Rollback" $ text $ tshow rb
 
 -- | Render the 'Provenance' pact type
@@ -211,15 +215,5 @@ renderContinuation
     => PactContinuation
     -> m ()
 renderContinuation (PactContinuation n args) =
-    detailsSection $ do
-      tfield "Name" $ text $ ppName n
-      renderArgs args
-  where
-    renderArgs [] = pure ()
-    renderArgs (a:as) = do
-      tfield "Args" $ go a
-      traverse_ (tfield "" . go) as
-
-    go = text
-      . unwrapJSON
-      . toJSON
+  text $ "(" <> ppName n <> " " <>
+    (T.intercalate " " (map renderCompactText args)) <> ")"
