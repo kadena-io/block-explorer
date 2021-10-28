@@ -29,11 +29,13 @@ import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
 import qualified Data.Set as Set
 import           Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value, EventName)
 import           Servant.API
 import           Servant.Reflex
+import           Text.Printf
 ------------------------------------------------------------------------------
 import           Blake2Native
 import           Chainweb.Api.BlockHeader
@@ -42,10 +44,14 @@ import           Chainweb.Api.BlockPayload
 import           Chainweb.Api.BlockPayloadWithOutputs
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainTip
+import           Chainweb.Api.ChainwebMeta
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
+import           Chainweb.Api.PactCommand
+import           Chainweb.Api.Payload
 import           Chainweb.Api.RespItems
+import           Chainweb.Api.Transaction
 import           ChainwebData.Api
 import           ChainwebData.Pagination
 import           ChainwebData.TxDetail
@@ -85,6 +91,9 @@ payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hash
 pollUrl :: ChainwebHost -> ChainId -> Text
 pollUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/poll"
 
+localUrl :: ChainwebHost -> ChainId -> Text
+localUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/local"
+
 payloadWithOutputsUrl :: ChainwebHost -> ChainId -> Hash -> Text
 payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash <> "/outputs"
 
@@ -97,6 +106,20 @@ getServerInfo h = do
   pb <- getPostBuild
   esi <- getInfo (h <$ pb)
   holdDyn Nothing esi
+
+detailsXhr :: ChainwebHost -> ChainwebMeta -> Text -> Text -> Either String (XhrRequest ByteString)
+detailsXhr host meta token account = do
+    chainId <- note "Could not parse chain ID" $ chainIdFromText $ _chainwebMeta_chainId meta
+    let url = localUrl host chainId
+    tx <- mkTransaction pc []
+    pure $ XhrRequest "POST" url $ def
+      { _xhrRequestConfig_headers = "content-type" =: aj <> "accept" =: aj
+      , _xhrRequestConfig_sendData = BL.toStrict $ encode $ toJSON tx
+      }
+  where
+    aj = "application/json"
+    code = T.pack $ printf "(%s.details \"%s\")" token account
+    pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local"
 
 requestKeyXhr :: ChainwebHost -> ChainId -> Text -> XhrRequest ByteString
 requestKeyXhr host chainId requestKey = XhrRequest "POST" url $ def

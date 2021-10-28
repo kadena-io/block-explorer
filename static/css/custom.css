@@ -173,3 +173,8 @@ div.summary-inner {
 .pagination .disabled.item {
     cursor: auto;
 }
+
+.selectable-row:hover {
+    background: rgba(0,0,0,.05)!important;
+    color: rgba(0,0,0,.95)!important;
+}

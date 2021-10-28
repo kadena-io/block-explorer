@@ -65,6 +65,7 @@ data NetRoute :: * -> * where
   NetRoute_TxDetail :: NetRoute Text
   NetRoute_TxSearch :: NetRoute (Map Text (Maybe Text))
   NetRoute_EventSearch :: NetRoute (Map Text (Maybe Text))
+  NetRoute_AccountSearch :: NetRoute [Text]
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
@@ -75,6 +76,7 @@ netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_TxDetail -> PathSegment "txdetail" singlePathSegmentEncoder
   NetRoute_TxSearch -> PathSegment "txsearch" queryOnlyEncoder
   NetRoute_EventSearch -> PathSegment "eventsearch" queryOnlyEncoder
+  NetRoute_AccountSearch -> PathSegment "account" pathOnlyEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()

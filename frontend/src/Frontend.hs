@@ -55,6 +55,7 @@ import           Common.Route
 import           Common.Types
 import           Common.Utils
 import           Frontend.About
+import           Frontend.Accounts
 import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
@@ -120,6 +121,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
         NetRoute_TxDetail -> txDetailWidget netId
         NetRoute_TxSearch -> transactionSearch
         NetRoute_EventSearch -> eventSearch
+        NetRoute_AccountSearch -> accountSearch
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -483,9 +485,11 @@ rowsWidget
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe BlockRef))
 rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
-  hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
-  spacerRow gis cs hoveredBlock maxNumChains bh
-  return hoverChanges
+  --hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
+  --hoverChanges <- blockHeightRow ti gis (traceDyn "hoveredBlock" hoveredBlock) maxNumChains (fst bh) (traceDyn "cs" cs)
+  --spacerRow gis cs hoveredBlock maxNumChains bh
+  --return hoverChanges
+  return never
 
 blockHeightRow
   :: (MonadAppIO r t m, Prerender js t m,
@@ -560,8 +564,13 @@ blockWidget0 ti gis hoveredBlock maxNumChains hs height cid = do
                     , Nothing <$ domEvent Mouseleave e]
 
 diffStr :: Double -> Text
-diffStr d = T.pack $ printf "%.1f %s" (d / divisor) units
+diffStr d = if val < 10
+    then T.pack $ printf "%.3f %s" (d / divisor) units
+    else if val < 100
+            then T.pack $ printf "%.2f %s" (d / divisor) units
+            else T.pack $ printf "%.1f %s" (d / divisor) units
   where
+    val = d / divisor
     (divisor, units :: String)
       | d >= 1e18 = (1e18, "EH")
       | d >= 1e15 = (1e15, "PH")

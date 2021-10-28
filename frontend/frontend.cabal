@@ -50,6 +50,7 @@ library
     Blake2Native
     Frontend
     Frontend.About
+    Frontend.Accounts
     Frontend.App
     Frontend.AppState
     Frontend.Common
