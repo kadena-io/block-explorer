@@ -121,7 +121,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
         NetRoute_TxDetail -> txDetailWidget netId
         NetRoute_TxSearch -> transactionSearch
         NetRoute_EventSearch -> eventSearch
-        NetRoute_AccountSearch -> accountSearch
+        NetRoute_AccountSearch -> accountSearchPage
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),

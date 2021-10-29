@@ -19,6 +19,7 @@ module Common.Route where
 ------------------------------------------------------------------------------
 import           Prelude hiding ((.), id)
 import           Control.Category (Category (..))
+import           Data.Dependent.Sum
 import           Data.Functor.Identity
 import           Data.Map (Map)
 import           Data.Some (Some)
@@ -109,6 +110,12 @@ addNetRoute netId c r = case netId of
   NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ (c, r)
   NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ (c, r)
   NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_Chain :/ (c, r)))
+
+mkNetRoute :: NetId -> DSum NetRoute Identity -> R FrontendRoute
+mkNetRoute netId r = case netId of
+    NetId_Mainnet -> FR_Mainnet :/ r
+    NetId_Testnet -> FR_Testnet :/ r
+    NetId_Custom host -> FR_Customnet :/ (host, r)
 
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute

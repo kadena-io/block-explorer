@@ -10,7 +10,7 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson.Lens
-import Data.Dependent.Sum
+import           Data.Dependent.Sum
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -114,20 +114,14 @@ transactionSearch = do
         let f = either text (txTable n "Transaction Search")
         void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
 
-mkSearchRoute' :: NetId -> DSum NetRoute Identity -> R FrontendRoute
-mkSearchRoute' netId r = case netId of
-    NetId_Mainnet -> FR_Mainnet :/ r
-    NetId_Testnet -> FR_Testnet :/ r
-    NetId_Custom host -> FR_Customnet :/ (host, r)
-
 mkReqKeySearchRoute :: NetId -> Text -> R FrontendRoute
-mkReqKeySearchRoute netId str = mkSearchRoute' netId (NetRoute_TxReqKey :/ str)
+mkReqKeySearchRoute netId str = mkNetRoute netId (NetRoute_TxReqKey :/ str)
 
 mkTxDetailRoute :: NetId -> Text -> R FrontendRoute
-mkTxDetailRoute netId rk = mkSearchRoute' netId (NetRoute_TxDetail :/ rk)
+mkTxDetailRoute netId rk = mkNetRoute netId (NetRoute_TxDetail :/ rk)
 
 mkTxSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
-mkTxSearchRoute netId str page = mkSearchRoute' netId (NetRoute_TxSearch :/ (qParam =: Just str <> p ))
+mkTxSearchRoute netId str page = mkNetRoute netId (NetRoute_TxSearch :/ (qParam =: Just str <> p ))
   where
     p = maybe mempty ((pageParam =:) . Just . tshow) page
 
@@ -177,7 +171,7 @@ eventSearch = do
         void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
 
 mkEventSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
-mkEventSearchRoute netId str page = mkSearchRoute' netId (NetRoute_EventSearch :/ (qParam =: Just str <> p ))
+mkEventSearchRoute netId str page = mkNetRoute netId (NetRoute_EventSearch :/ (qParam =: Just str <> p ))
   where
    p = maybe mempty ((pageParam =:) . Just . tshow) page
 
