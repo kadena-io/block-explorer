@@ -71,9 +71,9 @@ learnMore = mdo
     text "Learn More"
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      linkItemNewTab "Kadena Docs" "https://kadena-io.github.io/kadena-docs/"
+      linkItemNewTab "Kadena Docs" "https://docs.kadena.io"
       linkItemNewTab "Pact Smart Contract Tutorials" "https://pactlang.org"
-      linkItemNewTab "Kadena Whitepapers" "https://kadena.io/en/whitepapers/"
+      linkItemNewTab "Kadena Whitepapers" "https://docs.kadena.io/whitepapers/overview"
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
     , False <$ domEvent Mouseleave e
