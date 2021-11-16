@@ -91,14 +91,18 @@ requestKeyWidget si netId = do
                 go (c, Right v) = traverse_ (requestKeyResultPage netId c) v
             mapM_ go rs
   where
-    decodeWithErr resp = ffor (_xhrResponse_responseText resp) $ \rt ->
-      first tshow $ eitherDecode @PollResponses $ BL.fromStrict $ T.encodeUtf8 rt
+    decodeWithErr resp = do
+      guard $ _xhrResponse_status resp == 200
+      rt <- _xhrResponse_responseText resp
+      pure $ first tshow $ eitherDecode @PollResponses $ BL.fromStrict $ T.encodeUtf8 rt
 
     decodeAndDropEmpty resp = do
       res <- decodeWithErr resp
       case res of
-        Right (PollResponses pr) -> if HM.null pr then Nothing else pure $ Right pr
         Left e -> pure $ Left e
+        Right (PollResponses pr) -> if HM.null pr
+                                    then Nothing
+                                    else pure $ Right pr
 
     reqParseErrorMsg e rk = do 
       el "div" $ dynText $ 
