@@ -48,6 +48,12 @@ project ./. ({ pkgs, ... }: {
       network = dontCheck super.network;
 
       pact = dontCheck super.pact;
+      pact-time = haskellLib.dontCheck (self.callHackageDirect {
+        pkg = "pact-time";
+        ver = "0.2.0.0";
+        sha256 = "1cfn74j6dr4279bil9k0n1wff074sdlz6g1haqyyy38wm5mdd7mr";
+      } {});
+
       perfect-vector-shuffle = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "perfect-vector-shuffle";
         ver = "0.1.1";

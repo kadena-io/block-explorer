@@ -199,8 +199,9 @@ renderYield
     :: MonadApp r t m
     => Yield
     -> m ()
-renderYield (Yield (ObjectMap m) p) =
+renderYield (Yield (ObjectMap m) p mCid) =
     detailsSection $ do
+      voidMaybe (tfield "Source Chain" . text . Pact._chainId) mCid
       tfield "Data" $ renderRichObject $ yieldMap m
       voidMaybe (tfield "Provenance" . renderProvenance) p
   where
