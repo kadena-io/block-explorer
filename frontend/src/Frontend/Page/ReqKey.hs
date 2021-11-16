@@ -87,7 +87,7 @@ requestKeyWidget si netId = do
         case M.toList $ M.mapMaybe decodeAndDropEmpty resmap of
           [] -> dynText (reqKeyMessage <$> reqKey)
           rs -> do
-            let go (_, Left e) = reqParseErrorMsg e
+            let go (_, Left e) = reqParseErrorMsg e reqKey
                 go (c, Right v) = traverse_ (requestKeyResultPage netId c) v
             mapM_ go rs
   where
@@ -100,8 +100,10 @@ requestKeyWidget si netId = do
         Right (PollResponses pr) -> if HM.null pr then Nothing else pure $ Right pr
         Left e -> pure $ Left e
 
-    reqParseErrorMsg e = do 
-      el "div" $ text "An unexpected error occured. Help us improve our tooling by showing a developer the below error:"
+    reqParseErrorMsg e rk = do 
+      el "div" $ dynText $ 
+        fmap ("An unexpected error occured when processing request key: " <>) rk
+      el "div" $ text "Help a developer out and show them the below error:"
       el "div" $ text e
 
     reqKeyMessage s =
