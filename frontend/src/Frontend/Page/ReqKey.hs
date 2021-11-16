@@ -103,7 +103,6 @@ requestKeyWidget si netId = do
         Right (PollResponses pr) -> if HM.null pr
                                     then Nothing
                                     else pure $ Right pr
-
     reqParseErrorMsg e rk = do 
       el "div" $ dynText $ 
         fmap ("An unexpected error occured when processing request key: " <>) rk
