@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Frontend.Page.ReqKey
 ( requestKeyWidget
@@ -16,12 +17,15 @@ import Control.Monad.Reader
 
 import Data.Aeson as A
 import Data.Bifunctor
+import qualified Data.ByteString.Lazy as BL
 import Data.Foldable (traverse_)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T (pack)
+import qualified Data.Text.Encoding as T
+
 
 import GHCJS.DOM.Types (MonadJSM)
 
@@ -79,16 +83,29 @@ requestKeyWidget si netId = do
     results <- performRequestsAsync $ tag (current $ xhrs <$> reqKey) pb
     void $ networkHold (inlineLoader "Retrieving command result...") $
       ffor results $ \resmap -> do
+        -- text $ tshow $ fmap showResp resmap
         case M.toList $ M.mapMaybe decodeAndDropEmpty resmap of
           [] -> dynText (reqKeyMessage <$> reqKey)
           rs -> do
-            let go (c,v) = traverse_ (requestKeyResultPage netId c) v
+            let go (_, Left e) = reqParseErrorMsg e reqKey
+                go (c, Right v) = traverse_ (requestKeyResultPage netId c) v
             mapM_ go rs
   where
-    decodeAndDropEmpty resp =
-      case decodeXhrResponse resp of
-        Nothing -> Nothing
-        Just (PollResponses pr) -> if HM.null pr then Nothing else Just pr
+    decodeWithErr resp = ffor (_xhrResponse_responseText resp) $ \rt ->
+      first tshow $ eitherDecode @PollResponses $ BL.fromStrict $ T.encodeUtf8 rt
+
+    decodeAndDropEmpty resp = do
+      res <- decodeWithErr resp
+      case res of
+        Right (PollResponses pr) -> if HM.null pr then Nothing else pure $ Right pr
+        Left e -> pure $ Left e
+
+    reqParseErrorMsg e rk = do 
+      el "div" $ dynText $ 
+        fmap ("An unexpected error occured when processing request key: " <>) rk
+      el "div" $ text "Help us make our tools better by filing an issue with the below message at www.github.com/kadena-io/block-explorer :"
+      el "div" $ text e
+
     reqKeyMessage s =
       T.pack $ printf "Your request key %s is not associated with an already processed transaction on any chain." (show s)
 
