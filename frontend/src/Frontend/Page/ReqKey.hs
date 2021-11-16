@@ -103,7 +103,7 @@ requestKeyWidget si netId = do
     reqParseErrorMsg e rk = do 
       el "div" $ dynText $ 
         fmap ("An unexpected error occured when processing request key: " <>) rk
-      el "div" $ text "Help a developer out and show them the below error:"
+      el "div" $ text "Help us make our tools better by filing an issue with the below message at www.github.com/kadena-io/block-explorer :"
       el "div" $ text e
 
     reqKeyMessage s =
