@@ -52,13 +52,13 @@ txDetailWidget
     => NetId
     -> App T.Text t m ()
 txDetailWidget netId = do
-  (AppState _ _ mdbh _) <- ask
-  case mdbh of
+  (AppState _ _ mnc _) <- ask
+  case mnc of
     Nothing -> text "Tx detail not available for this network"
-    Just dbh -> do
+    Just nc -> do
       reqKey <- askRoute
       pb <- getPostBuild
-      res <- getTxDetail dbh
+      res <- getTxDetail nc
           (QParamSome . RequestKey <$> reqKey)
           (leftmost [pb, () <$ updated reqKey])
       void

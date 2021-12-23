@@ -19,7 +19,7 @@ module Common.Route where
 ------------------------------------------------------------------------------
 import           Prelude hiding ((.), id)
 import           Control.Category (Category (..))
-import           Data.Functor.Identity
+import           Control.Lens hiding ((.=))
 import           Data.Map (Map)
 import           Data.Some (Some)
 import qualified Data.Some as Some
@@ -81,7 +81,7 @@ data FrontendRoute :: * -> * where
   FR_About :: FrontendRoute ()
   FR_Mainnet :: FrontendRoute (R NetRoute)
   FR_Testnet :: FrontendRoute (R NetRoute)
-  FR_Customnet :: FrontendRoute (Host, R NetRoute)
+  FR_Customnet :: FrontendRoute (NetConfig, R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 backendRouteEncoder
@@ -97,10 +97,10 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       FR_About -> PathSegment "about" $ unitEncoder mempty
       FR_Mainnet -> PathSegment "mainnet" netRouteEncoder
       FR_Testnet -> PathSegment "testnet" netRouteEncoder
-      FR_Customnet -> PathSegment "custom" $ pathParamEncoder hostEncoder netRouteEncoder
+      FR_Customnet -> PathSegment "custom" $ pathParamEncoder netconfigEncoder netRouteEncoder
 
-hostEncoder :: Encoder (Either Text) (Either Text) Host Text
-hostEncoder = reviewEncoder humanReadableTextPrism
+netconfigEncoder :: Encoder (Either Text) (Either Text) NetConfig Text
+netconfigEncoder = reviewEncoder (prism' netConfigToRouteText netConfigFromRouteText)
 
 addNetRoute :: NetId -> Int -> R ChainRoute -> R FrontendRoute
 addNetRoute netId c r = case netId of

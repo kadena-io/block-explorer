@@ -1,3 +1,6 @@
 {
-  "mainnet01": { "hostAddress": "estats.chainweb.com", "hostPort": 443 }
+  "mainnet01": { "p2p": "https://192.168.88.186:4443"
+               , "service": "http://192.168.88.186:1848"
+               , "data": "http://192.168.88.186:8080"
+               }
 }
