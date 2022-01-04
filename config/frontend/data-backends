@@ -1,6 +1,7 @@
 {
-  "mainnet01": { "p2p": "https://192.168.88.186:4443"
-               , "service": "http://192.168.88.186:1848"
-               , "data": "http://192.168.88.186:8080"
-               }
+  "mainnet01": {
+    "p2p": "https://estats.chainweb.com",
+    "service": "http://estats.chainweb.com",
+    "data": "http://estats.chainweb.com"
+  }
 }

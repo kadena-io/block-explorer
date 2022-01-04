@@ -3,18 +3,29 @@
 ## Deployment Configs
 
 To deploy the block explorer, use the deployment functionality from
-[Obelisk](https://github.com/obsidiansystems/obelisk). Before deploying you may
-want to create some or all of the following configs:
+[Obelisk](https://github.com/obsidiansystems/obelisk). Alternatively, you can
+build locally with `nix-build -A exe`, run the `makeLinks` script to create
+appropriate symlinks, and then run with `result/backend`. Before deploying you
+may want to create some or all of the following configs:
 
 ### Data Backends
 
-In order to get block explorer features not provided by nodes, you have to
-configure a data backend.  To do that, put something like the following in
-`config/frontend/data-backends`:
+The block explorer gets blockchain data from a node's p2p and service APIs as
+well as optionally getting more data from a chainweb-data server. This needs to
+be configured something like the following in `config/frontend/data-backends`:
 
 ```
 {
-  "mainnet01": { "hostAddress": "example.com", "hostPort": 80 }
+  "mainnet01": {
+    "p2p": "https://node.example.com:443",
+    "service": "http://node.example.com:1848",
+    "data": "http://chainweb-data.example.com:8000"
+  },
+  "testnet04": {
+    "p2p": "https://testnet-node.example.com:443",
+    "service": "http://testnet-node.example.com:1848",
+    "data": "http://testnet-chainweb-data.example.com:8000"
+  }
 }
 ```
 
