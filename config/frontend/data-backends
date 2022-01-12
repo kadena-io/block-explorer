@@ -2,6 +2,6 @@
   "mainnet01": {
     "p2p": "https://estats.chainweb.com",
     "service": "http://estats.chainweb.com",
-    "data": "http://estats.chainweb.com"
+    "data": "http://data2.chainweb.com:8080"
   }
 }

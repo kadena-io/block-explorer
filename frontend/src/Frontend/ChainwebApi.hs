@@ -457,14 +457,14 @@ searchEvents nc lim off search param name evt = do
     txResp <- go lim off search param name evt
     return $ r2e <$> txResp
 
-getTxDetail
+getTxDetails
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
     => NetConfig
     -> Dynamic t (QParam RequestKey) -- req key
     -> Event t ()
-    -> m (Event t (Either Text TxDetail))
-getTxDetail nc rk evt = do
+    -> m (Event t (Either Text [TxDetail]))
+getTxDetails nc rk evt = do
     let ((_ :<|> _ :<|> _ :<|> go ) :<|> _) =
           client chainwebDataApi
             (Proxy :: Proxy m)
