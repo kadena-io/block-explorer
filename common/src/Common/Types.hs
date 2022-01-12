@@ -83,7 +83,7 @@ netConfigFromRouteText t =
 
 netConfigToRouteText :: NetConfig -> Text
 netConfigToRouteText (NetConfig p s d) =
-  T.intercalate "," [hostToText p, hostToText s, hostToText d]
+  T.intercalate "," [hostToRouteText p, hostToRouteText s, hostToRouteText d]
 
 instance ToJSON NetConfig where
     toJSON nc = object
@@ -124,6 +124,11 @@ netIdPathSegment = \case
   NetId_Mainnet -> "mainnet"
   NetId_Testnet -> "testnet"
   NetId_Custom _ -> "custom"
+
+--getNetConfig :: NetId -> AppConfig -> NetConfig
+--getNetConfig NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h h
+--getNetConfig NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h h
+--getNetConfig (NetId_Custom nc) = nc
 
 netHost :: NetId -> NetConfig
 netHost NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h h
