@@ -465,7 +465,7 @@ getTxDetails
     -> Event t ()
     -> m (Event t (Either Text [TxDetail]))
 getTxDetails nc rk evt = do
-    let ((_ :<|> _ :<|> _ :<|> go ) :<|> _) =
+    let ((_ :<|> _ :<|> _ :<|> _ :<|> go ) :<|> _) =
           client chainwebDataApi
             (Proxy :: Proxy m)
             (Proxy :: Proxy ())
