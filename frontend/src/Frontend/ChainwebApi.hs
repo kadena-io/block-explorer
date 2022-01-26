@@ -471,8 +471,8 @@ getTxDetails
     => NetConfig
     -> Dynamic t (QParam RequestKey) -- req key
     -> Event t ()
-    -> m (Event t (Either Text TxDetail))
-getTxDetail nc rk evt = do
+    -> m (Event t (Either Text [TxDetail]))
+getTxDetails nc rk evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
