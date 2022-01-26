@@ -89,13 +89,13 @@ txDetailPage netId cwVer txDetails = do
       tfield "Chain" $ text $ tshow $ (_txDetail_chain $ head txDetails)
       tfield "Block" $ do
         let tagIfOrphan cid height hash = if null $ drop 1 txDetails
-            then dynText $ constDyn mempty
-            else do
-                let h = ChainwebHost (netHost netId) cwVer
-                winningHash <- _blockHeader_hash . fst <$$$> getBlockHeaderByHeight h cid height
-                t <- holdDyn " (Determining if an orphan...)" $
-                      fmap (\whash -> if whash == hash then "" else " (orphan)") (fforMaybe winningHash (fmap hashB64U))
-                dynText t
+              then dynText $ constDyn mempty
+              else do
+                  let h = ChainwebHost (netHost netId) cwVer
+                  winningHash <- _blockHeader_hash . fst <$$$> getBlockHeaderByHeight h cid height
+                  t <- holdDyn " (Determining if an orphan...)" $
+                        fmap (\whash -> if whash == hash then "" else " (orphan)") (fforMaybe winningHash (fmap hashB64U))
+                  dynText t
         forM_ txDetails $ \tx -> el "tr" $ do
             blockHashLink netId (ChainId (_txDetail_chain tx)) (_txDetail_blockHash tx) $ (_txDetail_blockHash tx)
             tagIfOrphan (ChainId $ _txDetail_chain tx) (_txDetail_height tx) (_txDetail_blockHash tx)
