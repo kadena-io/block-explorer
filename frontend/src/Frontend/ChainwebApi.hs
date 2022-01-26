@@ -465,7 +465,7 @@ searchEvents nc lim off search param name evt = do
         txResp <- go lim off search param name evt
         return $ r2e <$> txResp
 
-getTxDetail
+getTxDetails
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
     => NetConfig
@@ -476,7 +476,7 @@ getTxDetail nc rk evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
-        let ((_ :<|> _ :<|> _ :<|> go ) :<|> _) =
+        let ((_ :<|> _ :<|> _ :<|> _ :<|> go ) :<|> _) =
               client chainwebDataApi
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
