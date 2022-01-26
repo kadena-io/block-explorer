@@ -14,6 +14,7 @@ module Frontend.Page.Block where
 ------------------------------------------------------------------------------
 import           Control.Monad
 import           Control.Monad.Reader
+import           Data.Functor
 import qualified Data.Map.Strict as M
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -65,7 +66,7 @@ blockHashWidget si netId cid = do
     ebh <- getBlockHeader chainwebHost c hash
     void $ networkHold (inlineLoader "Retrieving block...") $ ffor ebh $ \case
       Nothing -> text "Block with that hash does not exist"
-      Just bh -> blockPageNoPayload netId chainwebHost c bh
+      Just bh -> blockPageNoPayload netId chainwebHost c bh True
 
 blockHeightWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
@@ -85,7 +86,7 @@ blockHeightWidget si netId cid = do
     ebh <- getBlockHeaderByHeight chainwebHost c height
     void $ networkHold (inlineLoader "Retrieving block...") $ ffor ebh $ \case
       Nothing -> text "Block does not exist"
-      Just bh -> blockPageNoPayload netId chainwebHost c bh
+      Just bh -> blockPageNoPayload netId chainwebHost c bh False
 
 blockLink
   :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
@@ -122,13 +123,14 @@ blockPageNoPayload
   -> ChainwebHost
   -> ChainId
   -> (BlockHeader, Text)
+  -> Bool
   -> App (R BlockRoute) t m ()
   -- -> m ()
-blockPageNoPayload netId h c bh = do
+blockPageNoPayload netId h c bh resolveOrphan = do
   let choose ep = case ep of
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> subRoute_ $ \case
-          Block_Header -> blockHeaderPage netId h c bh payload
+          Block_Header -> blockHeaderPage netId h c bh payload resolveOrphan
           Block_Transactions -> transactionPage netId c payload
   pEvt <- getBlockPayloadWithOutputs h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
@@ -137,6 +139,8 @@ blockPageNoPayload netId h c bh = do
 blockHeaderPage
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      HasJSContext (Performable m),
+      MonadJSM (Performable m),
       Prerender js t m
      )
   => NetId
@@ -144,9 +148,16 @@ blockHeaderPage
   -> ChainId
   -> (BlockHeader, Text)
   -> BlockPayloadWithOutputs
+  -> Bool
   -> m ()
-blockHeaderPage netId _ c (bh, bhBinBase64) bp = do
-    el "h2" $ text "Block Header"
+blockHeaderPage netId h c (bh, bhBinBase64) bp resolveOrphan = do
+    orphanHash <- _blockHeader_hash . fst <$$$> getBlockHeaderByHeight h c (_blockHeader_height bh)
+    let isJust e = case e of Just _ -> True; _ -> False
+        displayOrphan = \case
+           Just hh | hh /= _blockHeader_hash bh -> "(orphan)"
+           _ -> ""
+    orphanText <- holdDyn "" $ orphanHash <&> (\b -> if isJust b && resolveOrphan then displayOrphan b else "")
+    el "h2" $ dynText ( ("Block Header " <>) <$> orphanText)
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
         tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_creationTime bh

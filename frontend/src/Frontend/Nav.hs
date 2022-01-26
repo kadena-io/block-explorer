@@ -22,7 +22,6 @@ import           Reflex.Dom
 ------------------------------------------------------------------------------
 import           Common.Route
 import           Common.Types
-import           Common.Utils
 ------------------------------------------------------------------------------
 
 nav
@@ -99,7 +98,7 @@ linkItemNewTab nm url = do
 networkName :: NetId -> Text
 networkName NetId_Mainnet = "Mainnet"
 networkName NetId_Testnet = "Testnet"
-networkName (NetId_Custom h) = humanize h
+networkName (NetId_Custom _) = "Custom Network"
 
 networkWidget
   :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m,
