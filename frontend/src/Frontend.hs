@@ -156,8 +156,20 @@ footer = do
 getTextCfg :: HasConfigs m => Text -> m (Maybe Text)
 getTextCfg p = fmap (T.strip . T.decodeUtf8With T.lenientDecode) <$> getConfig p
 
-getJsonCfg :: (HasConfigs m, FromJSON a) => Text -> m (Either String a)
-getJsonCfg p = f <$> getConfig p
+getJsonCfg
+  :: ( PostBuild t m
+     , PerformEvent t m
+     , MonadIO (Performable m)
+     , HasConfigs m
+     , FromJSON a
+     )
+  => Text
+  -> m (Either String a)
+getJsonCfg p = do
+    mbs <- getConfig p
+    pb <- getPostBuild
+    performEvent_ (liftIO (print mbs) <$ pb)
+    pure $ f mbs
   where
     f mbs = do
       bs <- note ("Config file missing: " <> T.unpack p) mbs
