@@ -397,10 +397,9 @@ r2e (ResponseSuccess _ a _) = Right a
 r2e (ResponseFailure _ t _) = Left t
 r2e (RequestFailure _ t )   = Left t
 
-mkDataUrl :: NetConfig -> BaseUrl
-mkDataUrl nc = BaseFullUrl scheme (hostAddress h) (hostPort h) "/"
+mkDataUrl :: Host -> BaseUrl
+mkDataUrl h = BaseFullUrl scheme (hostAddress h) (hostPort h) "/"
   where
-    h = _netConfig_dataHost nc
     scheme = case hostScheme h of
       "https" -> Https
       _ -> Http
@@ -412,12 +411,15 @@ getRecentTxs
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
 getRecentTxs nc evt = do
-    let ((go :<|> _ :<|> _) :<|> _) = client chainwebDataApi
-                                 (Proxy :: Proxy m)
-                                 (Proxy :: Proxy ())
-                                 (constDyn $ mkDataUrl nc)
-    txResp <- go evt
-    return $ r2e <$> txResp
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((go :<|> _ :<|> _) :<|> _) = client chainwebDataApi
+                                     (Proxy :: Proxy m)
+                                     (Proxy :: Proxy ())
+                                     (constDyn $ mkDataUrl dh)
+        txResp <- go evt
+        return $ r2e <$> txResp
 
 searchTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -429,13 +431,16 @@ searchTxs
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
 searchTxs nc lim off needle evt = do
-    let ((_ :<|> go :<|> _ :<|> _ ) :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl nc)
-    txResp <- go lim off needle evt
-    return $ r2e <$> txResp
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> go :<|> _ :<|> _ ) :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go lim off needle evt
+        return $ r2e <$> txResp
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -449,13 +454,16 @@ searchEvents
     -> Event t ()
     -> m (Event t (Either Text [EventDetail]))
 searchEvents nc lim off search param name evt = do
-    let ((_ :<|> _ :<|> go :<|> _ ) :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl nc)
-    txResp <- go lim off search param name evt
-    return $ r2e <$> txResp
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> go :<|> _ ) :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go lim off search param name evt
+        return $ r2e <$> txResp
 
 getTxDetail
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -465,13 +473,16 @@ getTxDetail
     -> Event t ()
     -> m (Event t (Either Text TxDetail))
 getTxDetail nc rk evt = do
-    let ((_ :<|> _ :<|> _ :<|> go ) :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl nc)
-    txResp <- go rk evt
-    return $ r2e <$> txResp
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> _ :<|> go ) :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go rk evt
+        return $ r2e <$> txResp
 
 getChainwebStats
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -480,10 +491,13 @@ getChainwebStats
     -> Event t ()
     -> m (Event t (Either Text ChainwebDataStats))
 getChainwebStats nc evt = do
-    let ((_ :<|> _ :<|> _ :<|> _ ) :<|> go :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl nc)
-    txResp <- go evt
-    return $ r2e <$> txResp
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> _ :<|> _ ) :<|> go :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go evt
+        return $ r2e <$> txResp

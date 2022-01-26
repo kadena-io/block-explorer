@@ -69,7 +69,7 @@ hostToRouteText (Host scheme addr port) = T.intercalate "," [scheme, addr, tshow
 data NetConfig = NetConfig
   { _netConfig_p2pHost :: Host
   , _netConfig_serviceHost :: Host
-  , _netConfig_dataHost :: Host
+  , _netConfig_dataHost :: Maybe Host
   } deriving (Eq,Ord,Show,Read)
 
 netConfigFromRouteText :: MonadPlus m => Text -> m NetConfig
@@ -78,12 +78,16 @@ netConfigFromRouteText t =
       [s1,a1,p1,s2,a2,p2,s3,a3,p3] -> NetConfig
         <$> (Host s1 a1 <$> fromText p1)
         <*> (Host s2 a2 <$> fromText p2)
-        <*> (Host s3 a3 <$> fromText p3)
+        <*> fmap Just (Host s3 a3 <$> fromText p3)
+      [s1,a1,p1,s2,a2,p2] -> NetConfig
+        <$> (Host s1 a1 <$> fromText p1)
+        <*> (Host s2 a2 <$> fromText p2)
+        <*> pure Nothing
       _ -> mzero
 
 netConfigToRouteText :: NetConfig -> Text
 netConfigToRouteText (NetConfig p s d) =
-  T.intercalate "," [hostToRouteText p, hostToRouteText s, hostToRouteText d]
+  T.intercalate "," [hostToRouteText p, hostToRouteText s, maybe "" hostToRouteText d]
 
 instance ToJSON NetConfig where
     toJSON nc = object
@@ -95,7 +99,7 @@ instance FromJSON NetConfig where
     parseJSON = withObject "NetConfig" $ \o -> NetConfig
       <$> o .: "p2p"
       <*> o .: "service"
-      <*> o .: "data"
+      <*> o .:? "data"
 
 newtype DataBackends = DataBackends
   { dataBackendMap :: Map Text NetConfig
@@ -131,8 +135,8 @@ netIdPathSegment = \case
 --getNetConfig (NetId_Custom nc) = nc
 
 netHost :: NetId -> NetConfig
-netHost NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h h
-netHost NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h h
+netHost NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h (Just h)
+netHost NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h (Just h)
 netHost (NetId_Custom nc) = nc
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
