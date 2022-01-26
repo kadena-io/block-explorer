@@ -72,7 +72,7 @@ frontend = Frontend
   , _frontend_body = do
       route <- getAppRoute
       ndbs <- getJsonCfg "frontend/data-backends"
-      mainDispatch route (either error id ndbs)
+      mainDispatch route (either (const defaultDataBackends) id ndbs)
       footer
   }
 

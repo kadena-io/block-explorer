@@ -11,6 +11,7 @@ import           Control.Lens hiding ((.=))
 import           Control.Monad
 import           Data.Aeson
 import           Data.Readable
+import qualified Data.Map as M
 import           Data.Map (Map)
 import           Data.Set (Set)
 import qualified Data.Set as S
@@ -106,6 +107,13 @@ newtype DataBackends = DataBackends
   } deriving (Eq,Ord,Show,Read)
     deriving newtype (FromJSON, ToJSON)
 
+defaultDataBackends :: DataBackends
+defaultDataBackends = DataBackends $ M.fromList
+  [ ("mainnet01", netHost NetId_Mainnet)
+  , ("testnet04", netHost NetId_Testnet)
+  ]
+
+
 type ChainwebVersion = Text
 
 data ChainwebHost = ChainwebHost
@@ -136,7 +144,7 @@ netIdPathSegment = \case
 
 netHost :: NetId -> NetConfig
 netHost NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h (Just h)
-netHost NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h (Just h)
+netHost NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h Nothing
 netHost (NetId_Custom nc) = nc
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
