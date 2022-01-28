@@ -99,9 +99,9 @@ txDetailPage netId cwVer txDetails = do
         forM_ txDetails $ \tx -> el "tr" $ do
             blockHashLink netId (ChainId (_txDetail_chain tx)) (_txDetail_blockHash tx) $ (_txDetail_blockHash tx)
             tagIfOrphan (ChainId $ _txDetail_chain tx) (_txDetail_height tx) (_txDetail_blockHash tx)
-      tfield "Code" $ case (_txDetail_continuation $ head txDetails) of
-        Nothing -> elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text $ fromMaybe "" (_txDetail_code $ head txDetails)
-        Just {} -> text "Continuation"
+      tfield "Code" $ case (_txDetail_code $ head txDetails) of
+        Just c -> elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
+        Nothing -> text "Continuation"
       tfield "Transaction Output" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
           tfield "Gas" $ text $ tshow $ (_txDetail_gas $ head txDetails)
