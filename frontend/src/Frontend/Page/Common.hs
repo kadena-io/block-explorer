@@ -99,6 +99,7 @@ transactionsLink
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
      , Prerender js t m
+     , RouteClick t m
      )
   => NetId
   -> ChainId
@@ -117,6 +118,7 @@ renderMetaData
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        , Prerender js t m
+       , RouteClick t m
        )
     => NetId
     -> ChainId
