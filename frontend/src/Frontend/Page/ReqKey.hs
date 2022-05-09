@@ -48,6 +48,7 @@ import Text.Printf (printf)
 
 import Chainweb.Api.ChainId
 
+import Common.Api
 import Common.Route
 import Common.Types
 import Common.Utils

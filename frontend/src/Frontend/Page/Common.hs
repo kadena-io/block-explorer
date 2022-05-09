@@ -51,6 +51,7 @@ import Chainweb.Api.Payload
 -- ------------------------------------------------------------------------ --
 -- Reflex modules
 
+import Common.Api
 import Common.Route
 import Common.Types
 import Common.Utils

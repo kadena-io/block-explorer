@@ -32,6 +32,7 @@ import Chainweb.Api.Hash
 import ChainwebData.Api
 import ChainwebData.TxDetail
 
+import Common.Api
 import Common.Types
 import Common.Utils
 import Common.Route

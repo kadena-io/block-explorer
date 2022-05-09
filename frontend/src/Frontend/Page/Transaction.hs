@@ -35,6 +35,7 @@ import Chainweb.Api.Signer
 import Chainweb.Api.Transaction
 import Common.Types
 import Common.Utils
+import Common.Api
 import Common.Route
 import Frontend.App
 import Frontend.Common
