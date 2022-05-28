@@ -128,9 +128,8 @@ requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta evs) 
     el "h2" $ text "Transaction Results"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Detail" $ txDetailLink netId (requestKeyToB16Text rk) (requestKeyToB16Text rk)
         tfield "Chain" $ text $ tshow $ unChainId cid
-        tfield "Request Key" $ text $ requestKeyToB16Text rk
+        tfield "Request Key" $ txDetailLink netId (requestKeyToB16Text rk) (requestKeyToB16Text rk)
         tfield "Transaction Id" $ text $ maybe "" tshow txid
         tfield "Result" $ renderPactResult pr
         tfield "Gas" $ text $ tshow g
