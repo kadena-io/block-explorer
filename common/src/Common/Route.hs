@@ -41,12 +41,14 @@ data BackendRoute :: * -> * where
 data BlockRoute :: * -> * where
   Block_Header :: BlockRoute ()
   Block_Transactions :: BlockRoute ()
+  Block_Transaction :: BlockRoute Text
 
 blockRouteEncoder
   :: Encoder (Either Text) (Either Text) (R BlockRoute) PageName
 blockRouteEncoder = pathComponentEncoder $ \case
   Block_Header -> PathEnd $ unitEncoder mempty
   Block_Transactions -> PathSegment "txs" $ unitEncoder mempty
+  Block_Transaction -> PathSegment "tx" singlePathSegmentEncoder
 
 data ChainRoute :: * -> * where
   Chain_BlockHash :: ChainRoute (Text, R BlockRoute)

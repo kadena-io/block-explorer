@@ -131,7 +131,8 @@ blockPageNoPayload netId h c bh resolveOrphan = do
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> subRoute_ $ \case
           Block_Header -> blockHeaderPage netId h c bh payload resolveOrphan
-          Block_Transactions -> transactionPage netId c payload
+          Block_Transactions -> transactionsPage netId c payload $ fst bh
+          Block_Transaction -> transactionPage netId c payload
   pEvt <- getBlockPayloadWithOutputs h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
