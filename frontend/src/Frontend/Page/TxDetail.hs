@@ -15,7 +15,6 @@ module Frontend.Page.TxDetail where
 import Control.Monad
 import Control.Monad.Reader
 import Data.Aeson as A
-import Data.Maybe
 import qualified Data.Text as T
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
