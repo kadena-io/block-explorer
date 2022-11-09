@@ -32,6 +32,12 @@ project ./. ({ pkgs, ... }: {
       } {}));
       lens-aeson = dontCheck super.lens-aeson;
 
+      direct-sqlite = dontCheck (self.callHackageDirect {
+        pkg = "direct-sqlite";
+        ver = "2.3.27";
+        sha256 = "0w8wj3210h08qlws40qhidkscgsil3635zk83kdlj929rbd8khip";
+      } {});
+
       http-media = dontCheck (self.callHackageDirect {
         pkg = "http-media";
         ver = "0.7.1.3";
