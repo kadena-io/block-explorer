@@ -5,6 +5,7 @@
 , iosSdkVersion ? "13.2"
 , withHoogle ? false
 , kpkgs ? import ./deps/kpkgs { inherit system; }
+, useGHC810 ? true
 }:
 let
   obelisk = import ./.obelisk/impl {
@@ -30,13 +31,44 @@ project ./. ({ pkgs, ... }: {
         ver = "0.1.1";
         sha256 = "12ivb374zymkqzq3w9a9vhxbri5bpymi1di6kk45hp2f6b8lafpz";
       } {}));
+
+      # base-orphans = dontCheck (self.callHackageDirect {
+      #   pkg = "base-orphans";
+      #   ver = "0.8.7";
+      #   sha256 = "0lgarsmzvgqj0h9aycm3wnarkadhxhv699qm3r17bxgc7cac15mf";
+      # } {});
+
+      # dec = doJailbreak (dontCheck (self.callHackageDirect {
+      #   pkg = "dec";
+      #   ver = "0.0.5";
+      #   sha256 = "0ac83xbcp4g6p9gffcx6w09rgylhj8znyvghfydwnq59q9ql5rd2";
+      # } {}));
+
       lens-aeson = dontCheck super.lens-aeson;
 
-      http-media = dontCheck (self.callHackageDirect {
+      http-media = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "http-media";
-        ver = "0.7.1.3";
-        sha256 = "04d0f7rmr2z3nkd7l6jbl6iq2f1rc7psqyynrn9287bbv1hfrmqs";
+        ver = "0.8.0.0";
+        sha256 = "080xkljq1iq0i8wagg8kbzbp523p2awa98wpn9i4ph1dq8y8346y";
+      } {}));
+
+      servant-auth = doJailbreak (dontCheck (self.callHackageDirect {
+        pkg = "servant-auth";
+        ver = "0.4.1.0";
+        sha256 = "0rc49n8micqd0bahvrwszvn9722rbyik78hgwnqq34r0ykd3k371";
+      } {}));
+
+      bound = dontCheck (self.callHackageDirect {
+        pkg = "bound";
+        ver = "2.0.5";
+        sha256 = "1cyryczzvqpf7ng3rjljb4kkjif0phccc65a9cp4fpyr822xns3q";
       } {});
+
+      # deriving-compat = doJailbreak (dontCheck (self.callHackageDirect {
+      #   pkg = "deriving-compat";
+      #   ver = "0.6.1";
+      #   sha256 = "165bk1sjg2sv92k812gfrlbrym42bk4l3gfcq1n0lb4rf1lg142r";
+      # } {}));
 
       # Comment out to see if the obelisk bump makes this unnecessary
       # jsaddle-dom = overrideCabal super.jsaddle-dom (drv: {
