@@ -12,7 +12,6 @@ module Frontend.Page.ReqKey
 
 ------------------------------------------------------------------------------
 
-import Control.Monad (join)
 import Control.Monad.Reader
 
 import Data.Aeson as A

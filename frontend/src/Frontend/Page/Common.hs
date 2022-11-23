@@ -78,6 +78,7 @@ ppName (Name (BareName n _)) = n
 ppName (QName (QualifiedName (ModuleName t ns) n _)) =
     maybe "" (\(NamespaceName nsn) -> nsn <> ".") ns <> t <> "." <> n
 ppName (DName dn) = tshow dn
+ppName (FQName fqn) = _fqName fqn
 
 unwrapJSON :: Value -> Text
 unwrapJSON = \case
@@ -172,7 +173,7 @@ renderPactExec
     :: MonadApp r t m
     => PactExec
     -> m ()
-renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb peNested) =
+renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb _peNested) =
     detailsSection $ do
       tfield "Step Count" $ text $ tshow stepCount
       voidMaybe (tfield "Yield" . renderYield) y

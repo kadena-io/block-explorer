@@ -363,7 +363,7 @@ mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
 
 mainPageWidget
-  :: forall js r t m. (MonadAppIO r t m, Prerender t m,
+  :: forall r t m. (MonadAppIO r t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId
@@ -459,7 +459,7 @@ mainPageWidget netId (Just height) = do
 --               in x : mkGrid n rest
 
 searchPageWidget
-  :: forall js r t m. (MonadAppIO r t m, Prerender t m,
+  :: forall r t m. (MonadAppIO r t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId

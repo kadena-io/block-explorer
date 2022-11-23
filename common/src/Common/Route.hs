@@ -28,7 +28,6 @@ import qualified Data.Text as T
 import           Data.Text.Encoding hiding (Some)
 import           Obelisk.Configs
 import           Obelisk.Route
-import           Obelisk.Route.Frontend
 import           Obelisk.Route.TH
 import           Reflex.Dom
 ------------------------------------------------------------------------------
@@ -86,8 +85,6 @@ data FrontendRoute :: * -> * where
   FR_Testnet :: FrontendRoute (R NetRoute)
   FR_Customnet :: FrontendRoute (NetConfig, R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
-
-instance MonadFail m => MonadFail (RoutedT t r m)
 
 backendRouteEncoder
   :: Encoder (Either Text) Identity (R (FullRoute BackendRoute FrontendRoute)) PageName
