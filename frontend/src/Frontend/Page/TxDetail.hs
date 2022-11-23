@@ -46,8 +46,7 @@ import Frontend.Page.Common
 txDetailWidget
     :: ( MonadApp r t m
        , MonadJSM (Performable m)
-       , HasJSContext (Performable m)
-       , Prerender js t m
+       , Prerender t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        )
@@ -73,9 +72,8 @@ txDetailPage
   :: ( MonadApp r t m
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
-     , HasJSContext (Performable m)
      , MonadJSM (Performable m)
-     , Prerender js t m
+     , Prerender t m
      )
   => NetId
   -> ChainwebVersion

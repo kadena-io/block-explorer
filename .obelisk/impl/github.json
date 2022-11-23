@@ -1,8 +1,8 @@
 {
   "owner": "obsidiansystems",
   "repo": "obelisk",
-  "branch": "develop",
+  "branch": "is/kda-infra-bump-ghc8_10",
   "private": false,
-  "rev": "56f2ea5ec06d59e08e6111c374dd0142200860ee",
-  "sha256": "1x07av9ayiaj3b3qknk3rd7k6gv19s27a4iz0wmi75xdg788r6x0"
+  "rev": "4e2bd00164fad8bcfcafbd83c31455e98df511bb",
+  "sha256": "1xq0yjd9m0hxsfxfbqq81xswb40v9w6l6bb8bm2s5aqc91cwnz5j"
 }

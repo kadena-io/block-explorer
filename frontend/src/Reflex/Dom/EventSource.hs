@@ -71,7 +71,7 @@ data RawEventSource t a
                       -- see the close event
                     }
 
---eventSource :: (MonadJSM m, MonadJSM (Performable m), HasJSContext m, PerformEvent t m, TriggerEvent t m, PostBuild t m) => Text -> EventSourceConfig t -> m (EventSource t)
+--eventSource :: (MonadJSM m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m) => Text -> EventSourceConfig t -> m (EventSource t)
 --eventSource url config = eventSource' url config onBSMessage
 
 eventSource' :: (MonadJSM m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m) => Text -> Text -> EventSourceConfig t -> (Either ByteString JSVal -> JSM b) -> m (RawEventSource t b)

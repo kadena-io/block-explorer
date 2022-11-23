@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Frontend.Nav where
 
 ------------------------------------------------------------------------------
@@ -17,7 +18,7 @@ import           Data.Map (Map)
 import           Data.Proxy
 import           Data.Text (Text)
 import           Obelisk.Generated.Static
-import           Obelisk.Route.Frontend hiding (decode)
+import           Obelisk.Route.Frontend hiding (decode, routeLinkAttr)
 import           Reflex.Dom
 ------------------------------------------------------------------------------
 import           Common.Route
@@ -35,7 +36,7 @@ nav netId = do
                 "href" =: "/" <>
                 "style" =: "color: #e8098f;") $
       elAttr "img" ("class" =: "logo" <>
-                    "src" =: static @"kadena-k-logo.png") $
+                    "src" =: $(static "kadena-k-logo.png")) $
         text "Kadena Block Explorer"
     elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Kadena Block Explorer"
     divClass "right menu" $ do
@@ -55,7 +56,7 @@ getStarted = mdo
       linkItemNewTab "Start Mining" "https://github.com/kadena-io/chainweb-miner/blob/master/README.org"
       linkItemNewTab "Download Wallet" "https://www.kadena.io/chainweaver"
       linkItemNewTab "Play Testnet Games" "http://testnet.chainweb.com/games/"
-      linkItemNewTab "See Chains in 3D (experimental)" (static @"chains-3d.html")
+      linkItemNewTab "See Chains in 3D (experimental)" $(static "chains-3d.html")
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
     , False <$ domEvent Mouseleave e

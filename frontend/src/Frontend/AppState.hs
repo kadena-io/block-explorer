@@ -196,7 +196,7 @@ getMissingBlocks blockTable downEvent = ffilter (not . null) $
   attachWith getMissing (current blockTable) (fmapMaybe id downEvent)
 
 startEventSource
-  :: (DomBuilder t m, Prerender js t m)
+  :: (DomBuilder t m, Prerender t m)
   => ChainwebHost
   -> EventSourceConfig t
   -> m (RawEventSource t (Maybe BlockHeaderTx))

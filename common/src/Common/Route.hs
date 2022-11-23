@@ -28,6 +28,7 @@ import qualified Data.Text as T
 import           Data.Text.Encoding hiding (Some)
 import           Obelisk.Configs
 import           Obelisk.Route
+import           Obelisk.Route.Frontend
 import           Obelisk.Route.TH
 import           Reflex.Dom
 ------------------------------------------------------------------------------
@@ -65,6 +66,7 @@ data NetRoute :: * -> * where
   NetRoute_TxDetail :: NetRoute Text
   NetRoute_TxSearch :: NetRoute (Map Text (Maybe Text))
   NetRoute_EventSearch :: NetRoute (Map Text (Maybe Text))
+  NetRoute_ModuleSearch :: NetRoute (Map Text (Maybe Text))
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
@@ -75,6 +77,7 @@ netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_TxDetail -> PathSegment "txdetail" singlePathSegmentEncoder
   NetRoute_TxSearch -> PathSegment "txsearch" queryOnlyEncoder
   NetRoute_EventSearch -> PathSegment "eventsearch" queryOnlyEncoder
+  NetRoute_ModuleSearch -> PathSegment "module" queryOnlyEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
@@ -83,6 +86,8 @@ data FrontendRoute :: * -> * where
   FR_Testnet :: FrontendRoute (R NetRoute)
   FR_Customnet :: FrontendRoute (NetConfig, R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
+
+instance MonadFail m => MonadFail (RoutedT t r m)
 
 backendRouteEncoder
   :: Encoder (Either Text) Identity (R (FullRoute BackendRoute FrontendRoute)) PageName
@@ -116,7 +121,7 @@ concat <$> mapM deriveRouteComponent
   , ''NetRoute
   ]
 
-getAppRoute :: HasConfigs m => m Text
+getAppRoute :: (HasConfigs m, MonadFail m) => m Text
 getAppRoute = do
     mroute <- getConfig "common/route"
     case mroute of

@@ -26,6 +26,10 @@ project ./. ({ pkgs, ... }: {
     in {
       bytes = dontCheck super.bytes;
 
+      hashable = doJailbreak (dontCheck (self.callCabal2nix "hashable" (nix-thunk.thunkSource ./deps/hashable) {}));
+      servant-reflex = doJailbreak (dontCheck (self.callCabal2nix "servant-reflex" (nix-thunk.thunkSource ./deps/servant-reflex) {}));
+      attoparsec = doJailbreak (dontCheck (self.callCabal2nix "attoparsec" (nix-thunk.thunkSource ./deps/attoparsec) {}));
+
       formattable = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "formattable";
         ver = "0.1.1";
@@ -64,18 +68,17 @@ project ./. ({ pkgs, ... }: {
         sha256 = "1cyryczzvqpf7ng3rjljb4kkjif0phccc65a9cp4fpyr822xns3q";
       } {});
 
-      # deriving-compat = doJailbreak (dontCheck (self.callHackageDirect {
-      #   pkg = "deriving-compat";
-      #   ver = "0.6.1";
-      #   sha256 = "165bk1sjg2sv92k812gfrlbrym42bk4l3gfcq1n0lb4rf1lg142r";
-      # } {}));
+      invariant = dontCheck (self.callHackageDirect {
+        pkg = "invariant";
+        ver = "0.6";
+        sha256 = "0r5qg9xqqss6q6qaz6n2bw8a03x94v7jv8rv4hbxpr748g0zakab";
+      } {});
 
-      # Comment out to see if the obelisk bump makes this unnecessary
-      # jsaddle-dom = overrideCabal super.jsaddle-dom (drv: {
-      #   preConfigure = (drv.preConfigure or "") + ''
-      #     sed -i 's/unsafeEventNameAsync (toJSString "readystatechange")/unsafeEventName (toJSString "readystatechange")/' src/JSDOM/Generated/XMLHttpRequest.hs
-      #   '';
-      # });
+      text-short = dontCheck (self.callHackageDirect {
+        pkg = "text-short";
+        ver = "0.1.5";
+        sha256 = "0fyyp9r1qsk16kcdbqm3r4yk5nm22sd4vgzg76cyszbj0cypfvaj";
+      } {});
 
       network = dontCheck super.network;
 
@@ -92,12 +95,6 @@ project ./. ({ pkgs, ... }: {
         sha256 = "0ddr9ksqkl9ncvih54yzr3p6rs08r5wk0yf7aj3ijlk30dg7sdwf";
       } {}));
       reflex-dom-core = dontCheck super.reflex-dom-core; #webdriver fails to build
-
-      servant-reflex = doJailbreak (dontCheck (self.callHackageDirect {
-        pkg = "servant-reflex";
-        ver = "0.3.5";
-        sha256 = "1cj5b7hl4jhsqxfg8vdw50z8zvfxkj42f41hmyx217w6bv3s3fdb";
-      } {}));
 
       swagger2 = dontCheck (self.callCabal2nix "swagger2" (pkgs.fetchFromGitHub {
         owner = "mightybyte";

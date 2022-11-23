@@ -63,8 +63,7 @@ import Frontend.Page.Common
 requestKeyWidget
     :: ( MonadApp r t m
        , MonadJSM (Performable m)
-       , HasJSContext (Performable m)
-       , Prerender js t m
+       , Prerender t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        )
@@ -117,7 +116,7 @@ requestKeyResultPage
     :: ( MonadApp r t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
-       , Prerender js t m
+       , Prerender t m
        )
     => NetId
     -> ChainId

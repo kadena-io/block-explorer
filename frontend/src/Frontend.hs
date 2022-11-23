@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -70,14 +71,15 @@ frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = appHead
   , _frontend_body = do
-      route <- getAppRoute
+      conf <- getConfigs
+      let (Just route) = runConfigsT conf getAppRoute
       ndbs <- getJsonCfg "frontend/data-backends"
       mainDispatch route (either (const defaultDataBackends) id ndbs)
       footer
   }
 
 mainDispatch
-  :: ObeliskWidget js t (R FrontendRoute) m
+  :: ObeliskWidget t (R FrontendRoute) m
   => Text
   -> DataBackends
   -> App (R FrontendRoute) t m ()
@@ -94,7 +96,7 @@ mainDispatch route ndbs = do
       networkDispatch route ndbs (NetId_Custom host)
 
 networkDispatch
-  :: (ObeliskWidget js t (R FrontendRoute) m)
+  :: (ObeliskWidget t (R FrontendRoute) m)
   => Text
   -> DataBackends
   -> NetId
@@ -120,11 +122,12 @@ networkDispatch route ndbs netId = prerender_ blank $ do
         NetRoute_TxDetail -> txDetailWidget netId
         NetRoute_TxSearch -> transactionSearch
         NetRoute_EventSearch -> eventSearch
+        NetRoute_ModuleSearch -> el "p" $ text "Module search page under construction"
 
 chainRouteHandler
-  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
+  :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      Prerender t m
      )
   => ServerInfo
   -> NetId
@@ -140,7 +143,7 @@ footer
 footer = do
     divClass "ui inverted vertical footer segment" $ do
       divClass "ui center aligned container" $ do
-        elAttr "img" ("src" =: static @"kadena-k-logo.png" <>
+        elAttr "img" ("src" =: $(static "kadena-k-logo.png") <>
                     "class" =: "ui centered mini image" <>
                     "alt" =: "Kadena" ) blank
         divClass "ui horizontal inverted small divided link list" $ do
@@ -178,7 +181,7 @@ getJsonCfg p = do
 appHead :: (DomBuilder t m, HasConfigs m) => m ()
 appHead = do
     el "title" $ text "Kadena Block Explorer"
-    elAttr "link" ("rel" =: "icon" <> "type" =: "image/png" <> "href" =: static @"img/favicon/favicon-96x96.png") blank
+    elAttr "link" ("rel" =: "icon" <> "type" =: "image/png" <> "href" =: $(static "img/favicon/favicon-96x96.png")) blank
     meta ("name" =: "description" <> "content" =: "Block Explorer is an analytics tool for the Kadena platform which visualizes the mining, propagation and braiding of blocks across multiple Kadena chains in real time.")
     meta ("name" =: "keywords" <> "content" =: "kadena, block explorer, mining, propagation, smart contracts, blockchain, chainweb")
     mTrackId <- getTextCfg "frontend/tracking-id"
@@ -187,11 +190,11 @@ appHead = do
       Just "no-tracking" -> blank
       Just tid           -> googleAnalyticsTracker tid
 
-    css (static @"semantic.min.css")
-    css (static @"css/custom.css")
+    css $(static "semantic.min.css")
+    css $(static "css/custom.css")
     --jsScript "https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"
-    jsScript (static @"jquery-3.1.1.min.js")
-    jsScript (static @"semantic.min.js")
+    jsScript $(static "jquery-3.1.1.min.js")
+    jsScript $(static "semantic.min.js")
   where
     meta attrs = elAttr "meta" attrs blank
 
@@ -229,7 +232,7 @@ statistic label val = do
     divClass "label" $ text label
 
 initBlockTable
-  :: (MonadAppIO r t m, Prerender js t m)
+  :: (MonadAppIO r t m, Prerender t m)
   => BlockHeight
   -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Maybe (Dynamic t RecentTxs))
 initBlockTable height = do
@@ -289,7 +292,7 @@ initBlockTable height = do
     t0 = UTCTime (ModifiedJulianDay 0) 0
 
 initRecents
-  :: (MonadAppIO r t m, Prerender js t m)
+  :: (MonadAppIO r t m, Prerender t m)
   => App r t m (Maybe (Dynamic t RecentTxs))
 initRecents = do
     (AppState n si mdbh _) <- ask
@@ -360,7 +363,7 @@ mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
 
 mainPageWidget
-  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
+  :: forall js r t m. (MonadAppIO r t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId
@@ -456,7 +459,7 @@ mainPageWidget netId (Just height) = do
 --               in x : mkGrid n rest
 
 searchPageWidget
-  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
+  :: forall js r t m. (MonadAppIO r t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId
@@ -484,8 +487,7 @@ chainDifficulty cid bt =
 
 
 rowsWidget
-  :: (MonadAppIO r t m, Prerender js t m,
-      HasJSContext (Performable m),
+  :: (MonadAppIO r t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> AllGraphs
@@ -500,8 +502,7 @@ rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
   return hoverChanges
 
 blockHeightRow
-  :: (MonadAppIO r t m, Prerender js t m,
-      HasJSContext (Performable m),
+  :: (MonadAppIO r t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> AllGraphs
@@ -524,8 +525,7 @@ blockHeightRow ti gis hoveredBlock maxNumChains height headers = do
     return $ (height,) <$$> leftmost es
 
 blockWidget0
-  :: (MonadAppIO r t m, Prerender js t m,
-      HasJSContext (Performable m),
+  :: (MonadAppIO r t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => Dynamic t TickInfo
   -> AllGraphs

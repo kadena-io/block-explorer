@@ -98,7 +98,7 @@ transactionsLink
   :: ( MonadApp r t m
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
-     , Prerender js t m
+     , Prerender t m
      )
   => NetId
   -> ChainId
@@ -116,7 +116,7 @@ renderMetaData
     :: ( MonadApp r t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
-       , Prerender js t m
+       , Prerender t m
        )
     => NetId
     -> ChainId
@@ -172,7 +172,7 @@ renderPactExec
     :: MonadApp r t m
     => PactExec
     -> m ()
-renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
+renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb peNested) =
     detailsSection $ do
       tfield "Step Count" $ text $ tshow stepCount
       voidMaybe (tfield "Yield" . renderYield) y

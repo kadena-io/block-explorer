@@ -46,7 +46,6 @@ type MonadAppIO r t m =
   , MonadIO m
   , MonadIO (Performable m)
   , MonadJSM (Performable m)
-  , HasJSContext (Performable m)
   )
 
 type App r t m a = RoutedT t r m a
@@ -54,7 +53,7 @@ type App r t m a = RoutedT t r m a
 --    RoutedT t r (ReaderT (AppState t) (EventWriterT t AppTriggers m)) a
 
 runApp
---  :: (DomBuilder t m, Routed t r m, MonadHold t m, MonadFix m, Prerender js t m, PostBuild t m, MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
+--  :: (DomBuilder t m, Routed t r m, MonadHold t m, MonadFix m, Prerender t m, PostBuild t m, MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m)
   :: (DomBuilder t m, Routed t r m, MonadFix m)
   => Text
   -> DataBackends

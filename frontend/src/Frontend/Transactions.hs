@@ -44,9 +44,9 @@ import           Frontend.Page.Block
 recentTransactions
   :: (SetRoute t (R FrontendRoute) m,
       RouteToUrl (R FrontendRoute) m, MonadReader (AppState t1) m,
-      HasJSContext (Performable m), MonadJSM (Performable m),
+       MonadJSM (Performable m),
       DomBuilder t m, PerformEvent t m, TriggerEvent t m, PostBuild t m,
-      Prerender js t m,
+      Prerender t m,
       MonadHold t m)
   => Int
   -> RecentTxs
@@ -73,9 +73,8 @@ itemsPerPage = 20
 
 transactionSearch
     :: ( MonadApp r t m
-       , Prerender js t m
+       , Prerender t m
        , MonadJSM (Performable m)
-       , HasJSContext (Performable m)
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        )
@@ -132,11 +131,83 @@ mkTxSearchRoute netId str page = mkSearchRoute' netId (NetRoute_TxSearch :/ (qPa
   where
     p = maybe mempty ((pageParam =:) . Just . tshow) page
 
+-- WIP
+moduleSearch
+    :: ( MonadApp r t m
+       , Prerender t m
+       , MonadJSM (Performable m)
+       , RouteToUrl (R FrontendRoute) m
+       , SetRoute t (R FrontendRoute) m
+       )
+    => App (Map Text (Maybe Text)) t m ()
+moduleSearch = do
+-- TODO
+--      async function go () {
+--
+--        document.getElementById("minfo").style.display="none";
+--        document.getElementById("result").style.display="block";
+--        const server = document.getElementById('server').value;
+--        const module = document.getElementById('module').value;
+--        const chain = document.getElementById('chain').value;
+--        const info = await getVersion(server);
+--        const host = `https://${server}/chainweb/0.0/${info.nv}/chain/${chain}/pact`;
+--
+--        document.getElementById("module-field").className = "field"
+--        document.getElementById("kadena-form").className = "ui form"
+--        localStorage.setItem("kadena-module-server", document.getElementById('server').value);
+--        localStorage.setItem("kadena-module", document.getElementById('module').value);
+--        localStorage.setItem("kadena-chain", document.getElementById('chain').value);
+--        await getCode(server,host,module,chain);
+--        console.log("done");
+--        if (urlParam("line")) {
+--          var l = parseInt(urlParam("line"));
+--          l = l > 0 ? l - 1 : 0;
+--          await editor.scrollToLine(l,false,true,null);
+--          editor.getSession().selection.moveCursorTo(l,0,false);
+--        }
+--
+--      }
+
+    (AppState n _ mnc _) <- ask
+    case mnc of
+      Nothing -> text "Event search feature not available for this network"
+      Just nc -> do
+
+        pmap <- askRoute
+        pb <- getPostBuild
+        let page = do
+              pm <- pmap
+              pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
+            needle = do
+              pm <- pmap
+              pure $ fromMaybe "" $ join (M.lookup qParam pm)
+            newSearch = leftmost [pb, () <$ updated pmap]
+        res <- searchEvents nc
+            (constDyn $ QParamSome $ Limit itemsPerPage)
+            (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
+            (QParamSome <$> needle)
+            (constDyn QNone)
+            (constDyn QNone)
+            newSearch
+        divClass "ui pagination menu" $ do
+          let setSearchRoute f e = setRoute $
+                tag (current $ mkEventSearchRoute n <$> needle <*> fmap (Just . f) page) e
+              prevAttrs p = if p == 1
+                              then "class" =: "disabled item"
+                              else "class" =: "item"
+          (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
+          setSearchRoute pred (domEvent Click p)
+          divClass "disabled item" $ display page
+          (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
+          setSearchRoute succ (domEvent Click next)
+
+        let f = either text (evTable n)
+        void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
+
 eventSearch
     :: ( MonadApp r t m
-       , Prerender js t m
+       , Prerender t m
        , MonadJSM (Performable m)
-       , HasJSContext (Performable m)
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        )
@@ -188,7 +259,7 @@ uiPagination = do
     divClass "item" blank
 
 txTable
-  :: (DomBuilder t m, Prerender js t m,
+  :: (DomBuilder t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => NetId
   -> Text
@@ -244,7 +315,7 @@ txTable net hdr txs = do
     openns _ = False
 
 evTable
-  :: (DomBuilder t m, Prerender js t m,
+  :: (DomBuilder t m, Prerender t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => NetId
   -> [EventDetail]
@@ -294,7 +365,7 @@ senderWidget tx = text $
 txDetailLink
   :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilder t m,
-      Prerender js t m
+      Prerender t m
      )
   => NetId
   -> Text

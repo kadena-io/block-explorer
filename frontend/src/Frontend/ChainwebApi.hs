@@ -97,7 +97,7 @@ payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl (p2pBaseUrl h) chainI
 
 getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
-      HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
+      MonadJSM (Performable m), MonadHold t m)
   => NetConfig
   -> m (Dynamic t (Maybe ServerInfo))
 getServerInfo nc = do
@@ -116,7 +116,7 @@ requestKeyXhr ch chainId requestKey = XhrRequest "POST" url $ def
     body = BL.toStrict $ encode $ object [ "requestKeys" .= [requestKey] ]
 
 getInfo
-  :: forall t m. (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
+  :: forall t m. (TriggerEvent t m, PerformEvent t m, MonadJSM (Performable m))
   => Event t Host
   -> m (Event t (Maybe ServerInfo))
 getInfo host = do
@@ -125,7 +125,7 @@ getInfo host = do
   return (decodeXhrResponse . snd <$> resp)
 
 getCut
-  :: (TriggerEvent t m, PerformEvent t m, HasJSContext (Performable m), MonadJSM (Performable m))
+  :: (TriggerEvent t m, PerformEvent t m, MonadJSM (Performable m))
   => Event t ChainwebHost
   -> m (Event t (Maybe Cut))
 getCut host = do
@@ -136,7 +136,7 @@ getItems :: Value -> [Value]
 getItems val = val ^.. key "items" . values
 
 getBlockTable
-  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  :: (MonadJSM (Performable m),  PerformEvent t m, TriggerEvent t m, PostBuild t m)
   => ChainwebHost
   -> CServerInfo
   -> m (Event t BlockTable)
@@ -146,7 +146,7 @@ getBlockTable h csi = do
   return (foldl' (\bt val -> combineBlockTables bt val) mempty <$> (fmap decodeXhrResponse <$> resp))
 
 getBlockHeader
-  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  :: (MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
   => ChainwebHost
   -> ChainId
   -> Text
@@ -163,7 +163,7 @@ getBlockHeader h c blockHash = do
   return (hush <$> eRes)
 
 getBlockHeaderByHeight
-  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  :: (MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
   => ChainwebHost
   -> ChainId
   -> BlockHeight
@@ -196,7 +196,7 @@ decodeResults [bh, bhBin] = do
 decodeResults _ = Left "Invalid number of results"
 
 getBlockPayload
-  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  :: (MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
   => ChainwebHost
   -> ChainId
   -> Hash
@@ -210,7 +210,7 @@ getBlockPayload h c payloadHash = do
             (def { _xhrRequestConfig_headers = "accept" =: "application/json" })
 
 getBlockPayload2
-  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
+  :: (MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m)
   => ChainwebHost
   -> Event t BlockHeaderTx
   -> m (Event t (Either String (BlockHeaderTx, BlockPayloadWithOutputs)))
@@ -228,7 +228,7 @@ getBlockPayload2 ch trigger = do
         ph = _blockHeader_payloadHash $ _blockHeaderTx_header bhtx
 
 getBlockPayloadWithOutputs
-  :: (MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
+  :: (MonadJSM (Performable m), PerformEvent t m, TriggerEvent t m, PostBuild t m)
   => ChainwebHost
   -> ChainId
   -> Hash
@@ -406,7 +406,7 @@ mkDataUrl h = BaseFullUrl scheme (hostAddress h) (hostPort h) "/"
 
 getRecentTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
-        HasJSContext (Performable m), MonadJSM (Performable m))
+        MonadJSM (Performable m))
     => NetConfig
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
@@ -423,7 +423,7 @@ getRecentTxs nc evt = do
 
 searchTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
-        HasJSContext (Performable m), MonadJSM (Performable m))
+        MonadJSM (Performable m))
     => NetConfig
     -> Dynamic t (QParam Limit)
     -> Dynamic t (QParam Offset)
@@ -444,7 +444,7 @@ searchTxs nc lim off needle evt = do
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
-        HasJSContext (Performable m), MonadJSM (Performable m))
+        MonadJSM (Performable m))
     => NetConfig
     -> Dynamic t (QParam Limit)
     -> Dynamic t (QParam Offset)
@@ -467,7 +467,7 @@ searchEvents nc lim off search param name evt = do
 
 getTxDetails
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
-        HasJSContext (Performable m), MonadJSM (Performable m))
+        MonadJSM (Performable m))
     => NetConfig
     -> Dynamic t (QParam RequestKey) -- req key
     -> Event t ()
@@ -486,7 +486,7 @@ getTxDetails nc rk evt = do
 
 getChainwebStats
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
-        HasJSContext (Performable m), MonadJSM (Performable m))
+        MonadJSM (Performable m))
     => NetConfig
     -> Event t ()
     -> m (Event t (Either Text ChainwebDataStats))
