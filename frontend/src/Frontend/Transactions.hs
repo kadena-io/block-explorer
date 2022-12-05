@@ -81,10 +81,10 @@ transactionSearch
        )
     => App (Map Text (Maybe Text)) t m ()
 transactionSearch = do
-    (AppState n _ mdbh _) <- ask
-    case mdbh of
+    (AppState n _ mnc _) <- ask
+    case mnc of
       Nothing -> text "Transaction search feature not available for this network"
-      Just dbh -> do
+      Just nc -> do
         pmap <- askRoute
         pb <- getPostBuild
         let page = do
@@ -95,9 +95,10 @@ transactionSearch = do
               pure $ fromMaybe "" $ join (M.lookup qParam pm)
             newSearch = leftmost [pb, () <$ updated pmap]
 
-        res <- searchTxs dbh (constDyn $ QParamSome $ Limit itemsPerPage)
-                             (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
-                             (QParamSome <$> needle) newSearch
+        res <- searchTxs nc
+                 (constDyn $ QParamSome $ Limit itemsPerPage)
+                 (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
+                 (QParamSome <$> needle) newSearch
 
         divClass "ui pagination menu" $ do
           let setSearchRoute f e = setRoute $
@@ -135,10 +136,10 @@ eventSearch
        )
     => App (Map Text (Maybe Text)) t m ()
 eventSearch = do
-    (AppState n _ mdbh _) <- ask
-    case mdbh of
+    (AppState n _ mnc _) <- ask
+    case mnc of
       Nothing -> text "Event search feature not available for this network"
-      Just dbh -> do
+      Just nc -> do
         pmap <- askRoute
         pb <- getPostBuild
         let page = do
@@ -148,10 +149,12 @@ eventSearch = do
               pm <- pmap
               pure $ fromMaybe "" $ join (M.lookup qParam pm)
             newSearch = leftmost [pb, () <$ updated pmap]
-        res <- searchEvents dbh
+        res <- searchEvents nc
             (constDyn $ QParamSome $ Limit itemsPerPage)
             (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
             (QParamSome <$> needle)
+            (constDyn QNone) 
+            (constDyn QNone)
             (constDyn QNone)
             (constDyn QNone)
             newSearch

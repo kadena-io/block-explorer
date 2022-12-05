@@ -48,6 +48,12 @@ project ./. ({ pkgs, ... }: {
       network = dontCheck super.network;
 
       pact = dontCheck super.pact;
+      pact-time = haskellLib.dontCheck (self.callHackageDirect {
+        pkg = "pact-time";
+        ver = "0.2.0.0";
+        sha256 = "1cfn74j6dr4279bil9k0n1wff074sdlz6g1haqyyy38wm5mdd7mr";
+      } {});
+
       perfect-vector-shuffle = doJailbreak (dontCheck (self.callHackageDirect {
         pkg = "perfect-vector-shuffle";
         ver = "0.1.1";
@@ -72,6 +78,12 @@ project ./. ({ pkgs, ... }: {
         pkg = "typed-process";
         ver = "0.2.6.0";
         sha256 = "17m2n9ffh88nj32xc00d48phaxav92dxisprc42pipgigq7fzs5s";
+      } {});
+
+      unordered-containers = dontCheck (self.callHackageDirect {
+        pkg = "unordered-containers";
+        ver = "0.2.15.0";
+        sha256 = "101fjg7jsa0mw57clpjwc2vgrdkrnn0vmf4xgagja21ynwwbl2b5";
       } {});
 
   };

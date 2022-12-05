@@ -152,7 +152,7 @@ setStartTime t gs = gs { _gs_startTime = t }
 data AppState t = AppState
     { _as_network    :: NetId
     , _as_serverInfo :: ServerInfo
-    , _as_dataHost   :: Maybe Host
+    , _as_netConfig :: Maybe NetConfig
     , _as_graphAdjacencies :: SM.Map Int Int
     } deriving Generic
 

@@ -22,7 +22,6 @@ import           Reflex.Dom
 ------------------------------------------------------------------------------
 import           Common.Route
 import           Common.Types
-import           Common.Utils
 ------------------------------------------------------------------------------
 
 nav
@@ -71,9 +70,9 @@ learnMore = mdo
     text "Learn More"
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      linkItemNewTab "Kadena Docs" "https://kadena-io.github.io/kadena-docs/"
-      linkItemNewTab "Pact Smart Contract Tutorials" "https://pactlang.org"
-      linkItemNewTab "Kadena Whitepapers" "https://kadena.io/en/whitepapers/"
+      linkItemNewTab "Kadena Docs" "https://docs.kadena.io"
+      linkItemNewTab "Pact Smart Contract Tutorials" "https://docs.kadena.io/learn-pact/intro"
+      linkItemNewTab "Kadena Whitepapers" "https://docs.kadena.io/basics/whitepapers/overview"
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
     , False <$ domEvent Mouseleave e
@@ -99,7 +98,7 @@ linkItemNewTab nm url = do
 networkName :: NetId -> Text
 networkName NetId_Mainnet = "Mainnet"
 networkName NetId_Testnet = "Testnet"
-networkName (NetId_Custom h) = humanize h
+networkName (NetId_Custom _) = "Custom Network"
 
 networkWidget
   :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m,

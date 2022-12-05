@@ -7,10 +7,11 @@
 module Common.Types where
 
 ------------------------------------------------------------------------------
-import           Control.Lens
+import           Control.Lens hiding ((.=))
 import           Control.Monad
 import           Data.Aeson
 import           Data.Readable
+import qualified Data.Map as M
 import           Data.Map (Map)
 import           Data.Set (Set)
 import qualified Data.Set as S
@@ -27,43 +28,96 @@ import           Common.Utils
 type Domain = Text
 
 data Host = Host
-  { hostAddress :: Text
-  , hostPort    :: Int
+  { hostScheme :: Text
+  , hostAddress :: Text
+  , hostPort :: Int
   } deriving (Eq,Ord,Show,Read,Generic)
 
-hostScheme :: Host -> Text
-hostScheme h = if hostPort h == 80 then "http://" else "https://"
-
 instance ToJSON Host where
-    toEncoding = genericToEncoding defaultOptions
-instance FromJSON Host
+    toJSON = String . hostToText
+instance FromJSON Host where
+    parseJSON = withText "Host" $ \t -> maybe (fail $ T.unpack t <> " is not a valid Host") pure (hostFromText t)
 
-instance Humanizable Host where
-  humanize (Host a p) = a <> ":" <> tshow p
+-- These instances are used for route serialization
+--instance Humanizable Host where
+--  humanize = hostToText
+--instance Readable Host where
+--  fromText = hostFromText
 
-instance Readable Host where
-  fromText t =
-      case T.span (/= ':') t of
-        ("", _) -> mzero
-        (a, rest) -> do
-          p <- fromText (T.drop 1 rest)
-          return $ Host a p
+hostFromText :: MonadPlus m => Text -> m Host
+hostFromText t =
+    case T.breakOn "://" t of
+      (_,"") -> mzero
+      (s,hp) -> do
+        case T.breakOn ":" (T.drop 3 hp) of
+          (a,"") -> case s of
+            "http" -> pure $ Host s a 80
+            "https" -> pure $ Host s a 443
+            _ -> mzero
+          (a, rest) -> do
+            p <- fromText (T.drop 1 rest)
+            return $ Host s a p
 
 hostToText :: Host -> Text
-hostToText h =
-    if hostPort h == 443
-      then hostAddress h
-      else hostAddress h <> ":" <> tshow (hostPort h)
+hostToText (Host scheme host port)
+  | scheme == "http" && port == 80 = scheme <> "://" <> host
+  | scheme == "https" && port == 443 = scheme <> "://" <> host
+  | otherwise = scheme <> "://" <> host <> ":" <> tshow port
+
+hostToRouteText :: Host -> Text
+hostToRouteText (Host scheme addr port) = T.intercalate "," [scheme, addr, tshow port]
+
+data NetConfig = NetConfig
+  { _netConfig_p2pHost :: Host
+  , _netConfig_serviceHost :: Host
+  , _netConfig_dataHost :: Maybe Host
+  } deriving (Eq,Ord,Show,Read)
+
+netConfigFromRouteText :: MonadPlus m => Text -> m NetConfig
+netConfigFromRouteText t =
+    case T.splitOn "," t of
+      [s1,a1,p1,s2,a2,p2,s3,a3,p3] -> NetConfig
+        <$> (Host s1 a1 <$> fromText p1)
+        <*> (Host s2 a2 <$> fromText p2)
+        <*> fmap Just (Host s3 a3 <$> fromText p3)
+      [s1,a1,p1,s2,a2,p2] -> NetConfig
+        <$> (Host s1 a1 <$> fromText p1)
+        <*> (Host s2 a2 <$> fromText p2)
+        <*> pure Nothing
+      _ -> mzero
+
+netConfigToRouteText :: NetConfig -> Text
+netConfigToRouteText (NetConfig p s d) =
+  T.intercalate "," [hostToRouteText p, hostToRouteText s, maybe "" hostToRouteText d]
+
+instance ToJSON NetConfig where
+    toJSON nc = object
+      [ "p2p" .= _netConfig_p2pHost nc
+      , "service" .= _netConfig_serviceHost nc
+      , "data" .= _netConfig_dataHost nc
+      ]
+instance FromJSON NetConfig where
+    parseJSON = withObject "NetConfig" $ \o -> NetConfig
+      <$> o .: "p2p"
+      <*> o .: "service"
+      <*> o .:? "data"
 
 newtype DataBackends = DataBackends
-  { dataBackendMap :: Map Text Host
+  { dataBackendMap :: Map Text NetConfig
   } deriving (Eq,Ord,Show,Read)
     deriving newtype (FromJSON, ToJSON)
+
+defaultDataBackends :: DataBackends
+defaultDataBackends = DataBackends $ M.fromList
+  [ ("mainnet01", netHost NetId_Mainnet)
+  , ("testnet04", netHost NetId_Testnet)
+  ]
+
 
 type ChainwebVersion = Text
 
 data ChainwebHost = ChainwebHost
-  { chHost    :: Host
+  { chNetConfig :: NetConfig
   , chVersion :: ChainwebVersion
   } deriving (Eq,Ord,Show,Read,Generic)
 
@@ -74,7 +128,7 @@ instance FromJSON ChainwebHost
 data NetId
    = NetId_Mainnet
    | NetId_Testnet
-   | NetId_Custom Host
+   | NetId_Custom NetConfig
    deriving (Eq,Ord)
 
 netIdPathSegment :: NetId -> Text
@@ -83,10 +137,15 @@ netIdPathSegment = \case
   NetId_Testnet -> "testnet"
   NetId_Custom _ -> "custom"
 
-netHost :: NetId -> Host
-netHost NetId_Mainnet    = Host "estats.chainweb.com" 443
-netHost NetId_Testnet    = Host "api.testnet.chainweb.com" 443
-netHost (NetId_Custom h) = h
+--getNetConfig :: NetId -> AppConfig -> NetConfig
+--getNetConfig NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h h
+--getNetConfig NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h h
+--getNetConfig (NetId_Custom nc) = nc
+
+netHost :: NetId -> NetConfig
+netHost NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h (Just h)
+netHost NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h Nothing
+netHost (NetId_Custom nc) = nc
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
 humanReadableTextPrism = prism' humanize fromText

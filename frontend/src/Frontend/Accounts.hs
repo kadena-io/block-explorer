@@ -248,6 +248,8 @@ accountChainWidget token account chain = do
           (constDyn QNone)
           (QParamSome <$> constDyn (EventParam $ token <> ".TRANSFER"))
           (QParamSome <$> constDyn (EventName account))
+          (constDyn QNone)
+          (constDyn QNone)
           pb
       --divClass "ui pagination menu" $ do
       --  let setSearchRoute f e = setRoute $

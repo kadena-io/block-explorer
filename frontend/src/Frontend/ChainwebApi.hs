@@ -61,57 +61,64 @@ import           Common.Types
 import           Common.Utils
 ------------------------------------------------------------------------------
 
-apiBaseUrl :: ChainwebHost -> Text
-apiBaseUrl (ChainwebHost h cver) =
-    hostScheme h <> hostToText h <> "/chainweb/0.0/" <> cver <> "/"
+p2pBaseUrl :: ChainwebHost -> Text
+p2pBaseUrl (ChainwebHost nc cver) =
+    hostToText (_netConfig_p2pHost nc) <> "/chainweb/0.0/" <> cver <> "/"
+
+serviceBaseUrl :: ChainwebHost -> Text
+serviceBaseUrl (ChainwebHost nc cver) =
+    hostToText (_netConfig_serviceHost nc) <> "/chainweb/0.0/" <> cver <> "/"
 
 cutUrl :: ChainwebHost -> Text
-cutUrl h = apiBaseUrl h <> "cut"
+cutUrl ch = p2pBaseUrl ch <> "cut"
 
-chainBaseUrl :: ChainwebHost -> ChainId -> Text
-chainBaseUrl h chainId = apiBaseUrl h <> "chain/" <> (tshow (unChainId chainId))
+chainBaseUrl :: Text -> ChainId -> Text
+chainBaseUrl base chainId = base <> "chain/" <> (tshow (unChainId chainId))
 
 chainHashesUrl :: ChainwebHost -> BlockHeight -> BlockHeight -> ChainId -> Text
-chainHashesUrl h minHeight maxHeight chainId = chainBaseUrl h chainId <>
+chainHashesUrl h minHeight maxHeight chainId = chainBaseUrl (p2pBaseUrl h) chainId <>
   "/hash?minheight=" <> tshow minHeight <> "&maxheight=" <> tshow maxHeight
 
 headersUrl :: ChainwebHost -> BlockHeight -> Int -> ChainId -> Text
-headersUrl h minHeight limit chainId = chainBaseUrl h chainId <>
+headersUrl h minHeight limit chainId = chainBaseUrl (p2pBaseUrl h) chainId <>
   "/header?minheight=" <> tshow minHeight <> "&limit=" <> tshow limit
 
 headerUrl :: ChainwebHost -> ChainId -> Text -> Text
-headerUrl h chainId blockHash = chainBaseUrl h chainId <> "/header/" <> blockHash
+headerUrl h chainId blockHash = chainBaseUrl (p2pBaseUrl h) chainId <> "/header/" <> blockHash
 
 headerUpdatesUrl :: ChainwebHost -> Text
-headerUpdatesUrl h = apiBaseUrl h <> "header/updates"
+headerUpdatesUrl h = serviceBaseUrl h <> "header/updates"
 
 payloadUrl :: ChainwebHost -> ChainId -> Hash -> Text
-payloadUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash
+payloadUrl h chainId payloadHash = chainBaseUrl (p2pBaseUrl h) chainId <> "/payload/" <> hashB64U payloadHash
 
 pollUrl :: ChainwebHost -> ChainId -> Text
-pollUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/poll"
+pollUrl h chainId = chainBaseUrl (serviceBaseUrl h) chainId <> "/pact/api/v1/poll"
 
 localUrl :: ChainwebHost -> ChainId -> Text
-localUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/local"
+localUrl h chainId = chainBaseUrl (serviceBaseUrl h) chainId <> "/pact/api/v1/local"
+
+-- localUrl :: ChainwebHost -> ChainId -> Text
+-- localUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/local"
 
 payloadWithOutputsUrl :: ChainwebHost -> ChainId -> Hash -> Text
-payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl h chainId <> "/payload/" <> hashB64U payloadHash <> "/outputs"
+payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl (p2pBaseUrl h) chainId <> "/payload/" <> hashB64U payloadHash <> "/outputs"
 
 getServerInfo
   :: (PostBuild t m, TriggerEvent t m, PerformEvent t m,
       HasJSContext (Performable m), MonadJSM (Performable m), MonadHold t m)
-  => Host
+  => NetConfig
   -> m (Dynamic t (Maybe ServerInfo))
-getServerInfo h = do
+getServerInfo nc = do
   pb <- getPostBuild
-  esi <- getInfo (h <$ pb)
+  esi <- getInfo (_netConfig_serviceHost nc <$ pb)
   holdDyn Nothing esi
 
 detailsXhr :: ChainwebHost -> ChainwebMeta -> Text -> Text -> Either String (XhrRequest ByteString)
 detailsXhr host meta token account = do
     chainId <- note "Could not parse chain ID" $ chainIdFromText $ _chainwebMeta_chainId meta
     let url = localUrl host chainId
-    tx <- mkTransaction pc []
+    let tx = mkTransaction pc []
     pure $ XhrRequest "POST" url $ def
       { _xhrRequestConfig_headers = "content-type" =: aj <> "accept" =: aj
       , _xhrRequestConfig_sendData = BL.toStrict $ encode $ toJSON tx
@@ -119,16 +126,16 @@ detailsXhr host meta token account = do
   where
     aj = "application/json"
     code = T.pack $ printf "(%s.details \"%s\")" token account
-    pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local"
+    pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local" Nothing
 
 requestKeyXhr :: ChainwebHost -> ChainId -> Text -> XhrRequest ByteString
-requestKeyXhr host chainId requestKey = XhrRequest "POST" url $ def
+requestKeyXhr ch chainId requestKey = XhrRequest "POST" url $ def
     { _xhrRequestConfig_headers = "content-type" =: aj <> "accept" =: aj
     , _xhrRequestConfig_sendData = body
     }
   where
     aj = "application/json"
-    url = pollUrl host chainId
+    url = pollUrl ch chainId
     body = BL.toStrict $ encode $ object [ "requestKeys" .= [requestKey] ]
 
 getInfo
@@ -136,7 +143,7 @@ getInfo
   => Event t Host
   -> m (Event t (Maybe ServerInfo))
 getInfo host = do
-  let mkUrl h = hostScheme h <> hostToText h <> "/info"
+  let mkUrl h = hostToText h <> "/info"
   resp <- performRequestsAsync $ fmap (\h -> (h, XhrRequest "GET" (mkUrl h) def)) host
   return (decodeXhrResponse . snd <$> resp)
 
@@ -300,7 +307,7 @@ mkAncestorHeaderRequest he h c cutHash minHeight maxHeight = XhrRequest "POST" u
                                             "content-type" =: "application/json"
               , _xhrRequestConfig_sendData = body }
     body = BL.toStrict $ encode $ object [ "upper" .= [cutHash], "lower" .= ([] :: [Text]) ]
-    url = chainBaseUrl h c <> "/header/branch?minheight=" <> tshow minHeight <>
+    url = chainBaseUrl (p2pBaseUrl h) c <> "/header/branch?minheight=" <> tshow minHeight <>
           "&maxheight=" <> tshow maxHeight
 
 
@@ -414,90 +421,108 @@ r2e (ResponseFailure _ t _) = Left t
 r2e (RequestFailure _ t )   = Left t
 
 mkDataUrl :: Host -> BaseUrl
-mkDataUrl h = BaseFullUrl scheme (hostAddress h) p "/"
+mkDataUrl h = BaseFullUrl scheme (hostAddress h) (hostPort h) "/"
   where
-    p = hostPort h
-    scheme = if p == 443 then Https else Http
+    scheme = case hostScheme h of
+      "https" -> Https
+      _ -> Http
 
 getRecentTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
-    => Host
+    => NetConfig
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
-getRecentTxs h evt = do
-    let ((go :<|> _ :<|> _) :<|> _) = client chainwebDataApi
-                                 (Proxy :: Proxy m)
-                                 (Proxy :: Proxy ())
-                                 (constDyn $ mkDataUrl h)
-    txResp <- go evt
-    return $ r2e <$> txResp
+getRecentTxs nc evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((go :<|> _ :<|> _) :<|> _) = client chainwebDataApi
+                                     (Proxy :: Proxy m)
+                                     (Proxy :: Proxy ())
+                                     (constDyn $ mkDataUrl dh)
+        txResp <- go evt
+        return $ r2e <$> txResp
 
 searchTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
-    => Host
+    => NetConfig
     -> Dynamic t (QParam Limit)
     -> Dynamic t (QParam Offset)
     -> Dynamic t (QParam Text)
     -> Event t ()
     -> m (Event t (Either Text [TxSummary]))
-searchTxs h lim off needle evt = do
-    let ((_ :<|> go :<|> _ :<|> _ ) :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl h)
-    txResp <- go lim off needle evt
-    return $ r2e <$> txResp
+searchTxs nc lim off needle evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> go :<|> _ :<|> _ ) :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go lim off needle evt
+        return $ r2e <$> txResp
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
-    => Host
+    => NetConfig
     -> Dynamic t (QParam Limit)
     -> Dynamic t (QParam Offset)
     -> Dynamic t (QParam Text) -- search
     -> Dynamic t (QParam EventParam)
     -> Dynamic t (QParam EventName)
+    -> Dynamic t (QParam EventModuleName)
+    -> Dynamic t (QParam BlockHeight)
     -> Event t ()
     -> m (Event t (Either Text [EventDetail]))
-searchEvents h lim off search param name evt = do
-    let ((_ :<|> _ :<|> go :<|> _ ) :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl h)
-    txResp <- go lim off search param name evt
-    return $ r2e <$> txResp
+searchEvents nc lim off search param name moduleName minHeight evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> go  :<|> _ :<|> _ :<|> _) :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go lim off search param name moduleName minHeight evt
+        return $ r2e <$> txResp
 
-getTxDetail
+getTxDetails
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
-    => Host
+    => NetConfig
     -> Dynamic t (QParam RequestKey) -- req key
     -> Event t ()
-    -> m (Event t (Either Text TxDetail))
-getTxDetail h rk evt = do
-    let ((_ :<|> _ :<|> _ :<|> go ) :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl h)
-    txResp <- go rk evt
-    return $ r2e <$> txResp
+    -> m (Event t (Either Text [TxDetail]))
+getTxDetails nc rk evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> _ :<|> _ :<|> go :<|> _) :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go rk evt
+        return $ r2e <$> txResp
 
 getChainwebStats
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m))
-    => Host
+    => NetConfig
     -> Event t ()
     -> m (Event t (Either Text ChainwebDataStats))
-getChainwebStats h evt = do
-    let ((_ :<|> _ :<|> _ :<|> _ ) :<|> go :<|> _) =
-          client chainwebDataApi
-            (Proxy :: Proxy m)
-            (Proxy :: Proxy ())
-            (constDyn $ mkDataUrl h)
-    txResp <- go evt
-    return $ r2e <$> txResp
+getChainwebStats nc evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> _ :<|> _ ) :<|> go :<|> _) =
+              client chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+        txResp <- go evt
+        return $ r2e <$> txResp
