@@ -147,7 +147,11 @@ transferWidget account token chainid fromheight = do
                   blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
                 let showAccount = listToMaybe [a | a <- [fromAccount, toAccount], a /= account, not $ T.null a]
                 elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> foldMap (\s -> "data-tooltip" =: s) showAccount) $
-                  maybe (pure ()) (\s -> accountSearchLink n token s s) showAccount
+                  case showAccount of
+                    Nothing -> pure ()
+                    Just s -> do
+                      text $ if s == fromAccount then "From: " else "To: "
+                      accountSearchLink n token s s
                 let isNegAmt = fromAccount == account
                 elAttr "td" ("data-label" =: "Amount" <> "style" =: if isNegAmt then "color: red" else "color: green") $ do
                   let printedAmount amt = formatScientific Fixed Nothing amt
