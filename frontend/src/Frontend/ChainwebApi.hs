@@ -24,6 +24,7 @@ import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Maybe (catMaybes)
 import           Data.Proxy
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
@@ -68,6 +69,10 @@ p2pBaseUrl (ChainwebHost nc cver) =
 serviceBaseUrl :: ChainwebHost -> Text
 serviceBaseUrl (ChainwebHost nc cver) =
     hostToText (_netConfig_serviceHost nc) <> "/chainweb/0.0/" <> cver <> "/"
+
+dataBaseUrl :: ChainwebHost -> Text
+dataBaseUrl (ChainwebHost nc _) =
+    maybe "https://estats.chainweb.com" hostToText (_netConfig_dataHost nc)
 
 cutUrl :: ChainwebHost -> Text
 cutUrl ch = p2pBaseUrl ch <> "cut"
@@ -127,6 +132,18 @@ detailsXhr host meta token account = do
     aj = "application/json"
     code = T.pack $ printf "(%s.details \"%s\")" token account
     pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local" Nothing
+
+transferXhr :: ChainwebHost -> Text -> Text -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Int -> Either String (XhrRequest ByteString)
+transferXhr ch account token chainid fromheight limit offset = do
+  let url = dataBaseUrl ch <> "/txs/account/" <> account <> if T.null rest then "" else "?" <> rest
+      rest = T.intercalate "&" $ ("token=" <> token) : catMaybes params
+      params =
+        [T.append "chain=" . T.pack . show <$> chainid
+	, T.append "fromheight=" . T.pack . show <$> fromheight
+	, T.append "limit=" . T.pack . show <$> limit
+	, T.append "offset=" . T.pack . show <$> offset
+	]
+  pure $ XhrRequest "GET" url $ def { _xhrRequestConfig_sendData = "" } -- TODO: Why can sendData  be null here?
 
 requestKeyXhr :: ChainwebHost -> ChainId -> Text -> XhrRequest ByteString
 requestKeyXhr ch chainId requestKey = XhrRequest "POST" url $ def

@@ -64,6 +64,7 @@ import           Frontend.Nav
 import           Frontend.Page.Block
 import           Frontend.Page.ReqKey
 import           Frontend.Page.TxDetail
+import           Frontend.Transfer
 import           Frontend.Transactions
 ------------------------------------------------------------------------------
 
@@ -122,6 +123,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
         NetRoute_TxSearch -> transactionSearch
         NetRoute_EventSearch -> eventSearch
         NetRoute_AccountSearch -> accountSearchPage
+        NetRoute_TransferSearch -> transferSearchPage
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -316,13 +318,15 @@ initRecents = do
           ]
         return $ Just recent
 
-data SearchType = RequestKeySearch | TxSearch | EventSearch
+data SearchType = RequestKeySearch | TxSearch | EventSearch | AccountSearch | TransferSearch
   deriving (Eq,Ord,Show,Read,Enum)
 
 searchTypeText :: SearchType -> Text
 searchTypeText RequestKeySearch = "Request Key"
 searchTypeText TxSearch = "Code"
 searchTypeText EventSearch = "Events"
+searchTypeText AccountSearch = "Account"
+searchTypeText TransferSearch = "Transfer"
 
 searchWidget
   :: (PostBuild t m, PerformEvent t m, DomBuilder t m,
@@ -335,17 +339,21 @@ searchWidget netId = do
   divClass "ui fluid action input" $ do
     st <- divClass "ui compact menu search__dropdown" $ do
       divClass "ui simple dropdown item" $ mdo
-        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc, evc]
+        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc, evc, acc,tfc]
         dynText $ searchTypeText <$> curSearchType
         elClass "i" "dropdown icon" blank
-        (rk, txc, evc) <- divClass "menu" $ do
+        (rk, txc, evc, acc, tfc) <- divClass "menu" $ do
           (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
           (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
           (e,_) <- elAttr' "div" ("class" =: "item") $ text "Events"
+	  (a,_) <- elAttr' "div" ("class" =: "item") $ text "Account"
+	  (tf,_) <- elAttr' "div" ("class" =: "item") $ text "Transfer"
           return
             ( RequestKeySearch <$ domEvent Click r
             , TxSearch <$ domEvent Click t
             , EventSearch <$ domEvent Click e
+	    , AccountSearch <$ domEvent Click a
+	    , TransferSearch <$ domEvent Click tf
             )
         return curSearchType
     ti <- inputElement $ def
@@ -360,6 +368,8 @@ mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
 mkSearchRoute netId str RequestKeySearch = mkReqKeySearchRoute netId str
 mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
+mkSearchRoute netId str AccountSearch = mkAccountSearchRoute netId "coin" str
+mkSearchRoute netId str TransferSearch = mkTransferSearchRoute netId str "coin"
 
 mainPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,

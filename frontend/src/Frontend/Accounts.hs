@@ -86,6 +86,7 @@ accountWidget
      , DomBuilder t m
      , MonadJSM (Performable m)
      , HasJSContext (Performable m)
+     , Prerender js t m
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
@@ -143,6 +144,7 @@ accountInfo
      , DomBuilder t m
      , MonadJSM (Performable m)
      , HasJSContext (Performable m)
+     , Prerender js t m
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
@@ -162,6 +164,8 @@ accountInfo token account mInfos = do
             --balances = M.unionsWith (+) $ map (\(k,amt) -> M.singleton (encode k) (pactNumberToDecimal amt)) good
             --addValue chain (newCoins, newCount) (oldCoins, oldCount) = (oldCoins + newCoins, oldCount + newCount)
             balances = foldl' addTo mempty good
+        let linkText = "View most recent transfers associated to this account."
+        el "p" $ routeLink (mkNetRoute n (NetRoute_TransferSearch :/ [account,token])) (text linkText)
         el "p" $ do
           text $ "Got data from " <> tshow goodCount <> " chains"
           when (totalCount > goodCount) $
@@ -342,3 +346,19 @@ accountHistTable net evs = do
             text $ _evDetail_name ev
         elAttr "td" ("data-label" =: "Parameters") $ el "pre" $
             text $ T.intercalate "\n" (map pactValueJSON $ _evDetail_params ev)
+
+mkAccountSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
+mkAccountSearchRoute netId token account = mkNetRoute netId (NetRoute_AccountSearch :/ [token ,account])
+
+accountSearchLink
+  :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      DomBuilder t m,
+      Prerender js t m
+     )
+  => NetId
+  -> Text
+  -> Text
+  -> Text
+  -> m ()
+accountSearchLink netId token account linkText =
+  routeLink (mkAccountSearchRoute netId token account) $ text linkText

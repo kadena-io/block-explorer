@@ -38,6 +38,7 @@ library
     , reflex
     , reflex-dom
     , reflex-dom-core
+    , scientific
     , servant
     , servant-reflex
     , stm
@@ -63,6 +64,7 @@ library
     Frontend.Page.TxDetail
     Frontend.Page.Types
     Frontend.Storage
+    Frontend.Transfer
     Frontend.Transactions
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign
