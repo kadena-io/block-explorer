@@ -141,7 +141,7 @@ transferWidget account token chainid fromheight = do
                     toAccount = _acDetail_toAccount acc
                     amount = _acDetail_amount acc
                 elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
-                  txDetailLink n requestKey requestKey
+                  if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
                 when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain ID") $ text $ tshow cid
                 elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash) $
                   blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
