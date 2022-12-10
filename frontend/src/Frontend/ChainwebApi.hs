@@ -34,6 +34,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value, EventName)
+import           Reflex.Dom.Xhr (XhrResponseHeaders(..))
 import           Servant.API
 import           Servant.Reflex
 import           Text.Printf
@@ -133,8 +134,8 @@ detailsXhr host meta token account = do
     code = T.pack $ printf "(%s.details \"%s\")" token account
     pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local" Nothing
 
-transferXhr :: ChainwebHost -> Text -> Text -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Int -> Either String (XhrRequest ByteString)
-transferXhr ch account token chainid fromheight limit offset = do
+transferXhr :: ChainwebHost -> Text -> Text -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
+transferXhr ch account token chainid fromheight limit offset nextToken = do
   let url = dataBaseUrl ch <> "/txs/account/" <> account <> if T.null rest then "" else "?" <> rest
       rest = T.intercalate "&" $ ("token=" <> token) : catMaybes params
       params =
@@ -142,8 +143,11 @@ transferXhr ch account token chainid fromheight limit offset = do
 	, T.append "fromheight=" . T.pack . show <$> fromheight
 	, T.append "limit=" . T.pack . show <$> limit
 	, T.append "offset=" . T.pack . show <$> offset
+        , T.append "next=" <$> nextToken
 	]
-  pure $ XhrRequest "GET" url $ def { _xhrRequestConfig_sendData = "" } -- TODO: Why can sendData  be null here?
+  pure $ XhrRequest "GET" url $ def 
+    { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"
+    }
 
 requestKeyXhr :: ChainwebHost -> ChainId -> Text -> XhrRequest ByteString
 requestKeyXhr ch chainId requestKey = XhrRequest "POST" url $ def

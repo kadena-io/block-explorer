@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
 
 module Frontend.Transfer where
@@ -11,11 +12,13 @@ module Frontend.Transfer where
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Types as A
 import           Data.Foldable
+import           Data.Functor
 import           Data.Scientific
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson.Lens
+import           Data.CaseInsensitive
 import           Data.Decimal
 import qualified Data.HashMap.Strict as HM
 import           Data.Map (Map)
@@ -95,6 +98,7 @@ transferWidget
      , MonadJSM (Performable m)
      , HasJSContext (Performable m)
      , Prerender js t m
+     , Reflex t
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
@@ -107,56 +111,95 @@ transferWidget
 transferWidget account token chainid fromheight = do
   (AppState n si _ _) <- ask -- TODO: add chainweb-data host to appstate record
   let chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
-      mkXhr lim off = transferXhr chainwebHost account token chainid fromheight lim off
-  case mkXhr Nothing Nothing of
+      mkXhr lim off nextToken = transferXhr chainwebHost account token chainid fromheight lim off nextToken
+  case mkXhr Nothing Nothing Nothing of
     Left e -> el "div" $ text $ "Error constructing XHR: " <> T.pack e
-    Right xhr -> do
+    Right xhr -> mdo
       pb <- getPostBuild
       result <- performRequestAsync $ xhr <$ pb
-      maccs <- (\xhr -> xhr >>= _xhrResponse_responseText >>= getAccountDetail) <$$> holdDyn Nothing (Just <$> result)
-      networkView $ flip fmap maccs $ \case
-        Nothing -> inlineLoader "Loading..."
-        Just accs -> do
+      maccs <- (\xhr -> (xhr >>= _xhrResponse_responseText >>= getAccountDetail >>= pure . (,foldMap _xhrResponse_headers xhr))) <$$> holdDyn Nothing (Just <$> result)
+      e <- networkView $ flip fmap maccs $ \case
+        Nothing -> inlineLoader "Loading..." >> pure never
+        Just (accs,headers) -> do
           elAttr "h2" ("data-tooltip" =: account) $ text $ "Transfer Info"
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
               tfield "Account" $ accountSearchLink n token account account
               tfield "Token" $ text token
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) chainid
-          elClass "table" "ui celled table" $ do
+          elClass "table" "ui fixed table" $ do
             el "thead" $ el "tr" $ do
               el "th" $ text "Request Key"
               maybe (el "th" $ text "Chain ID") (const $ pure ()) chainid
               el "th" $ text "Block Height"
               el "th" $ text "From/To"
               el "th" $ text "Amount"
-            el "tbody" $ do
-              forM_ accs $ \acc -> el "tr" $ do
-                let hash = _acDetail_blockHash acc
-                    requestKey = _acDetail_requestKey acc
-                    cid = _acDetail_chainid acc
-                    height = _acDetail_height acc
-                    idx = _acDetail_idx acc
-                    fromAccount = _acDetail_fromAccount acc
-                    toAccount = _acDetail_toAccount acc
-                    amount = _acDetail_amount acc
-                elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
-                  if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
-                when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain ID") $ text $ tshow cid
-                elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash) $
-                  blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
-                let showAccount = listToMaybe [a | a <- [fromAccount, toAccount], a /= account, not $ T.null a]
-                elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> foldMap (\s -> "data-tooltip" =: s) showAccount) $
-                  case showAccount of
-                    Nothing -> pure ()
-                    Just s -> do
-                      text $ if s == fromAccount then "From: " else "To: "
-                      accountSearchLink n token s s
-                let isNegAmt = fromAccount == account
-                elAttr "td" ("data-label" =: "Amount" <> "style" =: if isNegAmt then "color: red" else "color: green") $ do
-                  let printedAmount amt = formatScientific Fixed Nothing amt
-                  text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
+            el "tbody" $ forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc headers
+          case M.lookup "Chainweb-Next" headers of
+            Nothing -> pure never
+            Just next -> mdo 
+              beenClicked <- holdDyn (button next) (pure never <$ click)
+              clickNow <- networkView beenClicked
+              click <- switchHold never clickNow
+              pure (next <$ click)
+      t <- updated <$> produceNewRowsOnToken mkXhr n token account chainid (leftmost [e,t])
       pure ()
+
+type TransferXHR = Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
+
+produceNewRowsOnToken 
+  :: (MonadApp r t m, MonadJSM (Performable m),
+  HasJSContext (Performable m), Prerender js t m,
+  RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+  MonadIO m) => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t (Event t Text) -> m (Dynamic t (Event t Text))
+produceNewRowsOnToken mkXhr n token account chainid e = do
+  nextToken <- switchHold never e        
+  result <- performRequestAsync $ fmap (\token -> either error id $ mkXhr Nothing Nothing (Just token)) nextToken
+  let parsed = (\xhr -> (_xhrResponse_responseText xhr >>= getAccountDetail >>= pure . (,_xhrResponse_headers xhr))) <$> result
+  widgetHold (pure never) $ parsed <&> \case
+    Nothing -> inlineLoader "Loading..." >> pure never
+    Just (accs,headers) -> do
+      elClass "table" "ui fixed table" $ el "tbody" $ forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc headers
+      case M.lookup "Chainweb-Next" headers of
+        Nothing -> pure never
+        Just next -> mdo
+          beenClicked <- holdDyn (button next) (pure never <$ click)
+          clickNow <- networkView beenClicked
+          click <- switchHold never clickNow
+          pure (next <$ click)
+
+drawRow 
+  :: Monad m 
+   => RouteToUrl (R FrontendRoute) m
+   => SetRoute t (R FrontendRoute) m
+   => DomBuilder t m
+   => Prerender js t m
+   => NetId -> Text -> Text -> Maybe Int -> AccountDetail -> Map (CI Text) Text -> m ()
+drawRow n token account chainid acc headers = do
+  let hash = _acDetail_blockHash acc
+      requestKey = _acDetail_requestKey acc
+      cid = _acDetail_chainid acc
+      height = _acDetail_height acc
+      idx = _acDetail_idx acc
+      fromAccount = _acDetail_fromAccount acc
+      toAccount = _acDetail_toAccount acc
+      amount = _acDetail_amount acc
+  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
+    if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
+  when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain ID") $ text $ tshow cid
+  elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash) $
+    blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
+  let showAccount = listToMaybe [a | a <- [fromAccount, toAccount], a /= account, not $ T.null a]
+  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> foldMap (\s -> "data-tooltip" =: s) showAccount) $
+    case showAccount of
+      Nothing -> pure ()
+      Just s -> do
+        text $ if s == fromAccount then "From: " else "To: "
+        accountSearchLink n token s s
+  let isNegAmt = fromAccount == account
+  elAttr "td" ("data-label" =: "Amount" <> "style" =: if isNegAmt then "color: red" else "color: green") $ do
+    let printedAmount amt = formatScientific Fixed Nothing amt
+    text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
 
 mkTransferSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
 mkTransferSearchRoute netId account token = mkNetRoute netId (NetRoute_TransferSearch :/ [account,token])
