@@ -23,7 +23,7 @@ import           Data.Decimal
 import qualified Data.HashMap.Strict as HM
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Maybe
+import           Data.Maybe hiding (mapMaybe)
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -38,6 +38,8 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 import           Servant.Reflex
+import qualified Streaming.Prelude as SP
+import qualified Streaming as SS
 import           Text.Read
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
@@ -118,32 +120,39 @@ transferWidget account token chainid fromheight = do
       pb <- getPostBuild
       result <- performRequestAsync $ xhr <$ pb
       maccs <- (\xhr -> (xhr >>= _xhrResponse_responseText >>= getAccountDetail >>= pure . (,foldMap _xhrResponse_headers xhr))) <$$> holdDyn Nothing (Just <$> result)
-      e <- networkView $ flip fmap maccs $ \case
-        Nothing -> inlineLoader "Loading..." >> pure never
-        Just (accs,headers) -> do
+      networkView $ flip fmap maccs $ \case
+        Nothing -> inlineLoader "Loading..." 
+        Just (accs,headers) -> mdo
           elAttr "h2" ("data-tooltip" =: account) $ text $ "Transfer Info"
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
               tfield "Account" $ accountSearchLink n token account account
               tfield "Token" $ text token
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) chainid
-          elClass "table" "ui fixed table" $ do
+          t <- elClass "table" "ui fixed table" $ do
             el "thead" $ el "tr" $ do
               el "th" $ text "Request Key"
               maybe (el "th" $ text "Chain ID") (const $ pure ()) chainid
               el "th" $ text "Block Height"
               el "th" $ text "From/To"
               el "th" $ text "Amount"
-            el "tbody" $ forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc headers
-          case M.lookup "Chainweb-Next" headers of
+            el "tbody" $ do
+              forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc headers
+              produceNewRowsOnToken mkXhr n token account chainid e
+          e <- case M.lookup "Chainweb-Next" headers of
             Nothing -> pure never
-            Just next -> mdo 
-              beenClicked <- holdDyn (button next) (pure never <$ click)
-              clickNow <- networkView beenClicked
-              click <- switchHold never clickNow
-              pure (next <$ click)
-      t <- updated <$> produceNewRowsOnToken mkXhr n token account chainid (leftmost [e,t])
+            Just next -> evaporateButtonOnClick next t
+          pure ()
+
       pure ()
+
+evaporateButtonOnClick token t = mdo
+  let something = leftmost [pure never <$ click, t <&> \newToken -> (const newToken) <$$> button newToken]
+  beenClicked <- holdDyn ((const token) <$$> button token) something
+  clickNow <- networkView beenClicked
+  click <- switchHold never clickNow
+  pure click
+  
 
 type TransferXHR = Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
 
@@ -151,22 +160,19 @@ produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-  MonadIO m) => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t (Event t Text) -> m (Dynamic t (Event t Text))
-produceNewRowsOnToken mkXhr n token account chainid e = do
-  nextToken <- switchHold never e        
-  result <- performRequestAsync $ fmap (\token -> either error id $ mkXhr Nothing Nothing (Just token)) nextToken
-  let parsed = (\xhr -> (_xhrResponse_responseText xhr >>= getAccountDetail >>= pure . (,_xhrResponse_headers xhr))) <$> result
-  widgetHold (pure never) $ parsed <&> \case
-    Nothing -> inlineLoader "Loading..." >> pure never
+  -- MonadIO m) => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t Text -> m (Event t (Event t Text))
+  MonadIO m) => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t Text -> m (Event t Text)
+produceNewRowsOnToken mkXhr n token account chainid nextToken = do
+  result <- performRequestAsync $ fmap (\token -> either error id $ mkXhr Nothing Nothing (Just token)) nextToken -- TODO: Don't use error here
+  maccs <- (\xhr -> (xhr >>= _xhrResponse_responseText >>= getAccountDetail >>= pure . (,foldMap _xhrResponse_headers xhr))) <$$> holdDyn Nothing (Just <$> result)
+
+  fmap (mapMaybe id) $ networkView $ flip fmap maccs $ \case
+    Nothing -> pure Nothing
     Just (accs,headers) -> do
-      elClass "table" "ui fixed table" $ el "tbody" $ forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc headers
+      forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc headers
       case M.lookup "Chainweb-Next" headers of
-        Nothing -> pure never
-        Just next -> mdo
-          beenClicked <- holdDyn (button next) (pure never <$ click)
-          clickNow <- networkView beenClicked
-          click <- switchHold never clickNow
-          pure (next <$ click)
+        Nothing -> pure $ Just "End of stream!"
+        Just next -> pure $ Just next
 
 drawRow 
   :: Monad m 
