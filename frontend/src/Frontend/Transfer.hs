@@ -108,8 +108,8 @@ transferWidget account token chainid fromheight = do
           elAttr "h2" ("data-tooltip" =: account) $ text $ "Transfer Info"
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
-              tfield "Account" $ accountSearchLink n token account account
               tfield "Token" $ text token
+              tfield "Account" $ accountSearchLink n token account account
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) chainid
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui celled table" $ do
