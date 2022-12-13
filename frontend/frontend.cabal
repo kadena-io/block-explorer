@@ -41,7 +41,6 @@ library
     , scientific
     , servant
     , servant-reflex
-    , streaming
     , stm
     , text
     , time
