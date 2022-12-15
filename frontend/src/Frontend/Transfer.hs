@@ -122,14 +122,15 @@ transferWidget account token chainid fromheight = do
               el "tbody" $ do
                 forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc
                 p <- produceNewRowsOnToken mkXhr n token account chainid e
-                let (render,newToken) = splitE p
+                let (errorE, goodE) = fanEither p
+                let (render,newToken) = splitE goodE
                 indexWithRender <- accum (\(key,_oldRender) newRender -> (succ key, newRender)) (0 :: Integer, pure ()) render
                 void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
                 let dumpEmpty = \case
-                      Just "" -> Nothing
-                      Just tt -> Just tt
-                      Nothing -> Nothing
-                return $ fmap dumpEmpty newToken
+                      Just "" -> Right Nothing
+                      Just tt -> Right $ Just tt
+                      Nothing -> Right Nothing
+                return $ leftmost [fmap Left errorE, fmap dumpEmpty newToken]
             e <- case M.lookup "Chainweb-Next" headers of
               Nothing -> pure never
               Just next -> evaporateButtonOnClick next t
@@ -143,7 +144,7 @@ nextButtonText = "Fetch more results..."
 
 fetchButton :: DomBuilder t m => Text -> m (Event t ())
 fetchButton s = do
-  let ourAttrs = mconcat [ "type" =: "button", "style" =: "margin: auto" ]
+  let ourAttrs = mconcat [ "type" =: "button", "class" =: "ui blue button", "style" =: "margin: auto" ]
   (e, _) <- elAttr' "button" ourAttrs $ text s
   return $ domEvent Click e
 
@@ -153,12 +154,16 @@ evaporateButtonOnClick
   => DomBuilder t m
   => MonadHold t m
   => PostBuild t m
-  => Text -> Event t (Maybe Text) -> m (Event t Text)
+  => Text -> Event t (Either TransferError (Maybe Text)) -> m (Event t Text)
 evaporateButtonOnClick token t = mdo
   let something = leftmost [(inlineLoader "Fetching more rows..." >> pure never) <$ click, v]
       v = t <&> \case 
-        Just newToken -> (const newToken) <$$> fetchButton nextButtonText
-        Nothing -> pure never
+        Right (Just newToken) -> (const newToken) <$$> fetchButton nextButtonText
+        Right Nothing -> pure never
+        Left (NonHTTP200 status) -> const ("Non 200 HTTP Status: " <> T.pack (show status)) <$$> pure never
+        Left MissingHeader -> const "Missing Chainweb-Next Header" <$$> pure never
+        Left BadResponse -> const "Bad response" <$$> pure never
+        Left NoResponseText -> const "Missing response in HTTP Request" <$$> pure never
   beenClicked <- holdDyn ((const token) <$$> fetchButton nextButtonText) something
   clickNow <- networkView beenClicked
   click <- switchHold never clickNow
@@ -166,19 +171,23 @@ evaporateButtonOnClick token t = mdo
 
 type TransferXHR = Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
 
+data TransferError = NonHTTP200 Word | MissingHeader | BadResponse | NoResponseText
+
 produceNewRowsOnToken 
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
-  => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t Text -> m (Event t (m (), Maybe Text))
+  => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t Text -> m (Event t (Either TransferError (m (), Maybe Text)))
 produceNewRowsOnToken mkXhr n token account chainid nextToken = do
   result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nextToken -- TODO: Don't use error here
-  return $ mapMaybe id $ result <&> \xhr -> do
-       r <- _xhrResponse_responseText xhr
-       details <- getAccountDetail r
-       let headers = _xhrResponse_headers xhr
-       let rowsToRender = forM_ details $ \detail -> el "tr" $ drawRow n token account chainid detail
-       return (rowsToRender, M.lookup "Chainweb-Next" headers)
+  return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200 
+     then Left $ NonHTTP200 (_xhrResponse_status xhr) 
+     else do
+         r <- note NoResponseText $ _xhrResponse_responseText xhr
+         details <- note BadResponse $ getAccountDetail r
+         let headers = _xhrResponse_headers xhr
+         let rowsToRender = forM_ details $ \detail -> el "tr" $ drawRow n token account chainid detail
+         return (rowsToRender, M.lookup "Chainweb-Next" headers)
 
 drawRow 
   :: Monad m 

@@ -338,14 +338,14 @@ searchWidget netId = do
   divClass "ui fluid action input" $ do
     st <- divClass "ui compact menu search__dropdown" $ do
       divClass "ui simple dropdown item" $ mdo
-        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc, evc, acc]
+        curSearchType <- holdDyn AccountSearch $ leftmost [rk, txc, evc, acc]
         dynText $ searchTypeText <$> curSearchType
         elClass "i" "dropdown icon" blank
         (rk, txc, evc, acc) <- divClass "menu" $ do
+	  (a,_) <- elAttr' "div" ("class" =: "item") $ text "Account"
           (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
           (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
           (e,_) <- elAttr' "div" ("class" =: "item") $ text "Events"
-	  (a,_) <- elAttr' "div" ("class" =: "item") $ text "Account"
           return
             ( RequestKeySearch <$ domEvent Click r
             , TxSearch <$ domEvent Click t
@@ -503,10 +503,10 @@ rowsWidget
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe BlockRef))
 rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
-  --hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
-  --hoverChanges <- blockHeightRow ti gis (traceDyn "hoveredBlock" hoveredBlock) maxNumChains (fst bh) (traceDyn "cs" cs)
-  --spacerRow gis cs hoveredBlock maxNumChains bh
-  --return hoverChanges
+  hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
+  hoverChanges <- blockHeightRow ti gis (traceDyn "hoveredBlock" hoveredBlock) maxNumChains (fst bh) (traceDyn "cs" cs)
+  spacerRow gis cs hoveredBlock maxNumChains bh
+  return hoverChanges
   return never
 
 blockHeightRow
