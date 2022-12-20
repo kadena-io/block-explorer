@@ -192,7 +192,7 @@ accountInfo token account mInfos = do
                 let mkAttrs open = if open then "class" =: "selectable-row" <> "style" =: "cursor: pointer;" else "class" =: "selectable-row" <> "style" =: "display: none;"
                 (e,_) <- elDynAttr' "tr" (mkAttrs <$> openDyn) $ do
                   el "td" blank
-                  el "td" $ text $ "Chain " <> chain
+                  el "td" $ routeLink (mkTransferSearchRouteWithChainId n account "coin" chain) $ text $ "Chain " <> chain
                   el "td" $ text $ tshow bal
                 let setChainRoute evt = setRoute $
                       mkAccountRoute n token account chain <$ evt
@@ -349,6 +349,10 @@ accountHistTable net evs = do
 
 mkAccountSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
 mkAccountSearchRoute netId token account = mkNetRoute netId (NetRoute_AccountSearch :/ [token ,account])
+
+mkTransferSearchRouteWithChainId :: NetId -> Text -> Text -> Text -> R FrontendRoute
+mkTransferSearchRouteWithChainId netId account token chainid = mkNetRoute netId (NetRoute_TransferSearch :/ [account,token,chainid])
+
 
 accountSearchLink
   :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
