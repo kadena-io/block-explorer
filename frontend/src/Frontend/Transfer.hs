@@ -127,9 +127,8 @@ transferWidget account token chainid fromheight = do
                 indexWithRender <- accum (\(key,_oldRender) newRender -> (succ key, newRender)) (0 :: Integer, pure ()) render
                 void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
                 let dumpEmpty = \case
-                      Just "" -> Right Nothing
-                      Just tt -> Right $ Just tt
-                      Nothing -> Right Nothing
+                      "" -> Right Nothing
+                      tt -> Right $ Just tt
                 return $ leftmost [fmap Left errorE, fmap dumpEmpty newToken]
             e <- case M.lookup "Chainweb-Next" headers of
               Nothing -> pure never
@@ -148,6 +147,12 @@ fetchButton s = do
   (e, _) <- elAttr' "button" ourAttrs $ text s
   return $ domEvent Click e
 
+disabledButton :: DomBuilder t m => Text -> m (Event t ())
+disabledButton s = do
+  let ourAttrs = mconcat [ "type" =: "button", "class" =: "ui disabled button", "style" =: "margin: auto" ]
+  (e,_) <- elAttr' "button" ourAttrs $ text s
+  return $ domEvent Click e
+
 evaporateButtonOnClick
   :: MonadFix m
   => Reflex t
@@ -160,10 +165,10 @@ evaporateButtonOnClick token t = mdo
       v = t <&> \case 
         Right (Just newToken) -> (const newToken) <$$> fetchButton nextButtonText
         Right Nothing -> pure never
-        Left (NonHTTP200 status) -> const ("Non 200 HTTP Status: " <> T.pack (show status)) <$$> pure never
-        Left MissingHeader -> const "Missing Chainweb-Next Header" <$$> pure never
-        Left BadResponse -> const "Bad response" <$$> pure never
-        Left NoResponseText -> const "Missing response in HTTP Request" <$$> pure never
+        Left (NonHTTP200 status) -> disabledButton ("Non 200 HTTP Status: " <> T.pack (show status)) >> pure never
+        Left MissingHeader -> disabledButton "Missing Chainweb-Next Header"  >> pure never
+        Left BadResponse -> disabledButton "Bad response" >> pure never
+        Left NoResponseText -> disabledButton "Missing response in HTTP Request" >> pure never
   beenClicked <- holdDyn ((const token) <$$> fetchButton nextButtonText) something
   clickNow <- networkView beenClicked
   click <- switchHold never clickNow
@@ -177,7 +182,7 @@ produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
-  => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t Text -> m (Event t (Either TransferError (m (), Maybe Text)))
+  => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t Text -> m (Event t (Either TransferError (m (), Text)))
 produceNewRowsOnToken mkXhr n token account chainid nextToken = do
   result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nextToken -- TODO: Don't use error here
   return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200 
@@ -187,7 +192,9 @@ produceNewRowsOnToken mkXhr n token account chainid nextToken = do
          details <- note BadResponse $ getAccountDetail r
          let headers = _xhrResponse_headers xhr
          let rowsToRender = forM_ details $ \detail -> el "tr" $ drawRow n token account chainid detail
-         return (rowsToRender, M.lookup "Chainweb-Next" headers)
+         case M.lookup "Chainweb-Next" headers of
+           Nothing -> Left MissingHeader
+           Just cwnext -> Right (rowsToRender, cwnext)
 
 drawRow 
   :: Monad m 
