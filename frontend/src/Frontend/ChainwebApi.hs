@@ -145,7 +145,7 @@ transferXhr ch account token chainid fromheight limit offset nextToken = do
 	, T.append "offset=" . T.pack . show <$> offset
         , T.append "next=" <$> nextToken
 	]
-  pure $ XhrRequest "GET" url $ def 
+  pure $ XhrRequest "GET" url $ def
     { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"
     }
 
@@ -483,8 +483,8 @@ searchTxs nc lim off needle evt = do
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
                 (constDyn $ mkDataUrl dh)
-        txResp <- go lim off needle evt
-        return $ r2e <$> txResp
+        txResp <- go lim off needle (constDyn QNone) evt
+        return $ fmap getResponse . r2e <$> txResp
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -508,8 +508,8 @@ searchEvents nc lim off search param name moduleName minHeight evt = do
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
                 (constDyn $ mkDataUrl dh)
-        txResp <- go lim off search param name moduleName minHeight evt
-        return $ r2e <$> txResp
+        txResp <- go lim off search param name moduleName minHeight (constDyn QNone) evt
+        return $ fmap getResponse . r2e <$> txResp
 
 getTxDetails
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
