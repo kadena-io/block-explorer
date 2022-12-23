@@ -247,8 +247,8 @@ accountChainWidget token account chain = do
       --      pm <- pmap
       --      pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
       res <- searchEvents dbh
-          (constDyn $ QParamSome $ Limit itemsPerPage)
-          (QParamSome . Offset . (*itemsPerPage) . pred <$> constDyn 1)
+          (constDyn $ Just $ Limit itemsPerPage)
+          (Just . Offset . (*itemsPerPage) . pred <$> constDyn 1)
           (constDyn QNone)
           (QParamSome <$> constDyn (EventParam $ token <> ".TRANSFER"))
           (QParamSome <$> constDyn (EventName account))
@@ -317,12 +317,12 @@ accountHistTable
      , RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m
      )
   => NetId
-  -> [EventDetail]
+  -> (Bool, [EventDetail])
   -> m ()
-accountHistTable _ [] = do
+accountHistTable _ (t, []) = do
   el "h4" $ text "Event Search"
-  text "No results."
-accountHistTable net evs = do
+  if t then text "No results." else inlineLoader "Loading new results ..."
+accountHistTable net (t, evs) = do
   el "h4" $ text "Event Search"
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do
@@ -346,6 +346,7 @@ accountHistTable net evs = do
             text $ _evDetail_name ev
         elAttr "td" ("data-label" =: "Parameters") $ el "pre" $
             text $ T.intercalate "\n" (map pactValueJSON $ _evDetail_params ev)
+  unless t $ inlineLoader "Loading new rows..."
 
 mkAccountSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
 mkAccountSearchRoute netId token account = mkNetRoute netId (NetRoute_AccountSearch :/ [token ,account])
