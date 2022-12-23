@@ -1,7 +1,10 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
@@ -11,6 +14,7 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens hiding ((.=))
 import           Control.Monad
+import           Control.Monad.Fix
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
@@ -485,6 +489,73 @@ searchTxs nc lim off needle evt = do
                 (constDyn $ mkDataUrl dh)
         txResp <- go lim off needle (constDyn QNone) evt
         return $ fmap getResponse . r2e <$> txResp
+
+data LooperTag result callerTag = LooperTag
+  {
+      originalLimit :: Maybe Limit
+    , accumulatedResults :: [result]
+    , nextToken :: Maybe NextToken
+    , callerTag :: callerTag
+  }
+
+type Requester' t m tag result = 
+    Dynamic t (QParam Limit)
+    -> Dynamic t (QParam Offset)
+    -> Dynamic t (QParam NextToken)
+    -> Event t tag
+    -> m (Event t (ReqResult tag [result]))
+
+makeQParam :: Maybe a -> QParam a
+makeQParam = maybe QNone QParamSome
+
+requestLooper 
+   :: forall t m result callerTag. (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m), MonadFix m, MonadHold t m)
+   => Dynamic t (Maybe Limit)
+   -> Dynamic t (Maybe Offset)
+   -> Requester' t m (LooperTag result callerTag) result
+   -> Event t callerTag
+   -> m (Event t (ReqResult callerTag [result]))
+requestLooper givenLim givenOffset requester trigger = mdo
+  -- make initial requests
+  let labelledTrigger = 
+       attachPromptlyDyn givenLim trigger 
+          <&> \(lim,callerTag) -> LooperTag lim mempty Nothing callerTag
+
+  initResponses <- requester (fmap makeQParam givenLim) (fmap makeQParam givenOffset) (constDyn QNone) labelledTrigger    
+  -- magic mdo things happen here
+
+  let allResponses = leftmost [initResponses, subsequentResponses]
+  let (completeResponses, partialResponses) = fanEither $ allResponses <&> \case 
+        ResponseSuccess t r xhr@(XhrResponse {..}) -> case M.lookup "Chainweb-Next" _xhrResponse_headers of
+          Just next 
+            | enoughResponses -> Left $ ResponseSuccess (callerTag t) ((accumulatedResults t) ++ r) xhr
+            | otherwise -> Right $ ResponseSuccess (t { nextToken = Just $ NextToken next, accumulatedResults = undefined, originalLimit = undefined}) undefined xhr
+               where enoughResponses = undefined
+          Nothing -> Left $ ResponseSuccess (callerTag t) ((accumulatedResults t) ++ r) xhr
+        ResponseFailure _ _ _ -> Left undefined
+        RequestFailure _ _ -> Left undefined
+
+  let makeNewLimit = onResponse (\tagg _ _ -> makeQParam $ helper $ tagg) (\tag _ _ -> makeQParam $ originalLimit tag) (\_ _ -> QNone)
+        where
+           helper LooperTag {..} = (\a b -> Limit $ a - b) <$> (fmap unLimit originalLimit) <*> (pure $ fromIntegral $ length accumulatedResults)
+      getNextToken = onResponse (\tagg _ _ -> makeQParam $ nextToken $ tagg) (\_ _ _ -> QNone) (\_ _ -> QNone) 
+      processPartialResponses = onResponse appendRowsToTag (\t _ _ -> t) (\t _ -> t)
+      appendRowsToTag tagg rs _ =
+         tagg { accumulatedResults = accumulatedResults tagg ++ rs } -- work on limit with enis
+
+  nextTokens <- holdDyn QNone $ getNextToken  <$> partialResponses
+  nextLimits <- holdDyn QNone $ makeNewLimit <$> partialResponses
+  let partialTriggers = partialResponses <&> processPartialResponses
+  subsequentResponses <- requester nextLimits (constDyn QNone) nextTokens partialTriggers
+  pure completeResponses
+
+
+onResponse :: (tag -> a -> XhrResponse -> b) -> (tag -> Text -> XhrResponse -> b) -> (tag -> Text -> b) -> ReqResult tag a -> b
+onResponse success failure reqqFailure = \case
+  ResponseSuccess tagg a xhr -> success tagg a xhr
+  ResponseFailure tagg t xhr -> failure tagg t xhr
+  RequestFailure tagg t -> reqqFailure tagg t
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
