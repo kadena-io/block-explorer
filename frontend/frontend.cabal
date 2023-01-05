@@ -20,6 +20,7 @@ library
     , containers
     , data-default
     , dependent-sum
+    , Decimal
     , formattable
     , ghcjs-dom
     , hashable
