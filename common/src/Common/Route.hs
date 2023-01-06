@@ -32,6 +32,7 @@ import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
+import           Text.Read (readMaybe)
 ------------------------------------------------------------------------------
 import           Common.Types
 ------------------------------------------------------------------------------
@@ -59,6 +60,28 @@ blockIndexRouteEncoder = pathComponentEncoder $ \case
   Chain_BlockHash -> PathSegment "block" $ pathParamEncoder id blockRouteEncoder
   Chain_BlockHeight -> PathSegment "height" $ pathParamEncoder unsafeTshowEncoder blockRouteEncoder
 
+data AccountParams = AccountParams
+  { apToken :: T.Text
+  , apAccount :: T.Text
+  , apChain :: Maybe Integer
+  }
+
+accountParamsEncoder :: Applicative check =>
+  Encoder check (Either T.Text) AccountParams PageName
+accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
+  dec (segments,_params) = case segments of
+    token:account:rest -> AccountParams token account <$> case rest of
+      [] -> return Nothing
+      chainIdTxt:unexpected -> case readMaybe (T.unpack chainIdTxt) of
+        Just c -> if null unexpected
+          then return $ Just c
+          else Left $ "Unexpected path segments: " <> T.pack (show unexpected)
+        Nothing -> Left $ "Chain \"" <> chainIdTxt <> "\" must be an int"
+    [_token] -> Left "The URL is missing the account name path segment"
+    [] -> Left "The URL is missing the token and account name path segments"
+  enc ap = ([apToken ap, apAccount ap] ++ mbChainSegment, mempty) where
+    mbChainSegment = maybe [] (\cId -> [T.pack $ show cId]) $ apChain ap
+
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
   NetRoute_Search :: NetRoute ()
@@ -67,8 +90,8 @@ data NetRoute :: * -> * where
   NetRoute_TxDetail :: NetRoute Text
   NetRoute_TxSearch :: NetRoute (Map Text (Maybe Text))
   NetRoute_EventSearch :: NetRoute (Map Text (Maybe Text))
-  NetRoute_AccountSearch :: NetRoute [Text]
-  NetRoute_TransferSearch :: NetRoute [Text]
+  NetRoute_AccountSearch :: NetRoute AccountParams
+  NetRoute_TransferSearch :: NetRoute AccountParams
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
@@ -79,8 +102,8 @@ netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_TxDetail -> PathSegment "txdetail" singlePathSegmentEncoder
   NetRoute_TxSearch -> PathSegment "txsearch" queryOnlyEncoder
   NetRoute_EventSearch -> PathSegment "eventsearch" queryOnlyEncoder
-  NetRoute_AccountSearch -> PathSegment "account" pathOnlyEncoder
-  NetRoute_TransferSearch -> PathSegment "transfer" pathOnlyEncoder
+  NetRoute_AccountSearch -> PathSegment "account" accountParamsEncoder
+  NetRoute_TransferSearch -> PathSegment "transfer" accountParamsEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
