@@ -134,7 +134,7 @@ detailsXhr host meta token account = do
     code = T.pack $ printf "(%s.details \"%s\")" token account
     pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local" Nothing
 
-transferXhr :: ChainwebHost -> Text -> Text -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
+transferXhr :: ChainwebHost -> Text -> Text -> Maybe Integer -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
 transferXhr ch account token chainid fromheight limit offset nextToken = do
   let url = dataBaseUrl ch <> "/txs/account/" <> account <> if T.null rest then "" else "?" <> rest
       rest = T.intercalate "&" $ ("token=" <> token) : catMaybes params

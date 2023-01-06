@@ -185,6 +185,14 @@ blockHeaderPage netId h c (bh, bhBinBase64) bp resolveOrphan = do
           text $ "Chain " <> tshow cid <> ": "
           blockLink netId cid prevHeight (hashHex nh)
 
+mkCoinAccountSearchRoute :: NetId -> Text -> R FrontendRoute
+mkCoinAccountSearchRoute netId account = mkNetRoute netId $
+  NetRoute_AccountSearch :/ AccountParams
+    { apToken = "coin"
+    , apAccount = account
+    , apChain = Nothing
+    }
+
 blockPayloadWidget
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
@@ -199,10 +207,10 @@ blockPayloadWidget netId c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        let mkAccountSearchRoute account = mkNetRoute netId (NetRoute_AccountSearch :/ ["coin", account])
         tfield "Miner" $ do
           let account = _minerData_account (_blockPayload_minerData bp)
-          el "div" $ routeLink (mkAccountSearchRoute account) $ text $ "Account: " <> account
+          el "div" $ routeLink (mkCoinAccountSearchRoute netId account) $
+            text $ "Account: " <> account
           el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayload_minerData bp)
           el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayload_minerData bp)
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
@@ -224,10 +232,10 @@ blockPayloadWithOutputsWidget netId c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        let mkAccountSearchRoute account = mkNetRoute netId (NetRoute_AccountSearch :/ ["coin", account])
         tfield "Miner" $ do
           let account = _minerData_account (_blockPayloadWithOutputs_minerData bp)
-          el "div" $ routeLink (mkAccountSearchRoute account) $ text $ "Account: " <> account
+          el "div" $ routeLink (mkCoinAccountSearchRoute netId account) $
+            text $ "Account: " <> account
           el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayloadWithOutputs_minerData bp)
           el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayloadWithOutputs_minerData bp)
         tfield "Transactions Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_transactionsHash bp
