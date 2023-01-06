@@ -21,6 +21,7 @@ import           Data.Maybe
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Data.Text.Lens (unpacked)
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           GHCJS.DOM.Types (MonadJSM)
@@ -57,7 +58,7 @@ accountSearchPage
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
      )
-  => App [Text] t m ()
+  => App AccountParams t m ()
 accountSearchPage = do
     r <- askRoute
     void $ networkView $ accountHelper <$> r
@@ -72,14 +73,13 @@ accountHelper
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
      )
-  => [Text]
-  -> App [Text] t m ()
-accountHelper [token, account] = accountWidget token account
-accountHelper [token, account, chain] =
-  case readMaybe (T.unpack chain) of
-    Just c -> accountChainWidget token account c
-    Nothing -> text $ "Error: chain \"" <> chain <> "\" must be an int"
-accountHelper _ = text "Invalid account URL!"
+  => AccountParams
+  -> App r t m ()
+accountHelper ap = case apChain ap of
+  Nothing -> accountWidget token account
+  Just chain -> accountChainWidget token account chain
+  where token = apToken ap
+        account = apAccount ap
 
 accountWidget
   :: ( MonadApp r t m
@@ -93,7 +93,7 @@ accountWidget
      )
   => Text
   -> Text
-  -> App [Text] t m ()
+  -> App r t m ()
 accountWidget token account = do
   (AppState n si _ _) <- ask
   let chains = S.toList $ _siChains si
@@ -128,7 +128,7 @@ accountWidget token account = do
 
 data ChainInfo = ChainInfo
   { _chainInfo_totalBalance :: Decimal
-  , _chainInfo_chainBalances :: Map Text Decimal
+  , _chainInfo_chainBalances :: Map Integer Decimal
   }
 
 addValue chain new old = ChainInfo
@@ -151,8 +151,8 @@ accountInfo
      )
   => Text
   -> Text
-  -> Maybe [Maybe (Text, A.Value, PactNumber)]
-  -> App [Text] t m ()
+  -> Maybe [Maybe (Integer, A.Value, PactNumber)]
+  -> App r t m ()
 accountInfo token account mInfos = do
     (AppState n si mdbh _) <- ask
     case mInfos of
@@ -165,7 +165,7 @@ accountInfo token account mInfos = do
             --addValue chain (newCoins, newCount) (oldCoins, oldCount) = (oldCoins + newCoins, oldCount + newCount)
             balances = foldl' addTo mempty good
         let linkText = "View most recent transfers associated to this account."
-        el "p" $ routeLink (mkNetRoute n (NetRoute_TransferSearch :/ [account,token])) (text linkText)
+        el "p" $ routeLink (mkTransferViewRoute n account token Nothing) (text linkText)
         el "p" $ do
           text $ "Got data from " <> tshow goodCount <> " chains"
           when (totalCount > goodCount) $
@@ -192,19 +192,17 @@ accountInfo token account mInfos = do
                 let mkAttrs open = if open then "class" =: "selectable-row" <> "style" =: "cursor: pointer;" else "class" =: "selectable-row" <> "style" =: "display: none;"
                 (e,_) <- elDynAttr' "tr" (mkAttrs <$> openDyn) $ do
                   el "td" blank
-                  el "td" $ routeLink (mkTransferSearchRouteWithChainId n account "coin" chain) $ text $ "Chain " <> chain
+                  el "td" $ routeLink (mkTransferViewRoute n account "coin" (Just chain)) $
+                    text $ "Chain " <> T.pack (show chain)
                   el "td" $ text $ tshow bal
                 let setChainRoute evt = setRoute $
-                      mkAccountRoute n token account chain <$ evt
+                      mkAccountRoute n token account (Just chain) <$ evt
                 setChainRoute (domEvent Click e)
 
-mkAccountRoute :: NetId -> Text -> Text -> Text -> R FrontendRoute
-mkAccountRoute netId token account chain = mkNetRoute netId (NetRoute_AccountSearch :/ [token, account, chain])
-
-getDetails :: Maybe Text -> Maybe (Text, A.Value, PactNumber)
+getDetails :: Maybe Text -> Maybe (Integer, A.Value, PactNumber)
 getDetails mt = do
     t <- mt
-    chain <- t ^? _Value . key "metaData" . key "publicMeta" . key "chainId" . _String
+    chain <- t ^? _Value . key "metaData" . key "publicMeta" . key "chainId" . _String . unpacked . _Show
     d <- t ^? _Value . key "result" . key "data"
     g <- d ^? key "guard"
     bal <- d ^? key "balance"
@@ -231,8 +229,8 @@ accountChainWidget
      )
   => Text
   -> Text
-  -> Int
-  -> App [Text] t m ()
+  -> Integer
+  -> App r t m ()
 accountChainWidget token account chain = do
   (AppState n si mdbh _) <- ask
   let chains = S.toList $ _siChains si
@@ -348,12 +346,21 @@ accountHistTable net (t, evs) = do
             text $ T.intercalate "\n" (map pactValueJSON $ _evDetail_params ev)
   unless t $ inlineLoader "Loading new rows..."
 
-mkAccountSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
-mkAccountSearchRoute netId token account = mkNetRoute netId (NetRoute_AccountSearch :/ [token ,account])
+mkTransferViewRoute :: NetId -> Text -> Text -> Maybe Integer -> R FrontendRoute
+mkTransferViewRoute netId account token chainid =
+  mkNetRoute netId $ NetRoute_TransferSearch :/ AccountParams
+    { apToken = token
+    , apAccount = account
+    , apChain = chainid
+    }
 
-mkTransferSearchRouteWithChainId :: NetId -> Text -> Text -> Text -> R FrontendRoute
-mkTransferSearchRouteWithChainId netId account token chainid = mkNetRoute netId (NetRoute_TransferSearch :/ [account,token,chainid])
-
+mkAccountRoute :: NetId -> Text -> Text -> Maybe Integer -> R FrontendRoute
+mkAccountRoute netId token account chain = mkNetRoute netId $
+  NetRoute_AccountSearch :/ AccountParams
+    { apToken = token
+    , apAccount = account
+    , apChain = chain
+    }
 
 accountSearchLink
   :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
@@ -366,4 +373,4 @@ accountSearchLink
   -> Text
   -> m ()
 accountSearchLink netId token account linkText =
-  routeLink (mkAccountSearchRoute netId token account) $ text linkText
+  routeLink (mkAccountRoute netId token account Nothing) $ text linkText

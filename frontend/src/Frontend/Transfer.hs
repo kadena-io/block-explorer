@@ -52,7 +52,7 @@ transferSearchPage
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
      )
-  => App [Text] t m ()
+  => App AccountParams t m ()
 transferSearchPage = do
   r <- askRoute
   void $ networkView $ transferHelper <$> r
@@ -67,14 +67,9 @@ transferHelper
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
      )
-  => [Text]
-  -> App [Text] t m ()
-transferHelper (account:xs) = transferWidget account token chainid fromheight
-  where
-    token = fromMaybe "coin" $ xs ^? ix 0
-    chainid = xs ^? ix 1 . to decimal . _Right . _1 -- TODO: If this doesn't parse, we should throw back an appropriate error
-    fromheight = xs ^? ix 2 . to decimal . _Right . _1 -- TODO: If this doesn't parse, we should throw back an appropriate error
-transferHelper _ = text "Invalid transfer url!"
+  => AccountParams
+  -> App r t m ()
+transferHelper ap = transferWidget (apAccount ap) (apToken ap) (apChain ap) Nothing
 
 transferWidget
   :: ( MonadApp r t m
@@ -89,9 +84,9 @@ transferWidget
      )
   => Text
   -> Text
+  -> Maybe Integer
   -> Maybe Int
-  -> Maybe Int
-  -> App [Text] t m ()
+  -> App r t m ()
 transferWidget account token chainid fromheight = do
   (AppState n si _ _) <- ask -- TODO: add chainweb-data host to appstate record
   let chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
@@ -182,7 +177,7 @@ produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
-  => TransferXHR -> NetId -> Text -> Text -> Maybe Int -> Event t Text -> m (Event t (Either TransferError (m (), Text)))
+  => TransferXHR -> NetId -> Text -> Text -> Maybe Integer -> Event t Text -> m (Event t (Either TransferError (m (), Text)))
 produceNewRowsOnToken mkXhr n token account chainid nextToken = do
   result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nextToken -- TODO: Don't use error here
   return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200 
@@ -202,7 +197,7 @@ drawRow
    => SetRoute t (R FrontendRoute) m
    => DomBuilder t m
    => Prerender js t m
-   => NetId -> Text -> Text -> Maybe Int -> AccountDetail -> m ()
+   => NetId -> Text -> Text -> Maybe Integer -> AccountDetail -> m ()
 drawRow n token account chainid acc = do
   let hash = _acDetail_blockHash acc
       requestKey = _acDetail_requestKey acc
@@ -229,7 +224,12 @@ drawRow n token account chainid acc = do
     text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
 
 mkTransferSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
-mkTransferSearchRoute netId account token = mkNetRoute netId (NetRoute_TransferSearch :/ [account,token])
+mkTransferSearchRoute netId account token = mkNetRoute netId $
+  NetRoute_TransferSearch :/ AccountParams
+    { apToken = token
+    , apAccount = account
+    , apChain = Nothing
+    }
 
 getAccountDetail :: Text -> Maybe [AccountDetail]
 getAccountDetail = A.decode . T.encodeUtf8 . fromStrict

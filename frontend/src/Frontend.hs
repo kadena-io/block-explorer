@@ -365,7 +365,7 @@ mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
 mkSearchRoute netId str RequestKeySearch = mkReqKeySearchRoute netId str
 mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
-mkSearchRoute netId str AccountSearch = mkAccountSearchRoute netId "coin" str
+mkSearchRoute netId str AccountSearch = mkAccountRoute netId "coin" str Nothing
 
 mainPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,

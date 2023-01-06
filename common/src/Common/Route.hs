@@ -12,6 +12,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Common.Route where
@@ -23,6 +24,7 @@ import           Data.Dependent.Sum
 import           Data.Functor.Identity
 import           Control.Lens hiding ((.=))
 import           Data.Map (Map)
+import qualified Data.Map as M
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
@@ -32,6 +34,7 @@ import           Obelisk.Configs
 import           Obelisk.Route
 import           Obelisk.Route.TH
 import           Reflex.Dom
+import           Text.Read (readMaybe)
 ------------------------------------------------------------------------------
 import           Common.Types
 ------------------------------------------------------------------------------
@@ -59,6 +62,40 @@ blockIndexRouteEncoder = pathComponentEncoder $ \case
   Chain_BlockHash -> PathSegment "block" $ pathParamEncoder id blockRouteEncoder
   Chain_BlockHeight -> PathSegment "height" $ pathParamEncoder unsafeTshowEncoder blockRouteEncoder
 
+data AccountParams = AccountParams
+  { apToken :: T.Text
+  , apAccount :: T.Text
+  , apChain :: Maybe Integer
+  }
+
+accountParamsEncoder :: Applicative check =>
+  Encoder check (Either T.Text) AccountParams PageName
+accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
+  dec (segments,params) = case segments of
+    [account] -> do
+      token <- case M.lookup "token" params of
+        Nothing -> return "coin"
+        Just Nothing -> Left "Expected a value for the token parameter!"
+        Just (Just v) -> return v
+      chain <- case M.lookup "chain" params of
+         Nothing -> return Nothing
+         Just Nothing -> Left "Expected a value for the chain parameter!"
+         Just (Just chainIdTxt) -> case readMaybe @Integer (T.unpack chainIdTxt) of
+             Nothing -> Left $ "Chain \"" <> chainIdTxt <> "\" must be an int"
+             Just cid -> Right $ Just cid
+      return AccountParams
+         {
+           apToken = token
+         , apAccount = account
+         , apChain = chain
+         }
+    [] -> Left "Something about no account name in the url."
+    _ -> Left "Something about unexpected path segments after the account name."
+  enc ap = ([apAccount ap], params) where
+    params = 
+      M.singleton "token" (Just $ apToken ap) 
+      <> maybe mempty (M.singleton "chain" . Just . T.pack . show)  (apChain ap)
+
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
   NetRoute_Search :: NetRoute ()
@@ -67,8 +104,8 @@ data NetRoute :: * -> * where
   NetRoute_TxDetail :: NetRoute Text
   NetRoute_TxSearch :: NetRoute (Map Text (Maybe Text))
   NetRoute_EventSearch :: NetRoute (Map Text (Maybe Text))
-  NetRoute_AccountSearch :: NetRoute [Text]
-  NetRoute_TransferSearch :: NetRoute [Text]
+  NetRoute_AccountSearch :: NetRoute AccountParams
+  NetRoute_TransferSearch :: NetRoute AccountParams
 
 netRouteEncoder :: Encoder (Either Text) (Either Text) (R NetRoute) PageName
 netRouteEncoder = pathComponentEncoder $ \case
@@ -79,8 +116,8 @@ netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_TxDetail -> PathSegment "txdetail" singlePathSegmentEncoder
   NetRoute_TxSearch -> PathSegment "txsearch" queryOnlyEncoder
   NetRoute_EventSearch -> PathSegment "eventsearch" queryOnlyEncoder
-  NetRoute_AccountSearch -> PathSegment "account" pathOnlyEncoder
-  NetRoute_TransferSearch -> PathSegment "transfer" pathOnlyEncoder
+  NetRoute_AccountSearch -> PathSegment "account" accountParamsEncoder
+  NetRoute_TransferSearch -> PathSegment "transfer" accountParamsEncoder
 
 data FrontendRoute :: * -> * where
   FR_Main :: FrontendRoute ()
