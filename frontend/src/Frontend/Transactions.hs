@@ -10,7 +10,6 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson.Lens
-import           Data.Dependent.Sum
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -235,7 +234,7 @@ txTable net hdr (t,txs) = do
         elide $ "(" <> renderCompactText (_pcDef c)
       A.Error _ -> "<unavailable>"
     txPreview _ _ = "<unavailable>"
-    elide t = T.take 64 t <> " ..."
+    elide tt = T.take 64 tt <> " ..."
     openns "(user." = True
     openns "(free." = True
     openns _ = False

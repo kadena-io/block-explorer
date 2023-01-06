@@ -13,7 +13,6 @@ import qualified Data.Aeson as A
 import           Data.Foldable
 import           Data.Functor
 import           Data.Scientific
-import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import qualified Data.Map as M
@@ -22,7 +21,6 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Lazy (fromStrict)
 import qualified Data.Text.Lazy.Encoding as T
-import           Data.Text.Read (decimal)
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
@@ -69,7 +67,7 @@ transferHelper
      )
   => AccountParams
   -> App r t m ()
-transferHelper ap = transferWidget (apAccount ap) (apToken ap) (apChain ap) Nothing
+transferHelper aps = transferWidget (apAccount aps) (apToken aps) (apChain aps) Nothing
 
 transferWidget
   :: ( MonadApp r t m
@@ -90,7 +88,7 @@ transferWidget
 transferWidget account token chainid fromheight = do
   (AppState n si _ _) <- ask -- TODO: add chainweb-data host to appstate record
   let chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
-      mkXhr lim off nextToken = transferXhr chainwebHost account token chainid fromheight lim off nextToken
+      mkXhr lim off nxtToken = transferXhr chainwebHost account token chainid fromheight lim off nxtToken
   case mkXhr Nothing Nothing Nothing of
     Left e -> el "div" $ text $ "Error constructing XHR: " <> T.pack e
     Right xhr -> mdo
@@ -178,8 +176,8 @@ produceNewRowsOnToken
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
   => TransferXHR -> NetId -> Text -> Text -> Maybe Integer -> Event t Text -> m (Event t (Either TransferError (m (), Text)))
-produceNewRowsOnToken mkXhr n token account chainid nextToken = do
-  result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nextToken -- TODO: Don't use error here
+produceNewRowsOnToken mkXhr n token account chainid nxtToken = do
+  result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nxtToken -- TODO: Don't use error here
   return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200 
      then Left $ NonHTTP200 (_xhrResponse_status xhr) 
      else do

@@ -146,11 +146,11 @@ transferXhr ch account token chainid fromheight limit offset nextToken = do
       rest = T.intercalate "&" $ ("token=" <> token) : catMaybes params
       params =
         [T.append "chain=" . T.pack . show <$> chainid
-	, T.append "fromheight=" . T.pack . show <$> fromheight
-	, T.append "limit=" . T.pack . show <$> limit
-	, T.append "offset=" . T.pack . show <$> offset
+        , T.append "fromheight=" . T.pack . show <$> fromheight
+        , T.append "limit=" . T.pack . show <$> limit
+        , T.append "offset=" . T.pack . show <$> offset
         , T.append "next=" <$> nextToken
-	]
+        ]
   pure $ XhrRequest "GET" url $ def
     { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"
     }
@@ -493,13 +493,14 @@ searchTxs nc lim off needle evt = do
         txResp <- requestLooper lim off (\limm offf nextToken evt' -> go limm offf needle nextToken evt') evt
         return $ handleLooperResults <$> txResp
 
+handleLooperResults :: Either (ReqResult t [result]) (LooperTag result callerTag) -> Either Text (Bool, [result])
 handleLooperResults = \case
    Left complete -> fmap (True,) $ r2e complete
    Right partial -> Right $ (False, accumulatedResults partial)
 
 looperOpts :: ClientOptions
-looperOpts = ClientOptions $ \xhrRequest ->
-    pure $ xhrRequest { _xhrRequest_config = (_xhrRequest_config xhrRequest) { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"}}
+looperOpts = ClientOptions $ \xhrReq ->
+    pure $ xhrReq { _xhrRequest_config = (_xhrRequest_config xhrReq) { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"}}
 
 data LooperTag result callerTag = LooperTag
   {
@@ -543,7 +544,7 @@ requestLooper givenLim givenOffset requester trigger = mdo
   -- magic mdo things happen here
 
   let allResponses = leftmost [initResponses, subsequentResponses]
-  let (completeResponses, partialResponses) = fanEither a
+  let (_completeResponses, partialResponses) = fanEither a
   let a = allResponses <&> \case
         ResponseSuccess t hr xhr@(XhrResponse {..}) -> case getHeadHList hr of
           Just next 
@@ -552,13 +553,13 @@ requestLooper givenLim givenOffset requester trigger = mdo
 
           Nothing -> Left $ ResponseSuccess (callerTag t) ((accumulatedResults t) ++ r) xhr
           where enoughResponses = maybe False (\(Limit ol) -> ol <= genericLength ((accumulatedResults t) ++ r)) (originalLimit t)
-   	        r = getResponse hr
+                r = getResponse hr
         ResponseFailure tagg txt xhr -> Left $ ResponseFailure (callerTag tagg) txt xhr
         RequestFailure tagg txt -> Left $ RequestFailure (callerTag tagg) txt
 
   let makeNewLimit tagg = makeQParam $ helper $ tagg
         where
-           helper LooperTag {..} = (\a b -> Limit $ a - b) <$> (fmap unLimit originalLimit) <*> (pure $ genericLength accumulatedResults)
+           helper LooperTag {..} = (\aa b -> Limit $ aa - b) <$> (fmap unLimit originalLimit) <*> (pure $ genericLength accumulatedResults)
       getNextToken tagg = makeQParam $ nextToken $ tagg
 
   nextTokens <- holdDyn QNone $ getNextToken  <$> partialResponses

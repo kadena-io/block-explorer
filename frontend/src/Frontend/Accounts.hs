@@ -14,6 +14,7 @@ import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson.Lens
 import           Data.Decimal
+import           Data.Hashable (Hashable)
 import qualified Data.HashMap.Strict as HM
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -30,7 +31,6 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 import           Servant.Reflex
-import           Text.Read
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainwebMeta
@@ -75,11 +75,11 @@ accountHelper
      )
   => AccountParams
   -> App r t m ()
-accountHelper ap = case apChain ap of
+accountHelper aps = case apChain aps of
   Nothing -> accountWidget token account
   Just chain -> accountChainWidget token account chain
-  where token = apToken ap
-        account = apAccount ap
+  where token = apToken aps
+        account = apAccount aps
 
 accountWidget
   :: ( MonadApp r t m
@@ -123,7 +123,7 @@ accountWidget token account = do
           el "tr" $ do
             elClass "td" "two wide" $ text "Account"
             el "td" $ text account
-      networkView (accountInfo token account <$> rds)
+      _ <- networkView (accountInfo token account <$> rds)
       pure ()
 
 data ChainInfo = ChainInfo
@@ -131,10 +131,13 @@ data ChainInfo = ChainInfo
   , _chainInfo_chainBalances :: Map Integer Decimal
   }
 
-addValue chain new old = ChainInfo
+addValue :: a -> ChainInfo -> ChainInfo -> ChainInfo
+addValue _chain new old = ChainInfo
   (_chainInfo_totalBalance old + _chainInfo_totalBalance new)
   (M.union (_chainInfo_chainBalances old) (_chainInfo_chainBalances new))
 
+
+addTo :: (Eq k, Hashable k) => HM.HashMap k ChainInfo -> (Integer, k, PactNumber) -> HM.HashMap k ChainInfo
 addTo m (c,g,bal) = HM.insertWith (addValue c) g (ChainInfo d (M.singleton c d)) m
   where
     d = pactNumberToDecimal bal
@@ -154,7 +157,7 @@ accountInfo
   -> Maybe [Maybe (Integer, A.Value, PactNumber)]
   -> App r t m ()
 accountInfo token account mInfos = do
-    (AppState n si mdbh _) <- ask
+    (AppState n _si _mdbh _) <- ask
     case mInfos of
       Nothing -> inlineLoader "Loading..."
       Just infos -> do
@@ -231,11 +234,10 @@ accountChainWidget
   -> Text
   -> Integer
   -> App r t m ()
-accountChainWidget token account chain = do
+accountChainWidget token account _chain = do
   (AppState n si mdbh _) <- ask
-  let chains = S.toList $ _siChains si
-      chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
-  (AppState n _ mdbh _) <- ask
+  let _chains = S.toList $ _siChains si
+      _chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
   case mdbh of
     Nothing -> text "Event search feature not available for this network"
     Just dbh -> do

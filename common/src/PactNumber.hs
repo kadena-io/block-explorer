@@ -6,6 +6,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 
 module PactNumber where
 
@@ -29,7 +30,7 @@ data PactNumber = PactInteger Integer | PactDecimal Decimal
 
 instance FromJSON PactNumber where
   parseJSON v@(A.Number s) =
-    case floatingOrInteger s of
+    case floatingOrInteger @Double @Integer s of
       Left _ -> PactDecimal <$> decoder decimalCodec v
       Right _ -> PactInteger <$> decoder integerCodec v
   parseJSON v@(Object _) = do
