@@ -12,6 +12,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Common.Route where
@@ -23,6 +24,7 @@ import           Data.Dependent.Sum
 import           Data.Functor.Identity
 import           Control.Lens hiding ((.=))
 import           Data.Map (Map)
+import qualified Data.Map as M
 import           Data.Some (Some)
 import qualified Data.Some as Some
 import           Data.Text (Text)
@@ -69,18 +71,30 @@ data AccountParams = AccountParams
 accountParamsEncoder :: Applicative check =>
   Encoder check (Either T.Text) AccountParams PageName
 accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
-  dec (segments,_params) = case segments of
-    token:account:rest -> AccountParams token account <$> case rest of
-      [] -> return Nothing
-      chainIdTxt:unexpected -> case readMaybe (T.unpack chainIdTxt) of
-        Just c -> if null unexpected
-          then return $ Just c
-          else Left $ "Unexpected path segments: " <> T.pack (show unexpected)
-        Nothing -> Left $ "Chain \"" <> chainIdTxt <> "\" must be an int"
-    [_token] -> Left "The URL is missing the account name path segment"
-    [] -> Left "The URL is missing the token and account name path segments"
-  enc ap = ([apToken ap, apAccount ap] ++ mbChainSegment, mempty) where
-    mbChainSegment = maybe [] (\cId -> [T.pack $ show cId]) $ apChain ap
+  dec (segments,params) = case segments of
+    [account] -> do
+      token <- case M.lookup "token" params of
+        Nothing -> return "coin"
+        Just Nothing -> Left "Expected a value for the token parameter!"
+        Just (Just v) -> return v
+      chain <- case M.lookup "chain" params of
+         Nothing -> return Nothing
+         Just Nothing -> Left "Expected a value for the chain parameter!"
+         Just (Just chainIdTxt) -> case readMaybe @Integer (T.unpack chainIdTxt) of
+             Nothing -> Left $ "Chain \"" <> chainIdTxt <> "\" must be an int"
+             Just cid -> Right $ Just cid
+      return AccountParams
+         {
+           apToken = token
+         , apAccount = account
+         , apChain = chain
+         }
+    [] -> Left "Something about no account name in the url."
+    _ -> Left "Something about unexpected path segments after the account name."
+  enc ap = ([apAccount ap], params) where
+    params = 
+      M.singleton "token" (Just $ apToken ap) 
+      <> maybe mempty (M.singleton "chain" . Just . T.pack . show)  (apChain ap)
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
