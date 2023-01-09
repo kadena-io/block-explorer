@@ -504,10 +504,8 @@ rowsWidget
   -> m (Event t (Maybe BlockRef))
 rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
   hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
-  hoverChanges <- blockHeightRow ti gis (traceDyn "hoveredBlock" hoveredBlock) maxNumChains (fst bh) (traceDyn "cs" cs)
   spacerRow gis cs hoveredBlock maxNumChains bh
   return hoverChanges
-  return never
 
 blockHeightRow
   :: (MonadAppIO r t m, Prerender js t m,
