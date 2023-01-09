@@ -34,6 +34,7 @@ import           Text.Read
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainwebMeta
+import           Chainweb.Api.PactNumber
 import           ChainwebData.Api
 import           ChainwebData.EventDetail
 import           ChainwebData.Pagination
@@ -46,7 +47,6 @@ import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Page.Block
 import           Frontend.Transactions
-import           PactNumber
 ------------------------------------------------------------------------------
 
 accountSearchPage
