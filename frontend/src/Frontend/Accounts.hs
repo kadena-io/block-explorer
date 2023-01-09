@@ -189,7 +189,9 @@ accountInfo token account mInfos = do
                   text $ "spread across " <> tshow (M.size $ _chainInfo_chainBalances cinfo) <> " chains"
                 return openDyn
               forM_ (M.toList $ _chainInfo_chainBalances cinfo) $ \(chain, bal) -> do
-                let mkAttrs open = if open then "class" =: "selectable-row" <> "style" =: "cursor: pointer;" else "class" =: "selectable-row" <> "style" =: "display: none;"
+                let mkAttrs open 
+                          = "class" =: "selectable-row" 
+                         <> "style" =: if open then  "cursor: pointer;" else "display: none;"
                 (e,_) <- elDynAttr' "tr" (mkAttrs <$> openDyn) $ do
                   el "td" blank
                   el "td" $ routeLink (mkTransferViewRoute n account "coin" (Just chain)) $
