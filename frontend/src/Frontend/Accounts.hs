@@ -159,8 +159,6 @@ accountInfo token account mInfos = do
         let good = catMaybes infos
             goodCount = length good
             totalCount = length infos
-            --balances = M.unionsWith (+) $ map (\(k,amt) -> M.singleton (encode k) (pactNumberToDecimal amt)) good
-            --addValue chain (newCoins, newCount) (oldCoins, oldCount) = (oldCoins + newCoins, oldCount + newCount)
             balances = foldl' addTo mempty good
         let linkText = "View most recent transfers associated to this account."
         el "p" $ routeLink (mkTransferViewRoute n account token Nothing) (text linkText)
