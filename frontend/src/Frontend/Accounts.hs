@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
@@ -107,12 +108,12 @@ accountWidget token account = do
         0.001 -- High since this is a local and it shouldn't matter
         "dummy-sender"
       mkXhr chain = detailsXhr chainwebHost (meta chain) token account
-  case sequence (map mkXhr chains) of
+  case sequence (M.fromList $ map (\c -> (c, mkXhr c)) chains) of
     Left e -> el "div" $ text $ "Error constructing XHR: " <> T.pack e
     Right xhrs -> do
       pb <- getPostBuild
       results <- performRequestsAsync $ xhrs <$ pb
-      rds <- fmap (getDetails . _xhrResponse_responseText) <$$$> holdDyn Nothing (Just <$> results)
+      rds <- fmap getDetails <$$$> holdDyn Nothing (Just <$> results)
       el "h2" $ text "Account Info"
 
       elClass "table" "ui definition table" $ do
@@ -151,14 +152,17 @@ accountInfo
      )
   => Text
   -> Text
-  -> Maybe [Maybe (Integer, A.Value, PactNumber)]
+  -> Maybe (Map ChainId AccountDetailResponse)
   -> App r t m ()
 accountInfo token account mInfos = do
     (AppState n si mdbh _) <- ask
     case mInfos of
       Nothing -> inlineLoader "Loading..."
       Just infos -> do
-        let good = catMaybes infos
+        let good = catMaybes $ M.toList infos <&> \(ChainId chain,acc) ->
+               case acc of
+                 AccountExists guardd bal -> Just (fromIntegral chain,guardd,bal)
+                 _ -> Nothing
             goodCount = length good
             totalCount = length infos
             --balances = M.unionsWith (+) $ map (\(k,amt) -> M.singleton (encode k) (pactNumberToDecimal amt)) good
@@ -168,8 +172,11 @@ accountInfo token account mInfos = do
         el "p" $ routeLink (mkTransferViewRoute n account token Nothing) (text linkText)
         el "p" $ do
           text $ "Got data from " <> tshow goodCount <> " chains"
-          when (totalCount > goodCount) $
+          when (totalCount > goodCount) $ do
             text $ "(failed to get results from " <> tshow (totalCount - goodCount) <> " chains)"
+            iforM_ infos $ \chain -> \case
+              DetailsError errText -> text $ "(failed to get a result on chain " <> tshow chain <> " due to this error\n" <> errText
+              _ -> pure ()
         elClass "table" "ui celled table" $ do
           el "thead" $ do
             el "tr" $ do
@@ -201,15 +208,6 @@ accountInfo token account mInfos = do
                       mkAccountRoute n token account (Just chain) <$ evt
                 setChainRoute (domEvent Click e)
 
-getDetails :: Maybe Text -> Maybe (Integer, A.Value, PactNumber)
-getDetails mt = do
-    t <- mt
-    chain <- t ^? _Value . key "metaData" . key "publicMeta" . key "chainId" . _String . unpacked . _Show
-    d <- t ^? _Value . key "result" . key "data"
-    g <- d ^? key "guard"
-    bal <- d ^? key "balance"
-    dec <- A.parseMaybe A.parseJSON bal
-    pure (chain, g, dec)
 
 qParam :: Text
 qParam = "q"
@@ -375,3 +373,34 @@ accountSearchLink
   -> m ()
 accountSearchLink netId token account linkText =
   routeLink (mkAccountRoute netId token account Nothing) $ text linkText
+
+data AccountDetailResponse = 
+   AccountDoesntExist
+ | DetailsError Text
+ | AccountExists !A.Value !PactNumber
+
+getDetails :: XhrResponse -> AccountDetailResponse
+getDetails xhr =
+    if status /= 200
+       then DetailsError $ "Invalid Status " <> tshow status
+       else case responseText of
+         Nothing -> DetailsError "No response body"
+         Just t -> case parsedSuccessful t of
+           Just (_chain,g,dec) -> AccountExists g dec
+           Nothing -> case parsedFailure t of
+             Nothing -> DetailsError "Unexpected response body"
+             Just accDoesntExist -> accDoesntExist
+  where
+    status = _xhrResponse_status xhr
+    responseText = _xhrResponse_responseText xhr
+    parsedFailure t = do
+       data_ <- t ^? _Value . key "result" . key "data" . _Bool
+       guard $ not data_
+       return AccountDoesntExist 
+    parsedSuccessful t = do
+        chain :: Integer <- t ^? _Value . key "metaData" . key "publicMeta" . key "chainId" . _String . unpacked . _Show
+        d <- t ^? _Value . key "result" . key "data"
+        g <- d ^? key "guard"
+        bal <- d ^? key "balance"
+        dec <- A.parseMaybe A.parseJSON bal
+        pure (chain, g, dec)

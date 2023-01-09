@@ -131,7 +131,7 @@ detailsXhr host meta token account = do
       }
   where
     aj = "application/json"
-    code = T.pack $ printf "(%s.details \"%s\")" token account
+    code = T.pack $ printf "(try false (%s.details \"%s\"))" token account
     pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local" Nothing
 
 transferXhr :: ChainwebHost -> Text -> Text -> Maybe Integer -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
