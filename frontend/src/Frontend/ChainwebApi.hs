@@ -71,10 +71,6 @@ serviceBaseUrl :: ChainwebHost -> Text
 serviceBaseUrl (ChainwebHost nc cver) =
     hostToText (_netConfig_serviceHost nc) <> "/chainweb/0.0/" <> cver <> "/"
 
-dataBaseUrl :: ChainwebHost -> Text
-dataBaseUrl (ChainwebHost nc _) =
-    maybe "https://estats.chainweb.com" hostToText (_netConfig_dataHost nc)
-
 cutUrl :: ChainwebHost -> Text
 cutUrl ch = p2pBaseUrl ch <> "cut"
 
@@ -134,9 +130,9 @@ detailsXhr host meta token account = do
     code = T.pack $ printf "(%s.details \"%s\")" token account
     pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local" Nothing
 
-transferXhr :: ChainwebHost -> Text -> Text -> Maybe Integer -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
-transferXhr ch account token chainid fromheight limit offset nextToken = do
-  let url = dataBaseUrl ch <> "/txs/account/" <> account <> if T.null rest then "" else "?" <> rest
+transferXhr :: Host -> Text -> Text -> Maybe Integer -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
+transferXhr dataHost account token chainid fromheight limit offset nextToken = do
+  let url = hostToText dataHost <> "/txs/account/" <> account <> if T.null rest then "" else "?" <> rest
       rest = T.intercalate "&" $ ("token=" <> token) : catMaybes params
       params =
         [T.append "chain=" . T.pack . show <$> chainid
