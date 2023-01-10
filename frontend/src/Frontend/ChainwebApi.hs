@@ -572,7 +572,6 @@ requestLooper givenLim givenOffset requester trigger = mdo
   nextLimits <- holdDyn QNone $ makeNewLimit <$> partialResponses
   subsequentResponses <- requester nextLimits (constDyn QNone) nextTokens partialResponses
   pure a
-  -- pure completeResponses
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
