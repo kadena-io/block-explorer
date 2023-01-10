@@ -547,8 +547,8 @@ requestLooper requester givenLim givenOffset trigger = mdo
           <&> \(lim,callerTag) -> LooperTag lim mempty Nothing callerTag
 
   initResponses <- requester (fmap makeQParam givenLim) (fmap makeQParam givenOffset) (constDyn QNone) labelledTrigger
-  -- magic mdo things happen here
 
+  -- magic mdo things happen here
   let allResponses = leftmost [initResponses, subsequentResponses]
   let (_completeResponses, partialResponses) = fanEither completeAndPartialResponses
   let completeAndPartialResponses = allResponses <&> \case
@@ -572,7 +572,6 @@ requestLooper requester givenLim givenOffset trigger = mdo
   nextLimits <- holdDyn QNone $ makeNewLimit <$> partialResponses
   subsequentResponses <- requester nextLimits (constDyn QNone) nextTokens partialResponses
   pure completeAndPartialResponses
-  -- pure completeResponses
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
