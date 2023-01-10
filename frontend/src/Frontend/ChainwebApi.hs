@@ -547,8 +547,8 @@ requestLooper givenLim givenOffset requester trigger = mdo
           <&> \(lim,callerTag) -> LooperTag lim mempty Nothing callerTag
 
   initResponses <- requester (fmap makeQParam givenLim) (fmap makeQParam givenOffset) (constDyn QNone) labelledTrigger
-  -- magic mdo things happen here
 
+  -- magic mdo things happen here
   let allResponses = leftmost [initResponses, subsequentResponses]
   let (_completeResponses, partialResponses) = fanEither a
   let a = allResponses <&> \case
