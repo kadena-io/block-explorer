@@ -490,7 +490,7 @@ searchTxs nc lim off needle evt = do
                 (Proxy :: Proxy (LooperTag TxSummary ()))
                 (constDyn $ mkDataUrl dh)
                 looperOpts
-        txResp <- requestLooper lim off (\limm offf nextToken evt' -> go limm offf needle nextToken evt') evt
+        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf needle nextToken evt') lim off evt
         return $ handleLooperResults <$> txResp
 
 handleLooperResults :: Either (ReqResult t [result]) (LooperTag result callerTag) -> Either Text (Bool, [result])
@@ -535,12 +535,12 @@ getHeadHList (Servant.API.Headers _ (Servant.API.HCons v _)) =
 requestLooper 
    :: forall t m result callerTag. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m), MonadFix m, MonadHold t m)
-   => Dynamic t (Maybe Limit)
+   => Requester' t m (LooperTag result callerTag) result
+   -> Dynamic t (Maybe Limit)
    -> Dynamic t (Maybe Offset)
-   -> Requester' t m (LooperTag result callerTag) result
    -> Event t callerTag
    -> m (Event t (Either (ReqResult callerTag [result]) (LooperTag result callerTag)))
-requestLooper givenLim givenOffset requester trigger = mdo
+requestLooper requester givenLim givenOffset trigger = mdo
   -- make initial requests
   let labelledTrigger = 
        attachPromptlyDyn givenLim trigger 
@@ -597,7 +597,7 @@ searchEvents nc lim off search param name moduleName minHeight evt = do
                 (Proxy :: Proxy (LooperTag EventDetail ()))
                 (constDyn $ mkDataUrl dh)
                 looperOpts
-        txResp <- requestLooper lim off (\limm offf nextToken evt' -> go limm offf search param name moduleName minHeight nextToken evt') evt
+        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf search param name moduleName minHeight nextToken evt') lim off evt
         return $ handleLooperResults <$> txResp
 
 getTxDetails
