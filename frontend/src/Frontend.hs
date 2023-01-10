@@ -503,11 +503,9 @@ rowsWidget
   -> Dynamic t (Map ChainId BlockHeaderTx)
   -> m (Event t (Maybe BlockRef))
 rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
-  _hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
-  _hoverChanges <- blockHeightRow ti gis (traceDyn "hoveredBlock" hoveredBlock) maxNumChains (fst bh) (traceDyn "cs" cs)
+  hoverChanges <- blockHeightRow ti gis hoveredBlock maxNumChains (fst bh) cs
   spacerRow gis cs hoveredBlock maxNumChains bh
-  -- return hoverChanges
-  return never
+  return hoverChanges
 
 blockHeightRow
   :: (MonadAppIO r t m, Prerender js t m,
@@ -583,10 +581,10 @@ blockWidget0 ti gis hoveredBlock maxNumChains hs height cid = do
 
 diffStr :: Double -> Text
 diffStr d = if val < 10
-    then T.pack $ printf "%.3f %s" (d / divisor) units
+    then T.pack $ printf "%.3f %s" val units
     else if val < 100
-            then T.pack $ printf "%.2f %s" (d / divisor) units
-            else T.pack $ printf "%.1f %s" (d / divisor) units
+            then T.pack $ printf "%.2f %s" val units
+            else T.pack $ printf "%.1f %s" val units
   where
     val = d / divisor
     (divisor, units :: String)

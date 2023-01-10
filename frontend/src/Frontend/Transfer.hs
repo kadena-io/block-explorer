@@ -67,7 +67,11 @@ transferHelper
      )
   => AccountParams
   -> App r t m ()
-transferHelper aps = transferWidget (apAccount aps) (apToken aps) (apChain aps) Nothing
+transferHelper ap = do
+     (AppState _ _ cw _) <- ask
+     case cw >>= _netConfig_dataHost of
+       Nothing -> text "Transfers view is not supported unless a chainweb-data url is included in the config!"
+       Just v -> transferWidget (apAccount ap) (apToken ap) (apChain ap) v Nothing
 
 transferWidget
   :: ( MonadApp r t m
@@ -83,12 +87,12 @@ transferWidget
   => Text
   -> Text
   -> Maybe Integer
+  -> Host
   -> Maybe Int
   -> App r t m ()
-transferWidget account token chainid fromheight = do
-  (AppState n si _ _) <- ask -- TODO: add chainweb-data host to appstate record
-  let chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
-      mkXhr lim off nxtToken = transferXhr chainwebHost account token chainid fromheight lim off nxtToken
+transferWidget account token chainid cwHost fromheight = do
+  (AppState n si _ _) <- ask
+  let mkXhr lim off nextToken = transferXhr cwHost account token chainid fromheight lim off nextToken
   case mkXhr Nothing Nothing Nothing of
     Left e -> el "div" $ text $ "Error constructing XHR: " <> T.pack e
     Right xhr -> mdo
@@ -96,7 +100,7 @@ transferWidget account token chainid fromheight = do
       result <- performRequestAsync $ xhr <$ pb
       maccs <- (\xhr' -> (xhr' >>= _xhrResponse_responseText >>= getAccountDetail >>= pure . (,foldMap _xhrResponse_headers xhr'))) <$$> holdDyn Nothing (Just <$> result)
       _ <- networkView $ flip fmap maccs $ \case
-        Nothing -> inlineLoader "Loading..." 
+        Nothing -> inlineLoader "Loading..."
         Just (accs,headers) -> mdo
           elAttr "h2" ("data-tooltip" =: account) $ text $ "Transfer Info"
           elClass "table" "ui definition table" $ do
@@ -105,6 +109,10 @@ transferWidget account token chainid fromheight = do
               tfield "Account" $ accountSearchLink n token account account
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) chainid
           elAttr "div" ("style" =: "display: grid") $ mdo
+            let dumpEmpty = \case
+                  Just "" -> Nothing
+                  Just tt -> Just tt
+                  Nothing -> Nothing
             t <- elClass "table" "ui celled table" $ do
               el "thead" $ el "tr" $ do
                 el "th" $ text "Request Key"
@@ -113,17 +121,15 @@ transferWidget account token chainid fromheight = do
                 el "th" $ text "From/To"
                 el "th" $ text "Amount"
               el "tbody" $ do
-                forM_ accs $ \acc -> el "tr" $ drawRow n token account chainid acc
-                p <- produceNewRowsOnToken mkXhr n token account chainid e
+                let rowsToRender details = forM_ details $ \detail -> el "tr" $ drawRow n token account chainid detail
+                rowsToRender accs
+                p <- produceNewRowsOnToken mkXhr e
                 let (errorE, goodE) = fanEither p
-                let (render,newToken) = splitE goodE
-                indexWithRender <- accum (\(key,_oldRender) newRender -> (succ key, newRender)) (0 :: Integer, pure ()) render
+                let (details,newToken) = splitE goodE
+                indexWithRender <- accum (\(key,_oldDetails) newDetails -> (succ key, rowsToRender newDetails)) (0 :: Integer, pure ()) details
                 void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
-                let dumpEmpty = \case
-                      "" -> Right Nothing
-                      tt -> Right $ Just tt
-                return $ leftmost [fmap Left errorE, fmap dumpEmpty newToken]
-            e <- case M.lookup "Chainweb-Next" headers of
+                return $ leftmost [fmap Left errorE, fmap (Right . dumpEmpty) newToken]
+            e <- case dumpEmpty $ M.lookup "Chainweb-Next" headers of
               Nothing -> pure never
               Just next -> evaporateButtonOnClick next t
             pure ()
@@ -155,7 +161,7 @@ evaporateButtonOnClick
   => Text -> Event t (Either TransferError (Maybe Text)) -> m (Event t Text)
 evaporateButtonOnClick token t = mdo
   let something = leftmost [(inlineLoader "Fetching more rows..." >> pure never) <$ click, v]
-      v = t <&> \case 
+      v = t <&> \case
         Right (Just newToken) -> (const newToken) <$$> fetchButton nextButtonText
         Right Nothing -> pure never
         Left (NonHTTP200 status) -> disabledButton ("Non 200 HTTP Status: " <> T.pack (show status)) >> pure never
@@ -171,26 +177,25 @@ type TransferXHR = Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrReq
 
 data TransferError = NonHTTP200 Word | MissingHeader | BadResponse | NoResponseText
 
-produceNewRowsOnToken 
+produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
-  => TransferXHR -> NetId -> Text -> Text -> Maybe Integer -> Event t Text -> m (Event t (Either TransferError (m (), Text)))
-produceNewRowsOnToken mkXhr n token account chainid nxtToken = do
-  result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nxtToken -- TODO: Don't use error here
-  return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200 
-     then Left $ NonHTTP200 (_xhrResponse_status xhr) 
+  => TransferXHR -> Event t Text -> m (Event t (Either TransferError ([AccountDetail], Maybe Text)))
+produceNewRowsOnToken mkXhr nextToken = do
+  result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nextToken -- TODO: Don't use error here
+  return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200
+     then Left $ NonHTTP200 (_xhrResponse_status xhr)
      else do
          r <- note NoResponseText $ _xhrResponse_responseText xhr
          details <- note BadResponse $ getAccountDetail r
          let headers = _xhrResponse_headers xhr
-         let rowsToRender = forM_ details $ \detail -> el "tr" $ drawRow n token account chainid detail
          case M.lookup "Chainweb-Next" headers of
-           Nothing -> Left MissingHeader
-           Just cwnext -> Right (rowsToRender, cwnext)
+           Nothing -> Right (details, Nothing)
+           Just cwnext -> Right (details, Just cwnext)
 
-drawRow 
-  :: Monad m 
+drawRow
+  :: Monad m
    => RouteToUrl (R FrontendRoute) m
    => SetRoute t (R FrontendRoute) m
    => DomBuilder t m

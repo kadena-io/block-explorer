@@ -34,6 +34,7 @@ import           Servant.Reflex
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainwebMeta
+import           Chainweb.Api.PactNumber
 import           ChainwebData.Api
 import           ChainwebData.EventDetail
 import           ChainwebData.Pagination
@@ -46,7 +47,6 @@ import           Frontend.ChainwebApi
 import           Frontend.Common
 import           Frontend.Page.Block
 import           Frontend.Transactions
-import           PactNumber
 ------------------------------------------------------------------------------
 
 accountSearchPage
@@ -75,11 +75,9 @@ accountHelper
      )
   => AccountParams
   -> App r t m ()
-accountHelper aps = case apChain aps of
-  Nothing -> accountWidget token account
-  Just chain -> accountChainWidget token account chain
-  where token = apToken aps
-        account = apAccount aps
+accountHelper ap = accountWidget token account
+  where token = apToken ap
+        account = apAccount ap
 
 accountWidget
   :: ( MonadApp r t m
@@ -164,8 +162,6 @@ accountInfo token account mInfos = do
         let good = catMaybes infos
             goodCount = length good
             totalCount = length infos
-            --balances = M.unionsWith (+) $ map (\(k,amt) -> M.singleton (encode k) (pactNumberToDecimal amt)) good
-            --addValue chain (newCoins, newCount) (oldCoins, oldCount) = (oldCoins + newCoins, oldCount + newCount)
             balances = foldl' addTo mempty good
         let linkText = "View most recent transfers associated to this account."
         el "p" $ routeLink (mkTransferViewRoute n account token Nothing) (text linkText)
@@ -192,15 +188,12 @@ accountInfo token account mInfos = do
                   text $ "spread across " <> tshow (M.size $ _chainInfo_chainBalances cinfo) <> " chains"
                 return openDyn
               forM_ (M.toList $ _chainInfo_chainBalances cinfo) $ \(chain, bal) -> do
-                let mkAttrs open = if open then "class" =: "selectable-row" <> "style" =: "cursor: pointer;" else "class" =: "selectable-row" <> "style" =: "display: none;"
-                (e,_) <- elDynAttr' "tr" (mkAttrs <$> openDyn) $ do
+                let mkAttrs open = "style" =: if open then  "cursor: auto;" else "display: none;"
+                elDynAttr "tr" (mkAttrs <$> openDyn) $ do
                   el "td" blank
                   el "td" $ routeLink (mkTransferViewRoute n account "coin" (Just chain)) $
                     text $ "Chain " <> T.pack (show chain)
                   el "td" $ text $ tshow bal
-                let setChainRoute evt = setRoute $
-                      mkAccountRoute n token account (Just chain) <$ evt
-                setChainRoute (domEvent Click e)
 
 getDetails :: Maybe Text -> Maybe (Integer, A.Value, PactNumber)
 getDetails mt = do
@@ -220,133 +213,6 @@ limParam = "lim"
 
 pageParam :: Text
 pageParam = "page"
-
-accountChainWidget
-  :: ( MonadApp r t m
-     , DomBuilder t m
-     , MonadJSM (Performable m)
-     , HasJSContext (Performable m)
-     , Prerender js t m
-     , RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m
-     , MonadIO m
-     )
-  => Text
-  -> Text
-  -> Integer
-  -> App r t m ()
-accountChainWidget token account _chain = do
-  (AppState n si mdbh _) <- ask
-  let _chains = S.toList $ _siChains si
-      _chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
-  case mdbh of
-    Nothing -> text "Event search feature not available for this network"
-    Just dbh -> do
-      pb <- getPostBuild
-      --pmap <- askRoute
-      --let page = do
-      --      pm <- pmap
-      --      pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
-      res <- searchEvents dbh
-          (constDyn $ Just $ Limit itemsPerPage)
-          (Just . Offset . (*itemsPerPage) . pred <$> constDyn 1)
-          (constDyn QNone)
-          (QParamSome <$> constDyn (EventParam $ token <> ".TRANSFER"))
-          (QParamSome <$> constDyn (EventName account))
-          (constDyn QNone)
-          (constDyn QNone)
-          pb
-      --divClass "ui pagination menu" $ do
-      --  let setSearchRoute f e = setRoute $
-      --        tag (current $ mkEventSearchRoute n <$> needle <*> fmap (Just . f) page) e
-      --      prevAttrs p = if p == 1
-      --                      then "class" =: "disabled item"
-      --                      else "class" =: "item"
-      --  (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
-      --  setSearchRoute pred (domEvent Click p)
-      --  divClass "disabled item" $ display page
-      --  (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
-      --  setSearchRoute succ (domEvent Click next)
-
-      let f = either text (accountHistTable n)
-      void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
-
---accountSearch
---    :: ( MonadApp r t m
---       , Prerender js t m
---       , MonadJSM (Performable m)
---       , HasJSContext (Performable m)
---       , RouteToUrl (R FrontendRoute) m
---       , SetRoute t (R FrontendRoute) m
---       )
---    => m ()
---accountSearch = do
---    pmap <- askRoute
---    pb <- getPostBuild
---    let page = do
---          pm <- pmap
---          pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
---        needle = do
---          pm <- pmap
---          pure $ fromMaybe "" $ join (M.lookup qParam pm)
---        newSearch = leftmost [pb, () <$ updated pmap]
---    res <- searchEvents dbh
---        (constDyn $ QParamSome $ Limit itemsPerPage)
---        (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
---        (QParamSome <$> needle)
---        (constDyn QNone)
---        (constDyn QNone)
---        newSearch
---    divClass "ui pagination menu" $ do
---      let setSearchRoute f e = setRoute $
---            tag (current $ mkEventSearchRoute n <$> needle <*> fmap (Just . f) page) e
---          prevAttrs p = if p == 1
---                          then "class" =: "disabled item"
---                          else "class" =: "item"
---      (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
---      setSearchRoute pred (domEvent Click p)
---      divClass "disabled item" $ display page
---      (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
---      setSearchRoute succ (domEvent Click next)
---
---    let f = either text (evTable n)
---    void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
-
-accountHistTable
-  :: ( DomBuilder t m
-     , Prerender js t m
-     , RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m
-     )
-  => NetId
-  -> (Bool, [EventDetail])
-  -> m ()
-accountHistTable _ (t, []) = do
-  el "h4" $ text "Event Search"
-  if t then text "No results." else inlineLoader "Loading new results ..."
-accountHistTable net (t, evs) = do
-  el "h4" $ text "Event Search"
-  elClass "table" "ui compact celled table" $ do
-    el "thead" $ el "tr" $ do
-      el "th" $ text "Block Time"
-      el "th" $ text "Height"
-      el "th" $ text "Tx"
-      el "th" $ text "Event"
-      el "th" $ text "Parameters"
-    el "tbody" $ do
-      forM_ evs $ \ev -> el "tr" $ do
-        let chain = _evDetail_chain ev
-        let height = _evDetail_height ev
-        let rk = T.take 10 (_evDetail_requestKey ev) <> "..."
-        elAttr "td" ("data-label" =: "Chain") $
-            text $ tshow $ _evDetail_blockTime ev
-        elAttr "td" ("data-label" =: "Height") $
-            blockLink net (ChainId chain) height $ tshow height
-        elAttr "td" ("data-label" =: "Tx") $
-            txDetailLink net (_evDetail_requestKey ev) rk
-        elAttr "td" ("data-label" =: "Event") $
-            text $ _evDetail_name ev
-        elAttr "td" ("data-label" =: "Parameters") $ el "pre" $
-            text $ T.intercalate "\n" (map pactValueJSON $ _evDetail_params ev)
-  unless t $ inlineLoader "Loading new rows..."
 
 mkTransferViewRoute :: NetId -> Text -> Text -> Maybe Integer -> R FrontendRoute
 mkTransferViewRoute netId account token chainid =
