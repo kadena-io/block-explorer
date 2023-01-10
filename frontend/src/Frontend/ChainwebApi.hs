@@ -526,6 +526,12 @@ getHeadHList (Servant.API.Headers _ (Servant.API.HCons v _)) =
     Header n -> Just n
     _ -> Nothing
 
+-- | Given a "Requester", i.e. a function for making XHR requests with `(limit, offset, nextToken)` triples, construct a function for making XHR requests with `(limit, offset)` pairs. 
+-- 
+-- Every time `trigger` fires, "requestLooper" kicks off a chain of requests starting 
+-- with the given `limit` and `offset` and keeps making new requests until the endpoint 
+-- responds without a `Chainweb-Next` header (no more results) or it accumulates 
+-- `limit`-many results through the requests it makes.
 requestLooper 
    :: forall t m result callerTag. (TriggerEvent t m, PerformEvent t m,
         HasJSContext (Performable m), MonadJSM (Performable m), MonadFix m, MonadHold t m)
