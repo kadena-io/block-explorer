@@ -550,8 +550,8 @@ requestLooper requester givenLim givenOffset trigger = mdo
   -- magic mdo things happen here
 
   let allResponses = leftmost [initResponses, subsequentResponses]
-  let (_completeResponses, partialResponses) = fanEither a
-  let a = allResponses <&> \case
+  let (_completeResponses, partialResponses) = fanEither completeAndPartialResponses
+  let completeAndPartialResponses = allResponses <&> \case
         ResponseSuccess t hr xhr@(XhrResponse {..}) -> case getHeadHList hr of
           Just next 
             | enoughResponses -> Left $ ResponseSuccess (callerTag t) ((accumulatedResults t) ++ r) xhr
@@ -571,7 +571,7 @@ requestLooper requester givenLim givenOffset trigger = mdo
   nextTokens <- holdDyn QNone $ getNextToken  <$> partialResponses
   nextLimits <- holdDyn QNone $ makeNewLimit <$> partialResponses
   subsequentResponses <- requester nextLimits (constDyn QNone) nextTokens partialResponses
-  pure a
+  pure completeAndPartialResponses
   -- pure completeResponses
 
 searchEvents
