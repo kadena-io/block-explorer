@@ -60,6 +60,7 @@ import           Chainweb.Api.PactCommand
 import           Chainweb.Api.Payload
 import           Chainweb.Api.RespItems
 import           Chainweb.Api.Transaction
+import           ChainwebData.AccountDetail
 import           ChainwebData.Api
 import           ChainwebData.Pagination
 import           ChainwebData.TxDetail
@@ -631,3 +632,47 @@ getChainwebStats nc evt = do
                 (constDyn $ mkDataUrl dh)
         txResp <- go evt
         return $ r2e <$> txResp
+
+getTransfers
+    :: forall t m. (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m))
+    => NetConfig
+    -> Dynamic t (QParam Limit)
+    -> Dynamic t (QParam Offset)
+    -> Dynamic t (Either Text Text) -- Account Name
+    -> Dynamic t (QParam Text) -- Token
+    -> Dynamic t (QParam ChainId)
+    -> Dynamic t (QParam NextToken)
+    -> Event t ()
+    -> m (Event t (Either TransferError ([AccountDetail], Maybe NextToken)))
+getTransfers nc lim off account token chain nextToken evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> _  :<|> _ :<|> _ :<|> go) :<|> _) =
+              clientWithOpts chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+                transferOpts
+	trResp <- go account token chain lim off nextToken evt
+        return $ go_ <$> trResp
+  where
+    go_ = \case
+        ResponseSuccess _ a _ ->
+                Right (getResponse a, getNextHeader a)
+        ResponseFailure _ txt xhrResponse
+                | _xhrResponse_status xhrResponse /= 200 -> Left $ NonHTTP200 (_xhrResponse_status xhrResponse)
+                | otherwise -> Left $ BadResponse txt
+
+        RequestFailure _ txt -> Left $ ReqFailure txt
+    transferOpts = ClientOptions $ \xhrReq -> pure $
+        set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
+
+getNextHeader :: NextHeaders a -> Maybe NextToken
+getNextHeader (Servant.API.Headers _ (Servant.API.HCons v _)) =
+  case v of
+    Header n -> Just n
+    _ -> Nothing
+
+data TransferError = NonHTTP200 Word | BadResponse Text | ReqFailure Text

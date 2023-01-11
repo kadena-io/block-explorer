@@ -26,9 +26,11 @@ import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
+import           Servant.Common.Req hiding (note)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           ChainwebData.AccountDetail
+import           ChainwebData.Pagination
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -71,7 +73,7 @@ transferHelper ap = do
      (AppState _ _ cw _) <- ask
      case cw >>= _netConfig_dataHost of
        Nothing -> text "Transfers view is not supported unless a chainweb-data url is included in the config!"
-       Just v -> transferWidget (apAccount ap) (apToken ap) (apChain ap) v Nothing
+       Just _v -> transferWidget (apAccount ap) (apToken ap) (apChain ap) (fromJust cw) Nothing -- We can assume the netconfig exists if we got to this branch!
 
 transferWidget
   :: ( MonadApp r t m
@@ -87,21 +89,28 @@ transferWidget
   => Text
   -> Text
   -> Maybe Integer
-  -> Host
+  -> NetConfig
   -> Maybe Int
   -> App r t m ()
-transferWidget account token chainid cwHost fromheight = do
-  (AppState n si _ _) <- ask
-  let mkXhr lim off nextToken = transferXhr cwHost account token chainid fromheight lim off nextToken
-  case mkXhr Nothing Nothing Nothing of
-    Left e -> el "div" $ text $ "Error constructing XHR: " <> T.pack e
-    Right xhr -> mdo
-      pb <- getPostBuild
-      result <- performRequestAsync $ xhr <$ pb
-      maccs <- (\xhr' -> (xhr' >>= _xhrResponse_responseText >>= getAccountDetail >>= pure . (,foldMap _xhrResponse_headers xhr'))) <$$> holdDyn Nothing (Just <$> result)
-      _ <- networkView $ flip fmap maccs $ \case
-        Nothing -> inlineLoader "Loading..."
-        Just (accs,headers) -> mdo
+transferWidget account token chainid nc _fromheight = do
+    pb <- getPostBuild
+    res <- mkXhr QNone QNone (constDyn QNone) pb
+    void $ networkHold (inlineLoader "Loading...") (f <$> res)
+  where
+    mkXhr lim off nextToken evt =
+      getTransfers
+      nc
+      (constDyn lim)
+      (constDyn off)
+      (constDyn $ Right account)
+      (constDyn $ QParamSome token)
+      (constDyn $ maybe QNone (QParamSome . ChainId . fromIntegral) chainid)
+      nextToken
+        evt
+    f = \case
+        Left _ -> pure ()
+        Right (accs, nextHeaderToken) -> mdo
+          (AppState n _ _ _) <- ask
           elAttr "h2" ("data-tooltip" =: account) $ text $ "Transfer Info"
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
@@ -109,10 +118,6 @@ transferWidget account token chainid cwHost fromheight = do
               tfield "Account" $ accountSearchLink n token account account
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) chainid
           elAttr "div" ("style" =: "display: grid") $ mdo
-            let dumpEmpty = \case
-                  Just "" -> Nothing
-                  Just tt -> Just tt
-                  Nothing -> Nothing
             t <- elClass "table" "ui celled table" $ do
               el "thead" $ el "tr" $ do
                 el "th" $ text "Request Key"
@@ -128,13 +133,12 @@ transferWidget account token chainid cwHost fromheight = do
                 let (details,newToken) = splitE goodE
                 indexWithRender <- accum (\(key,_oldDetails) newDetails -> (succ key, rowsToRender newDetails)) (0 :: Integer, pure ()) details
                 void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
-                return $ leftmost [fmap Left errorE, fmap (Right . dumpEmpty) newToken]
-            e <- case dumpEmpty $ M.lookup "Chainweb-Next" headers of
+                return $ leftmost [fmap Left errorE, fmap Right newToken]
+            e <- case nextHeaderToken of
               Nothing -> pure never
-              Just next -> evaporateButtonOnClick next t
+              Just (NextToken next) -> evaporateButtonOnClick next t
             pure ()
 
-      pure ()
 
 nextButtonText :: Text
 nextButtonText = "Fetch more results..."
@@ -165,34 +169,33 @@ evaporateButtonOnClick token t = mdo
         Right (Just newToken) -> (const newToken) <$$> fetchButton nextButtonText
         Right Nothing -> pure never
         Left (NonHTTP200 status) -> disabledButton ("Non 200 HTTP Status: " <> T.pack (show status)) >> pure never
-        Left MissingHeader -> disabledButton "Missing Chainweb-Next Header"  >> pure never
-        Left BadResponse -> disabledButton "Bad response" >> pure never
-        Left NoResponseText -> disabledButton "Missing response in HTTP Request" >> pure never
+        Left (BadResponse txt) -> disabledButton ("Bad response: " <> txt) >> pure never
+        Left (ReqFailure txt) -> disabledButton ("Request Failure: " <> txt) >> pure never
   beenClicked <- holdDyn ((const token) <$$> fetchButton nextButtonText) something
   clickNow <- networkView beenClicked
   click <- switchHold never clickNow
   pure click
 
-type TransferXHR = Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
-
-data TransferError = NonHTTP200 Word | MissingHeader | BadResponse | NoResponseText
+type TransferRequest t m =
+        QParam Limit
+        -> QParam Offset
+        -> Dynamic t (QParam NextToken)
+        -> Event t ()
+        -> m (Event t (Either TransferError ([AccountDetail], Maybe NextToken)))
 
 produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
-  => TransferXHR -> Event t Text -> m (Event t (Either TransferError ([AccountDetail], Maybe Text)))
+  => TransferRequest t m -> Event t Text -> m (Event t (Either TransferError ([AccountDetail], Maybe Text)))
 produceNewRowsOnToken mkXhr nextToken = do
-  result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nextToken -- TODO: Don't use error here
-  return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200
-     then Left $ NonHTTP200 (_xhrResponse_status xhr)
-     else do
-         r <- note NoResponseText $ _xhrResponse_responseText xhr
-         details <- note BadResponse $ getAccountDetail r
-         let headers = _xhrResponse_headers xhr
-         case M.lookup "Chainweb-Next" headers of
-           Nothing -> Right (details, Nothing)
-           Just cwnext -> Right (details, Just cwnext)
+    newTokenDyn <- holdDyn QNone (QParamSome . NextToken <$> nextToken)
+    mkXhr QNone QNone newTokenDyn (() <$ nextToken) <&&> \case
+            Left err -> Left err
+            Right (details, nextTokenHeader) -> Right (details, unNextToken <$> nextTokenHeader)
+  where
+    (<&&>) = flip (fmap . fmap)
+
 
 drawRow
   :: Monad m
