@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
@@ -54,6 +55,7 @@ import           Chainweb.Api.PactCommand
 import           Chainweb.Api.Payload
 import           Chainweb.Api.RespItems
 import           Chainweb.Api.Transaction
+import           ChainwebData.AccountDetail
 import           ChainwebData.Api
 import           ChainwebData.Pagination
 import           ChainwebData.TxDetail
@@ -543,3 +545,37 @@ getChainwebStats nc evt = do
                 (constDyn $ mkDataUrl dh)
         txResp <- go evt
         return $ r2e <$> txResp
+
+getTransfers
+    :: forall t m. (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m))
+    => NetConfig
+    -> Dynamic t (QParam Limit)
+    -> Dynamic t (QParam Offset)
+    -> Dynamic t (Either Text Text) -- Account Name
+    -> Dynamic t (QParam Text) -- Token
+    -> Dynamic t (QParam ChainId)
+    -> Dynamic t (QParam NextToken)
+    -> Event t ()
+    -> m (Event t (Either Text ([AccountDetail], Maybe NextToken)))
+getTransfers nc lim off account token chain nextToken evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> _  :<|> _ :<|> _ :<|> go) :<|> _) =
+              clientWithOpts chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+                transferOpts
+	trResp <- go account token chain lim off nextToken evt
+        return $ go_ <$> trResp
+  where
+    go_ = \case
+        ResponseSuccess _tag a xhrResponse ->
+                Right (getResponse a, fmap NextToken $ M.lookup "Chainweb-Next" $ _xhrResponse_headers xhrResponse)
+        ResponseFailure _tag _text _xhr -> undefined
+        RequestFailure _tag _text -> undefined
+    transferOpts = ClientOptions $ \xhrReq ->
+        pure $ xhrReq { _xhrRequest_config = (_xhrRequest_config xhrReq) {
+                _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next" }}
