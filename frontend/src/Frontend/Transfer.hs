@@ -171,9 +171,8 @@ evaporateButtonOnClick token t = mdo
         Right (Just newToken) -> (const newToken) <$$> fetchButton nextButtonText
         Right Nothing -> pure never
         Left (NonHTTP200 status) -> disabledButton ("Non 200 HTTP Status: " <> T.pack (show status)) >> pure never
-        Left MissingHeader -> disabledButton "Missing Chainweb-Next Header"  >> pure never
-        Left BadResponse -> disabledButton "Bad response" >> pure never
-        Left NoResponseText -> disabledButton "Missing response in HTTP Request" >> pure never
+        Left (BadResponse txt) -> disabledButton ("Bad response: " <> txt) >> pure never
+        Left (ReqFailure txt) -> disabledButton ("Request Failure: " <> txt) >> pure never
   beenClicked <- holdDyn ((const token) <$$> fetchButton nextButtonText) something
   clickNow <- networkView beenClicked
   click <- switchHold never clickNow
@@ -184,9 +183,7 @@ type TransferRequest t m =
         -> QParam Offset
         -> Dynamic t (QParam NextToken)
         -> Event t ()
-        -> m (Event t (Either Text ([AccountDetail], Maybe NextToken)))
-
-data TransferError = NonHTTP200 Word | MissingHeader | BadResponse | NoResponseText
+        -> m (Event t (Either TransferError ([AccountDetail], Maybe NextToken)))
 
 produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
@@ -194,23 +191,13 @@ produceNewRowsOnToken
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
   => TransferRequest t m -> Event t Text -> m (Event t (Either TransferError ([AccountDetail], Maybe Text)))
 produceNewRowsOnToken mkXhr nextToken = do
-        newTokenDyn <- holdDyn QNone (QParamSome . NextToken <$> nextToken)
-        mkXhr QNone QNone newTokenDyn (() <$ nextToken) <&&> \case
-                Left _ -> undefined
-                Right (details, nextTokenHeader) -> Right (details, unNextToken <$> nextTokenHeader)
+    newTokenDyn <- holdDyn QNone (QParamSome . NextToken <$> nextToken)
+    mkXhr QNone QNone newTokenDyn (() <$ nextToken) <&&> \case
+            Left err -> Left err
+            Right (details, nextTokenHeader) -> Right (details, unNextToken <$> nextTokenHeader)
   where
     (<&&>) = flip (fmap . fmap)
--- produceNewRowsOnToken mkXhr nextToken = do
---   result <- performRequestAsync $ fmap (\t -> either error id $ mkXhr Nothing Nothing (Just t)) nextToken -- TODO: Don't use error here
---   return $ result <&> \xhr -> if _xhrResponse_status xhr /= 200
---      then Left $ NonHTTP200 (_xhrResponse_status xhr)
---      else do
---          r <- note NoResponseText $ _xhrResponse_responseText xhr
---          details <- note BadResponse $ getAccountDetail r
---          let headers_ = _xhrResponse_headers xhr
---          case M.lookup "Chainweb-Next" headers_ of
---            Nothing -> Right (details, Nothing)
---            Just cwnext -> Right (details, Just cwnext)
+
 
 drawRow
   :: Monad m

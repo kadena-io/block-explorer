@@ -558,7 +558,7 @@ getTransfers
     -> Dynamic t (QParam ChainId)
     -> Dynamic t (QParam NextToken)
     -> Event t ()
-    -> m (Event t (Either Text ([AccountDetail], Maybe NextToken)))
+    -> m (Event t (Either TransferError ([AccountDetail], Maybe NextToken)))
 getTransfers nc lim off account token chain nextToken evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
@@ -573,17 +573,20 @@ getTransfers nc lim off account token chain nextToken evt = do
         return $ go_ <$> trResp
   where
     go_ = \case
-        ResponseSuccess _tag a _xhrResponse ->
+        ResponseSuccess _ a _ ->
                 Right (getResponse a, getNextHeader a)
-        ResponseFailure _tag _text _xhr -> undefined
-        RequestFailure _tag _text -> undefined
+        ResponseFailure _ txt xhrResponse
+                | _xhrResponse_status xhrResponse /= 200 -> Left $ NonHTTP200 (_xhrResponse_status xhrResponse)
+                | otherwise -> Left $ BadResponse txt
+
+        RequestFailure _ txt -> Left $ ReqFailure txt
     transferOpts = ClientOptions $ \xhrReq -> pure $
-        set (xhrRequest_config . xhrRequestConfig_responseHeaders) (OnlyHeaders $ Set.singleton "Chainweb-Next") xhrReq
+        set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
 
 getNextHeader :: NextHeaders a -> Maybe NextToken
 getNextHeader (Servant.API.Headers _ (Servant.API.HCons v _)) =
   case v of
-    Header n@(NextToken t)
-        | T.null t -> Nothing
-        | otherwise -> Just n
+    Header n -> Just n
     _ -> Nothing
+
+data TransferError = NonHTTP200 Word | BadResponse Text | ReqFailure Text
