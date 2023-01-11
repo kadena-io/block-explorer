@@ -495,8 +495,7 @@ handleLooperResults = \case
    Right partial -> Right $ (False, accumulatedResults partial)
 
 looperOpts :: ClientOptions
-looperOpts = ClientOptions $ \xhrReq ->
-    pure $ xhrReq { _xhrRequest_config = (_xhrRequest_config xhrReq) { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"}}
+looperOpts = ClientOptions $ \xhrReq -> pure $ set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
 
 data LooperTag result callerTag = LooperTag
   {
