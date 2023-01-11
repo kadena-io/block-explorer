@@ -94,7 +94,7 @@ transferWidget
   -> NetConfig
   -> Maybe Int
   -> App r t m ()
-transferWidget account token chainid nc _fromheight = mdo
+transferWidget account token chainid nc _fromheight = do
     pb <- getPostBuild
     res <- mkXhr QNone QNone (constDyn QNone) pb
     void $ networkHold (inlineLoader "Loading...") (f <$> res)
@@ -120,10 +120,6 @@ transferWidget account token chainid nc _fromheight = mdo
               tfield "Account" $ accountSearchLink n token account account
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) chainid
           elAttr "div" ("style" =: "display: grid") $ mdo
-            let dumpEmpty = \case
-                  Just "" -> Nothing
-                  Just tt -> Just tt
-                  Nothing -> Nothing
             t <- elClass "table" "ui celled table" $ do
               el "thead" $ el "tr" $ do
                 el "th" $ text "Request Key"
@@ -139,10 +135,10 @@ transferWidget account token chainid nc _fromheight = mdo
                 let (details,newToken) = splitE goodE
                 indexWithRender <- accum (\(key,_oldDetails) newDetails -> (succ key, rowsToRender newDetails)) (0 :: Integer, pure ()) details
                 void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
-                return $ leftmost [fmap Left errorE, fmap (Right . dumpEmpty) newToken]
-            e <- case dumpEmpty $ fmap unNextToken $ nextHeaderToken of
+                return $ leftmost [fmap Left errorE, fmap Right newToken]
+            e <- case nextHeaderToken of
               Nothing -> pure never
-              Just next -> evaporateButtonOnClick next t
+              Just (NextToken next) -> evaporateButtonOnClick next t
             pure ()
 
 

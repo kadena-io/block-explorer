@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -572,10 +573,17 @@ getTransfers nc lim off account token chain nextToken evt = do
         return $ go_ <$> trResp
   where
     go_ = \case
-        ResponseSuccess _tag a xhrResponse ->
-                Right (getResponse a, fmap NextToken $ M.lookup "Chainweb-Next" $ _xhrResponse_headers xhrResponse)
+        ResponseSuccess _tag a _xhrResponse ->
+                Right (getResponse a, getNextHeader a)
         ResponseFailure _tag _text _xhr -> undefined
         RequestFailure _tag _text -> undefined
-    transferOpts = ClientOptions $ \xhrReq ->
-        pure $ xhrReq { _xhrRequest_config = (_xhrRequest_config xhrReq) {
-                _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next" }}
+    transferOpts = ClientOptions $ \xhrReq -> pure $
+        set (xhrRequest_config . xhrRequestConfig_responseHeaders) (OnlyHeaders $ Set.singleton "Chainweb-Next") xhrReq
+
+getNextHeader :: NextHeaders a -> Maybe NextToken
+getNextHeader (Servant.API.Headers _ (Servant.API.HCons v _)) =
+  case v of
+    Header n@(NextToken t)
+        | T.null t -> Nothing
+        | otherwise -> Just n
+    _ -> Nothing
