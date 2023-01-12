@@ -167,8 +167,7 @@ evaporateButtonOnClick token t = mdo
       v = t <&> \case
         Right (Just newToken) -> (const newToken) <$$> fetchButton nextButtonText
         Right Nothing -> pure never
-        Left (NonHTTP200 status) -> disabledButton ("Non 200 HTTP Status: " <> T.pack (show status)) >> pure never
-        Left (BadResponse txt) -> disabledButton ("Bad response: " <> txt) >> pure never
+        Left (BadResponse txt status) -> disabledButton ("Bad response (status: " <> tshow status <> "): " <> txt) >> pure never
         Left (ReqFailure txt) -> disabledButton ("Request Failure: " <> txt) >> pure never
   beenClicked <- holdDyn ((const token) <$$> fetchButton nextButtonText) something
   clickNow <- networkView beenClicked
