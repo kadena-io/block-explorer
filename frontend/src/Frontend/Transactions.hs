@@ -10,7 +10,6 @@ import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Reader
 import           Data.Aeson.Lens
-import           Data.Dependent.Sum
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import           Data.Maybe
@@ -56,7 +55,7 @@ recentTransactions tcount txs = do
   if S.null (_recentTxs_txs txs)
     then blank
     else do
-      txTable net "Recent Transactions" $ take tcount $ getSummaries txs
+      txTable net "Recent Transactions" $ (True, take tcount $ getSummaries txs)
 
 
 qParam :: Text
@@ -96,8 +95,8 @@ transactionSearch = do
             newSearch = leftmost [pb, () <$ updated pmap]
 
         res <- searchTxs nc
-                 (constDyn $ QParamSome $ Limit itemsPerPage)
-                 (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
+                 (constDyn $ Just $ Limit itemsPerPage)
+                 (Just . Offset . (*itemsPerPage) . pred <$> page)
                  (QParamSome <$> needle) newSearch
 
         divClass "ui pagination menu" $ do
@@ -150,8 +149,8 @@ eventSearch = do
               pure $ fromMaybe "" $ join (M.lookup qParam pm)
             newSearch = leftmost [pb, () <$ updated pmap]
         res <- searchEvents nc
-            (constDyn $ QParamSome $ Limit itemsPerPage)
-            (QParamSome . Offset . (*itemsPerPage) . pred <$> page)
+            (constDyn $ Just $ Limit itemsPerPage)
+            (Just . Offset . (*itemsPerPage) . pred <$> page)
             (QParamSome <$> needle)
             (constDyn QNone) 
             (constDyn QNone)
@@ -188,12 +187,12 @@ txTable
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => NetId
   -> Text
-  -> [TxSummary]
+  -> (Bool,[TxSummary])
   -> m ()
-txTable _ hdr [] = do
+txTable _ hdr (t,[]) = do
   el "h4" $ text hdr
-  text "No results"
-txTable net hdr txs = do
+  if t then text "No results" else inlineLoader "Loading results..."
+txTable net hdr (t,txs) = do
   el "h4" $ text hdr
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do
@@ -224,6 +223,7 @@ txTable net hdr txs = do
             txDetailLink net rk (T.take 24 rk <> "...")
         elAttr "td" ("data-label" =: "Preview") $
             txDetailLink net rk $ txPreview (_txSummary_code tx) (_txSummary_continuation tx)
+  unless t $ inlineLoader "Loading new rows..."
   where
     txPreview :: Maybe Text -> Maybe A.Value -> Text
     txPreview (Just code) _ | openns (T.take 6 code) = elide (T.takeWhile (/= ' ') code)
@@ -234,7 +234,7 @@ txTable net hdr txs = do
         elide $ "(" <> renderCompactText (_pcDef c)
       A.Error _ -> "<unavailable>"
     txPreview _ _ = "<unavailable>"
-    elide t = T.take 64 t <> " ..."
+    elide tt = T.take 64 tt <> " ..."
     openns "(user." = True
     openns "(free." = True
     openns _ = False
@@ -243,12 +243,12 @@ evTable
   :: (DomBuilder t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
   => NetId
-  -> [EventDetail]
+  -> (Bool, [EventDetail])
   -> m ()
-evTable _ [] = do
+evTable _ (t, []) = do
   el "h4" $ text "Event Search"
-  text "No results."
-evTable net evs = do
+  if t then text "No results." else inlineLoader "Loading results..."
+evTable net (t, evs) = do
   el "h4" $ text "Event Search"
   elClass "table" "ui compact celled table" $ do
     el "thead" $ el "tr" $ do
@@ -272,6 +272,7 @@ evTable net evs = do
             text $ _evDetail_name ev
         elAttr "td" ("data-label" =: "Parameters") $ el "pre" $
             text $ T.intercalate "\n" (map pactValueJSON $ _evDetail_params ev)
+  unless t $ inlineLoader "Loading new rows..."
 
 showCont :: AsValue s => s -> Text
 showCont v = "<continuation> " <> fromMaybe "" (v ^? key "continuation" . key "def" . _String)

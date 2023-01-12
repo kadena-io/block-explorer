@@ -4,6 +4,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
@@ -13,6 +15,7 @@ module Frontend.ChainwebApi where
 ------------------------------------------------------------------------------
 import           Control.Lens hiding ((.=))
 import           Control.Monad
+import           Control.Monad.Fix
 import           Data.Aeson
 import           Data.Aeson.Lens
 import           Data.Aeson.Types
@@ -24,6 +27,7 @@ import qualified Data.ByteString.Lazy as BL
 import           Data.Either
 import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
+import           Data.List (genericLength)
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (catMaybes)
@@ -139,11 +143,11 @@ transferXhr dataHost account token chainid fromheight limit offset nextToken = d
       rest = T.intercalate "&" $ ("token=" <> token) : catMaybes params
       params =
         [T.append "chain=" . T.pack . show <$> chainid
-	, T.append "fromheight=" . T.pack . show <$> fromheight
-	, T.append "limit=" . T.pack . show <$> limit
-	, T.append "offset=" . T.pack . show <$> offset
+        , T.append "fromheight=" . T.pack . show <$> fromheight
+        , T.append "limit=" . T.pack . show <$> limit
+        , T.append "offset=" . T.pack . show <$> offset
         , T.append "next=" <$> nextToken
-	]
+        ]
   pure $ XhrRequest "GET" url $ def
     { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"
     }
@@ -466,49 +470,125 @@ getRecentTxs nc evt = do
 
 searchTxs
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
-        HasJSContext (Performable m), MonadJSM (Performable m))
+        HasJSContext (Performable m), MonadJSM (Performable m), MonadFix m, MonadHold t m)
     => NetConfig
-    -> Dynamic t (QParam Limit)
-    -> Dynamic t (QParam Offset)
+    -> Dynamic t (Maybe Limit)
+    -> Dynamic t (Maybe Offset)
     -> Dynamic t (QParam Text)
     -> Event t ()
-    -> m (Event t (Either Text [TxSummary]))
+    -> m (Event t (Either Text (Bool,[TxSummary])))
 searchTxs nc lim off needle evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
         let ((_ :<|> go :<|> _ :<|> _ ) :<|> _) =
-              client chainwebDataApi
+              clientWithOpts chainwebDataApi
                 (Proxy :: Proxy m)
-                (Proxy :: Proxy ())
+                (Proxy :: Proxy (LooperTag TxSummary ()))
                 (constDyn $ mkDataUrl dh)
-        txResp <- go lim off needle (pure QNone) evt
-        return $ fmap getResponse . r2e <$> txResp
+                nextHeaderOpts
+        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf needle nextToken evt') lim off evt
+        return $ handleLooperResults <$> txResp
+
+handleLooperResults :: Either (ReqResult t [result]) (LooperTag result callerTag) -> Either Text (Bool, [result])
+handleLooperResults = \case
+   Left complete -> fmap (True,) $ r2e complete
+   Right partial -> Right $ (False, accumulatedResults partial)
+
+nextHeaderOpts :: ClientOptions
+nextHeaderOpts = ClientOptions $ \xhrReq -> pure $ set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
+
+data LooperTag result callerTag = LooperTag
+  {
+      originalLimit :: Maybe Limit
+    , accumulatedResults :: [result]
+    , nextToken :: Maybe NextToken
+    , callerTag :: callerTag
+  }
+
+type Requester' t m tag result = 
+    Dynamic t (QParam Limit)
+    -> Dynamic t (QParam Offset)
+    -> Dynamic t (QParam NextToken)
+    -> Event t tag
+    -> m (Event t (ReqResult tag (NextHeaders [result])))
+
+makeQParam :: Maybe a -> QParam a
+makeQParam = maybe QNone QParamSome
+
+-- | Given a "Requester", i.e. a function for making XHR requests with `(limit, offset, nextToken)` triples, construct a function for making XHR requests with `(limit, offset)` pairs. 
+-- 
+-- Every time `trigger` fires, "requestLooper" kicks off a chain of requests starting 
+-- with the given `limit` and `offset` and keeps making new requests until the endpoint 
+-- responds without a `Chainweb-Next` header (no more results) or it accumulates 
+-- `limit`-many results through the requests it makes.
+requestLooper 
+   :: forall t m result callerTag. (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m), MonadFix m, MonadHold t m)
+   => Requester' t m (LooperTag result callerTag) result
+   -> Dynamic t (Maybe Limit)
+   -> Dynamic t (Maybe Offset)
+   -> Event t callerTag
+   -> m (Event t (Either (ReqResult callerTag [result]) (LooperTag result callerTag)))
+requestLooper requester givenLim givenOffset trigger = mdo
+  -- make initial requests
+  let labelledTrigger = 
+       attachPromptlyDyn givenLim trigger 
+          <&> \(lim,callerTag) -> LooperTag lim mempty Nothing callerTag
+
+  initResponses <- requester (fmap makeQParam givenLim) (fmap makeQParam givenOffset) (constDyn QNone) labelledTrigger
+
+  -- magic mdo things happen here
+  let allResponses = leftmost [initResponses, subsequentResponses]
+  let (_completeResponses, partialResponses) = fanEither completeAndPartialResponses
+  let completeAndPartialResponses = allResponses <&> \case
+        ResponseSuccess t hr xhr@(XhrResponse {..}) -> case getNextHeader hr of
+          Just next 
+            | enoughResponses -> Left $ ResponseSuccess (callerTag t) ((accumulatedResults t) ++ r) xhr
+            | otherwise -> Right $ t { nextToken = Just next, accumulatedResults = accumulatedResults t ++ r}
+
+          Nothing -> Left $ ResponseSuccess (callerTag t) ((accumulatedResults t) ++ r) xhr
+          where enoughResponses = maybe False (\(Limit ol) -> ol <= genericLength ((accumulatedResults t) ++ r)) (originalLimit t)
+                r = getResponse hr
+        ResponseFailure tagg txt xhr -> Left $ ResponseFailure (callerTag tagg) txt xhr
+        RequestFailure tagg txt -> Left $ RequestFailure (callerTag tagg) txt
+
+  let makeNewLimit tagg = makeQParam $ helper $ tagg
+        where
+           helper LooperTag {..} = (\aa b -> Limit $ aa - b) <$> (fmap unLimit originalLimit) <*> (pure $ genericLength accumulatedResults)
+      getNextToken tagg = makeQParam $ nextToken $ tagg
+
+  nextTokens <- holdDyn QNone $ getNextToken  <$> partialResponses
+  nextLimits <- holdDyn QNone $ makeNewLimit <$> partialResponses
+  subsequentResponses <- requester nextLimits (constDyn QNone) nextTokens partialResponses
+  pure completeAndPartialResponses
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
-        HasJSContext (Performable m), MonadJSM (Performable m))
+        HasJSContext (Performable m), MonadJSM (Performable m), MonadFix m, MonadHold t m)
     => NetConfig
-    -> Dynamic t (QParam Limit)
-    -> Dynamic t (QParam Offset)
+    -> Dynamic t (Maybe Limit)
+    -> Dynamic t (Maybe Offset)
     -> Dynamic t (QParam Text) -- search
     -> Dynamic t (QParam EventParam)
     -> Dynamic t (QParam EventName)
     -> Dynamic t (QParam EventModuleName)
     -> Dynamic t (QParam BlockHeight)
     -> Event t ()
-    -> m (Event t (Either Text [EventDetail]))
+    -> m (Event t (Either Text (Bool, [EventDetail])))
 searchEvents nc lim off search param name moduleName minHeight evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
         let ((_ :<|> _ :<|> go  :<|> _ :<|> _ :<|> _) :<|> _) =
-              client chainwebDataApi
+              clientWithOpts chainwebDataApi
                 (Proxy :: Proxy m)
-                (Proxy :: Proxy ())
+                (Proxy :: Proxy (LooperTag EventDetail ()))
                 (constDyn $ mkDataUrl dh)
-        txResp <- go lim off search param name moduleName minHeight (pure QNone) evt
-        return $ fmap getResponse . r2e <$> txResp
+                nextHeaderOpts
+        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf search param name moduleName minHeight nextToken evt') lim off evt
+        return $ handleLooperResults <$> txResp
+
 
 getTxDetails
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -568,8 +648,8 @@ getTransfers nc lim off account token chain nextToken evt = do
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
                 (constDyn $ mkDataUrl dh)
-                transferOpts
-	trResp <- go account token chain lim off nextToken evt
+                nextHeaderOpts
+        trResp <- go account token chain lim off nextToken evt
         return $ go_ <$> trResp
   where
     go_ = \case
@@ -577,8 +657,6 @@ getTransfers nc lim off account token chain nextToken evt = do
                 Right (getResponse a, getNextHeader a)
         ResponseFailure _ txt xhrResponse -> Left $ BadResponse txt (_xhrResponse_status xhrResponse)
         RequestFailure _ txt -> Left $ ReqFailure txt
-    transferOpts = ClientOptions $ \xhrReq -> pure $
-        set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
 
 getNextHeader :: NextHeaders a -> Maybe NextToken
 getNextHeader (Servant.API.Headers _ (Servant.API.HCons v _)) =

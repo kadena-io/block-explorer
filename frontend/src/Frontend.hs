@@ -342,7 +342,7 @@ searchWidget netId = do
         dynText $ searchTypeText <$> curSearchType
         elClass "i" "dropdown icon" blank
         (rk, txc, evc, acc) <- divClass "menu" $ do
-	  (a,_) <- elAttr' "div" ("class" =: "item") $ text "Account"
+          (a,_) <- elAttr' "div" ("class" =: "item") $ text "Account"
           (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
           (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
           (e,_) <- elAttr' "div" ("class" =: "item") $ text "Events"
@@ -350,7 +350,7 @@ searchWidget netId = do
             ( RequestKeySearch <$ domEvent Click r
             , TxSearch <$ domEvent Click t
             , EventSearch <$ domEvent Click e
-	    , AccountSearch <$ domEvent Click a
+            , AccountSearch <$ domEvent Click a
             )
         return curSearchType
     ti <- inputElement $ def
