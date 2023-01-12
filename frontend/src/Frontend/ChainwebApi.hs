@@ -486,7 +486,7 @@ searchTxs nc lim off needle evt = do
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy (LooperTag TxSummary ()))
                 (constDyn $ mkDataUrl dh)
-                looperOpts
+                nextHeaderOpts
         txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf needle nextToken evt') lim off evt
         return $ handleLooperResults <$> txResp
 
@@ -495,8 +495,8 @@ handleLooperResults = \case
    Left complete -> fmap (True,) $ r2e complete
    Right partial -> Right $ (False, accumulatedResults partial)
 
-looperOpts :: ClientOptions
-looperOpts = ClientOptions $ \xhrReq -> pure $ set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
+nextHeaderOpts :: ClientOptions
+nextHeaderOpts = ClientOptions $ \xhrReq -> pure $ set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
 
 data LooperTag result callerTag = LooperTag
   {
@@ -515,12 +515,6 @@ type Requester' t m tag result =
 
 makeQParam :: Maybe a -> QParam a
 makeQParam = maybe QNone QParamSome
-
-getHeadHList :: NextHeaders a -> Maybe NextToken
-getHeadHList (Servant.API.Headers _ (Servant.API.HCons v _)) =
-  case v of
-    Header n -> Just n
-    _ -> Nothing
 
 -- | Given a "Requester", i.e. a function for making XHR requests with `(limit, offset, nextToken)` triples, construct a function for making XHR requests with `(limit, offset)` pairs. 
 -- 
@@ -548,7 +542,7 @@ requestLooper requester givenLim givenOffset trigger = mdo
   let allResponses = leftmost [initResponses, subsequentResponses]
   let (_completeResponses, partialResponses) = fanEither completeAndPartialResponses
   let completeAndPartialResponses = allResponses <&> \case
-        ResponseSuccess t hr xhr@(XhrResponse {..}) -> case getHeadHList hr of
+        ResponseSuccess t hr xhr@(XhrResponse {..}) -> case getNextHeader hr of
           Just next 
             | enoughResponses -> Left $ ResponseSuccess (callerTag t) ((accumulatedResults t) ++ r) xhr
             | otherwise -> Right $ t { nextToken = Just next, accumulatedResults = accumulatedResults t ++ r}
@@ -591,7 +585,7 @@ searchEvents nc lim off search param name moduleName minHeight evt = do
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy (LooperTag EventDetail ()))
                 (constDyn $ mkDataUrl dh)
-                looperOpts
+                nextHeaderOpts
         txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf search param name moduleName minHeight nextToken evt') lim off evt
         return $ handleLooperResults <$> txResp
 
@@ -654,8 +648,8 @@ getTransfers nc lim off account token chain nextToken evt = do
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
                 (constDyn $ mkDataUrl dh)
-                transferOpts
-	trResp <- go account token chain lim off nextToken evt
+                nextHeaderOpts
+        trResp <- go account token chain lim off nextToken evt
         return $ go_ <$> trResp
   where
     go_ = \case
@@ -666,8 +660,6 @@ getTransfers nc lim off account token chain nextToken evt = do
                 | otherwise -> Left $ BadResponse txt
 
         RequestFailure _ txt -> Left $ ReqFailure txt
-    transferOpts = ClientOptions $ \xhrReq -> pure $
-        set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
 
 getNextHeader :: NextHeaders a -> Maybe NextToken
 getNextHeader (Servant.API.Headers _ (Servant.API.HCons v _)) =

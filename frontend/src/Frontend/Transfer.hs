@@ -69,11 +69,11 @@ transferHelper
      )
   => AccountParams
   -> App r t m ()
-transferHelper ap = do
+transferHelper aps = do
      (AppState _ _ cw _) <- ask
      case cw >>= _netConfig_dataHost of
        Nothing -> text "Transfers view is not supported unless a chainweb-data url is included in the config!"
-       Just _v -> transferWidget (apAccount ap) (apToken ap) (apChain ap) (fromJust cw) Nothing -- We can assume the netconfig exists if we got to this branch!
+       Just _dataHost -> transferWidget (apAccount aps) (apToken aps) (apChain aps) (fromJust cw) -- We can assume the netconfig exists if we got to this branch!
 
 transferWidget
   :: ( MonadApp r t m
@@ -90,14 +90,13 @@ transferWidget
   -> Text
   -> Maybe Integer
   -> NetConfig
-  -> Maybe Int
   -> App r t m ()
-transferWidget account token chainid nc _fromheight = do
+transferWidget account token chainid nc = do
     pb <- getPostBuild
     res <- mkXhr QNone QNone (constDyn QNone) pb
     void $ networkHold (inlineLoader "Loading...") (f <$> res)
   where
-    mkXhr lim off nextToken evt =
+    mkXhr lim off nextToken_ evt =
       getTransfers
       nc
       (constDyn lim)
@@ -105,7 +104,7 @@ transferWidget account token chainid nc _fromheight = do
       (constDyn $ Right account)
       (constDyn $ QParamSome token)
       (constDyn $ maybe QNone (QParamSome . ChainId . fromIntegral) chainid)
-      nextToken
+      nextToken_
         evt
     f = \case
         Left _ -> pure ()
@@ -176,7 +175,7 @@ evaporateButtonOnClick token t = mdo
   click <- switchHold never clickNow
   pure click
 
-type TransferRequest t m =
+type TransferRequester t m =
         QParam Limit
         -> QParam Offset
         -> Dynamic t (QParam NextToken)
@@ -187,15 +186,14 @@ produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
-  => TransferRequest t m -> Event t Text -> m (Event t (Either TransferError ([AccountDetail], Maybe Text)))
-produceNewRowsOnToken mkXhr nextToken = do
-    newTokenDyn <- holdDyn QNone (QParamSome . NextToken <$> nextToken)
-    mkXhr QNone QNone newTokenDyn (() <$ nextToken) <&&> \case
+  => TransferRequester t m -> Event t Text -> m (Event t (Either TransferError ([AccountDetail], Maybe Text)))
+produceNewRowsOnToken mkXhr nextToken_ = do
+    newTokenDyn <- holdDyn QNone (QParamSome . NextToken <$> nextToken_)
+    mkXhr QNone QNone newTokenDyn (() <$ nextToken_) <&&> \case
             Left err -> Left err
             Right (details, nextTokenHeader) -> Right (details, unNextToken <$> nextTokenHeader)
   where
     (<&&>) = flip (fmap . fmap)
-
 
 drawRow
   :: Monad m

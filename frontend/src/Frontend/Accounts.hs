@@ -30,14 +30,10 @@ import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
-import           Servant.Reflex
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainwebMeta
 import           Chainweb.Api.PactNumber
-import           ChainwebData.Api
-import           ChainwebData.EventDetail
-import           ChainwebData.Pagination
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -45,8 +41,6 @@ import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
 import           Frontend.Common
-import           Frontend.Page.Block
-import           Frontend.Transactions
 ------------------------------------------------------------------------------
 
 accountSearchPage
@@ -75,9 +69,9 @@ accountHelper
      )
   => AccountParams
   -> App r t m ()
-accountHelper ap = accountWidget token account
-  where token = apToken ap
-        account = apAccount ap
+accountHelper aps = accountWidget token account
+  where token = apToken aps
+        account = apAccount aps
 
 accountWidget
   :: ( MonadApp r t m
