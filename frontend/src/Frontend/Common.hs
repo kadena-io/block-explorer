@@ -11,24 +11,25 @@
 module Frontend.Common where
 
 ------------------------------------------------------------------------------
-import Control.Lens
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Fix
-import Data.Aeson as A hiding (pairs)
-import Data.Aeson.Encode.Pretty
-import Data.Aeson.Lens
+import           Data.Aeson as A hiding (pairs)
+import           Data.Aeson.Encode.Pretty
+import           Data.Aeson.Lens
 import qualified Data.Array.IArray as IA
 import           Data.Array.MArray
 import           Data.Array.ST
-import Data.ByteString.Lazy (toStrict)
+import           Data.ByteString.Lazy (toStrict)
 import           Data.Char
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import           Data.Maybe
-import Data.Monoid (First)
+import           Data.Monoid (First)
 import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding
+import           Data.Text.Encoding
 import qualified Data.Vector as V
 import qualified GHCJS.DOM as DOM
 import qualified "ghcjs-dom" GHCJS.DOM.Document as Document
@@ -44,6 +45,7 @@ import           Reflex.Network
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.Common
 import           Common.Types
+import           Common.Utils
 ------------------------------------------------------------------------------
 
 
@@ -78,6 +80,19 @@ tfieldPre :: DomBuilder t m => Text -> m a -> m a
 tfieldPre nm v = el "tr" $ do
   elClass "td" "two wide" $ text nm
   el "td" $ el "pre" v
+
+jsonTable :: DomBuilder t m => Value -> m ()
+jsonTable (Object o) = detailsSection $ forM_ (HM.toList o) $ \(k,v) -> do
+  el "tr" $ do
+    elClass "td" "two wide" $ text k
+    el "td" $ jsonTable v
+jsonTable (Array a) = forM_ a $ \v -> do
+  jsonTable v
+  el "br" blank
+jsonTable (String s) = text s
+jsonTable (Number d) = text $ tshow d
+jsonTable (Bool b) = text $ tshow b
+jsonTable Null = text "null"
 
 viewIntoMaybe
     :: (DomBuilder t m, PostBuild t m, MonadHold t m, MonadFix m)

@@ -55,6 +55,7 @@ import           Common.Route
 import           Common.Types
 import           Common.Utils
 import           Frontend.About
+import           Frontend.Accounts
 import           Frontend.App
 import           Frontend.AppState
 import           Frontend.ChainwebApi
@@ -63,6 +64,7 @@ import           Frontend.Nav
 import           Frontend.Page.Block
 import           Frontend.Page.ReqKey
 import           Frontend.Page.TxDetail
+import           Frontend.Transfer
 import           Frontend.Transactions
 ------------------------------------------------------------------------------
 
@@ -120,6 +122,8 @@ networkDispatch route ndbs netId = prerender_ blank $ do
         NetRoute_TxDetail -> txDetailWidget netId
         NetRoute_TxSearch -> transactionSearch
         NetRoute_EventSearch -> eventSearch
+        NetRoute_AccountSearch -> accountSearchPage
+        NetRoute_TransferSearch -> transferSearchPage
 
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
@@ -314,13 +318,14 @@ initRecents = do
           ]
         return $ Just recent
 
-data SearchType = RequestKeySearch | TxSearch | EventSearch
+data SearchType = RequestKeySearch | TxSearch | EventSearch | AccountSearch
   deriving (Eq,Ord,Show,Read,Enum)
 
 searchTypeText :: SearchType -> Text
 searchTypeText RequestKeySearch = "Request Key"
 searchTypeText TxSearch = "Code"
 searchTypeText EventSearch = "Events"
+searchTypeText AccountSearch = "Account"
 
 searchWidget
   :: (PostBuild t m, PerformEvent t m, DomBuilder t m,
@@ -333,10 +338,11 @@ searchWidget netId = do
   divClass "ui fluid action input" $ do
     st <- divClass "ui compact menu search__dropdown" $ do
       divClass "ui simple dropdown item" $ mdo
-        curSearchType <- holdDyn RequestKeySearch $ leftmost [rk, txc, evc]
+        curSearchType <- holdDyn AccountSearch $ leftmost [rk, txc, evc, acc]
         dynText $ searchTypeText <$> curSearchType
         elClass "i" "dropdown icon" blank
-        (rk, txc, evc) <- divClass "menu" $ do
+        (rk, txc, evc, acc) <- divClass "menu" $ do
+	  (a,_) <- elAttr' "div" ("class" =: "item") $ text "Account"
           (r,_) <- elAttr' "div" ("class" =: "item") $ text "Request Key"
           (t,_) <- elAttr' "div" ("class" =: "item") $ text "Code"
           (e,_) <- elAttr' "div" ("class" =: "item") $ text "Events"
@@ -344,6 +350,7 @@ searchWidget netId = do
             ( RequestKeySearch <$ domEvent Click r
             , TxSearch <$ domEvent Click t
             , EventSearch <$ domEvent Click e
+	    , AccountSearch <$ domEvent Click a
             )
         return curSearchType
     ti <- inputElement $ def
@@ -358,6 +365,7 @@ mkSearchRoute :: NetId -> Text -> SearchType -> R FrontendRoute
 mkSearchRoute netId str RequestKeySearch = mkReqKeySearchRoute netId str
 mkSearchRoute netId str TxSearch = mkTxSearchRoute netId str Nothing
 mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
+mkSearchRoute netId str AccountSearch = mkAccountRoute netId "coin" str Nothing
 
 mainPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
@@ -572,8 +580,13 @@ blockWidget0 ti gis hoveredBlock maxNumChains hs height cid = do
                     , Nothing <$ domEvent Mouseleave e]
 
 diffStr :: Double -> Text
-diffStr d = T.pack $ printf "%.1f %s" (d / divisor) units
+diffStr d = if val < 10
+    then T.pack $ printf "%.3f %s" val units
+    else if val < 100
+            then T.pack $ printf "%.2f %s" val units
+            else T.pack $ printf "%.1f %s" val units
   where
+    val = d / divisor
     (divisor, units :: String)
       | d >= 1e18 = (1e18, "EH")
       | d >= 1e15 = (1e15, "PH")

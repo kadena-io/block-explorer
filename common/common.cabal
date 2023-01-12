@@ -14,6 +14,7 @@ library
     , chainweb-api
     , containers
     , dependent-sum
+    , Decimal
     , errors
     , hashable
     , lens
@@ -23,6 +24,7 @@ library
     , mtl
     , readable
     , reflex-dom
+    , scientific
     , text
     , time
     , unordered-containers

@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TemplateHaskell            #-}
@@ -24,16 +26,20 @@ import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Maybe (catMaybes)
 import           Data.Proxy
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
 import qualified Data.Set as Set
 import           Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           GHCJS.DOM.Types (MonadJSM)
 import           Reflex.Dom hiding (Cut, Value, EventName)
+import           Reflex.Dom.Xhr (XhrResponseHeaders(..))
 import           Servant.API
 import           Servant.Reflex
+import           Text.Printf
 ------------------------------------------------------------------------------
 import           Blake2Native
 import           Chainweb.Api.BlockHeader
@@ -42,10 +48,15 @@ import           Chainweb.Api.BlockPayload
 import           Chainweb.Api.BlockPayloadWithOutputs
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.ChainTip
+import           Chainweb.Api.ChainwebMeta
 import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
+import           Chainweb.Api.PactCommand
+import           Chainweb.Api.Payload
 import           Chainweb.Api.RespItems
+import           Chainweb.Api.Transaction
+import           ChainwebData.AccountDetail
 import           ChainwebData.Api
 import           ChainwebData.Pagination
 import           ChainwebData.TxDetail
@@ -92,6 +103,9 @@ pollUrl h chainId = chainBaseUrl (serviceBaseUrl h) chainId <> "/pact/api/v1/pol
 localUrl :: ChainwebHost -> ChainId -> Text
 localUrl h chainId = chainBaseUrl (serviceBaseUrl h) chainId <> "/pact/api/v1/local"
 
+-- localUrl :: ChainwebHost -> ChainId -> Text
+-- localUrl h chainId = chainBaseUrl h chainId <> "/pact/api/v1/local"
+
 payloadWithOutputsUrl :: ChainwebHost -> ChainId -> Hash -> Text
 payloadWithOutputsUrl h chainId payloadHash = chainBaseUrl (p2pBaseUrl h) chainId <> "/payload/" <> hashB64U payloadHash <> "/outputs"
 
@@ -104,6 +118,35 @@ getServerInfo nc = do
   pb <- getPostBuild
   esi <- getInfo (_netConfig_serviceHost nc <$ pb)
   holdDyn Nothing esi
+
+detailsXhr :: ChainwebHost -> ChainwebMeta -> Text -> Text -> Either String (XhrRequest ByteString)
+detailsXhr host meta token account = do
+    chainId <- note "Could not parse chain ID" $ chainIdFromText $ _chainwebMeta_chainId meta
+    let url = localUrl host chainId
+    let tx = mkTransaction pc []
+    pure $ XhrRequest "POST" url $ def
+      { _xhrRequestConfig_headers = "content-type" =: aj <> "accept" =: aj
+      , _xhrRequestConfig_sendData = BL.toStrict $ encode $ toJSON tx
+      }
+  where
+    aj = "application/json"
+    code = T.pack $ printf "(%s.details \"%s\")" token account
+    pc = PactCommand (ExecPayload $ Exec code Nothing) [] meta "local" Nothing
+
+transferXhr :: Host -> Text -> Text -> Maybe Integer -> Maybe Int -> Maybe Int -> Maybe Int -> Maybe Text -> Either String (XhrRequest ())
+transferXhr dataHost account token chainid fromheight limit offset nextToken = do
+  let url = hostToText dataHost <> "/txs/account/" <> account <> if T.null rest then "" else "?" <> rest
+      rest = T.intercalate "&" $ ("token=" <> token) : catMaybes params
+      params =
+        [T.append "chain=" . T.pack . show <$> chainid
+	, T.append "fromheight=" . T.pack . show <$> fromheight
+	, T.append "limit=" . T.pack . show <$> limit
+	, T.append "offset=" . T.pack . show <$> offset
+        , T.append "next=" <$> nextToken
+	]
+  pure $ XhrRequest "GET" url $ def
+    { _xhrRequestConfig_responseHeaders = OnlyHeaders $ Set.singleton "Chainweb-Next"
+    }
 
 requestKeyXhr :: ChainwebHost -> ChainId -> Text -> XhrRequest ByteString
 requestKeyXhr ch chainId requestKey = XhrRequest "POST" url $ def
@@ -439,8 +482,8 @@ searchTxs nc lim off needle evt = do
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
                 (constDyn $ mkDataUrl dh)
-        txResp <- go lim off needle evt
-        return $ r2e <$> txResp
+        txResp <- go lim off needle (pure QNone) evt
+        return $ fmap getResponse . r2e <$> txResp
 
 searchEvents
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -451,19 +494,21 @@ searchEvents
     -> Dynamic t (QParam Text) -- search
     -> Dynamic t (QParam EventParam)
     -> Dynamic t (QParam EventName)
+    -> Dynamic t (QParam EventModuleName)
+    -> Dynamic t (QParam BlockHeight)
     -> Event t ()
     -> m (Event t (Either Text [EventDetail]))
-searchEvents nc lim off search param name evt = do
+searchEvents nc lim off search param name moduleName minHeight evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
-        let ((_ :<|> _ :<|> go :<|> _ ) :<|> _) =
+        let ((_ :<|> _ :<|> go  :<|> _ :<|> _ :<|> _) :<|> _) =
               client chainwebDataApi
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
                 (constDyn $ mkDataUrl dh)
-        txResp <- go lim off search param name evt
-        return $ r2e <$> txResp
+        txResp <- go lim off search param name moduleName minHeight (pure QNone) evt
+        return $ fmap getResponse . r2e <$> txResp
 
 getTxDetails
     :: forall t m. (TriggerEvent t m, PerformEvent t m,
@@ -476,7 +521,7 @@ getTxDetails nc rk evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
-        let ((_ :<|> _ :<|> _ :<|> _ :<|> go ) :<|> _) =
+        let ((_ :<|> _ :<|> _ :<|> _ :<|> go :<|> _) :<|> _) =
               client chainwebDataApi
                 (Proxy :: Proxy m)
                 (Proxy :: Proxy ())
@@ -501,3 +546,44 @@ getChainwebStats nc evt = do
                 (constDyn $ mkDataUrl dh)
         txResp <- go evt
         return $ r2e <$> txResp
+
+getTransfers
+    :: forall t m. (TriggerEvent t m, PerformEvent t m,
+        HasJSContext (Performable m), MonadJSM (Performable m))
+    => NetConfig
+    -> Dynamic t (QParam Limit)
+    -> Dynamic t (QParam Offset)
+    -> Dynamic t (Either Text Text) -- Account Name
+    -> Dynamic t (QParam Text) -- Token
+    -> Dynamic t (QParam ChainId)
+    -> Dynamic t (QParam NextToken)
+    -> Event t ()
+    -> m (Event t (Either TransferError ([AccountDetail], Maybe NextToken)))
+getTransfers nc lim off account token chain nextToken evt = do
+    case _netConfig_dataHost nc of
+      Nothing -> return never
+      Just dh -> do
+        let ((_ :<|> _ :<|> _  :<|> _ :<|> _ :<|> go) :<|> _) =
+              clientWithOpts chainwebDataApi
+                (Proxy :: Proxy m)
+                (Proxy :: Proxy ())
+                (constDyn $ mkDataUrl dh)
+                transferOpts
+	trResp <- go account token chain lim off nextToken evt
+        return $ go_ <$> trResp
+  where
+    go_ = \case
+        ResponseSuccess _ a _ ->
+                Right (getResponse a, getNextHeader a)
+        ResponseFailure _ txt xhrResponse -> Left $ BadResponse txt (_xhrResponse_status xhrResponse)
+        RequestFailure _ txt -> Left $ ReqFailure txt
+    transferOpts = ClientOptions $ \xhrReq -> pure $
+        set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
+
+getNextHeader :: NextHeaders a -> Maybe NextToken
+getNextHeader (Servant.API.Headers _ (Servant.API.HCons v _)) =
+  case v of
+    Header n -> Just n
+    _ -> Nothing
+
+data TransferError = BadResponse Text Word | ReqFailure Text

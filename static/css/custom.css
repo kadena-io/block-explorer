@@ -173,3 +173,17 @@ div.summary-inner {
 .pagination .disabled.item {
     cursor: auto;
 }
+
+.selectable-row:hover {
+    background: rgba(0,0,0,.05)!important;
+    color: rgba(0,0,0,.95)!important;
+}
+.cut-text {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 80px;
+    height: 1.2em;
+    white-space: nowrap;
+    max-width: 200px;
+}
+

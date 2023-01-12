@@ -20,6 +20,7 @@ library
     , containers
     , data-default
     , dependent-sum
+    , Decimal
     , formattable
     , ghcjs-dom
     , hashable
@@ -38,6 +39,7 @@ library
     , reflex
     , reflex-dom
     , reflex-dom-core
+    , scientific
     , servant
     , servant-reflex
     , stm
@@ -50,6 +52,7 @@ library
     Blake2Native
     Frontend
     Frontend.About
+    Frontend.Accounts
     Frontend.App
     Frontend.AppState
     Frontend.Common
@@ -62,6 +65,7 @@ library
     Frontend.Page.TxDetail
     Frontend.Page.Types
     Frontend.Storage
+    Frontend.Transfer
     Frontend.Transactions
     Reflex.Dom.EventSource
     Reflex.Dom.EventSource.Foreign
