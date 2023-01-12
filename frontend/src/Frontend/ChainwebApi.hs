@@ -575,10 +575,7 @@ getTransfers nc lim off account token chain nextToken evt = do
     go_ = \case
         ResponseSuccess _ a _ ->
                 Right (getResponse a, getNextHeader a)
-        ResponseFailure _ txt xhrResponse
-                | _xhrResponse_status xhrResponse /= 200 -> Left $ NonHTTP200 (_xhrResponse_status xhrResponse)
-                | otherwise -> Left $ BadResponse txt
-
+        ResponseFailure _ txt xhrResponse -> Left $ BadResponse txt (_xhrResponse_status xhrResponse)
         RequestFailure _ txt -> Left $ ReqFailure txt
     transferOpts = ClientOptions $ \xhrReq -> pure $
         set (xhrRequest_config . xhrRequestConfig_responseHeaders) AllHeaders xhrReq
@@ -589,4 +586,4 @@ getNextHeader (Servant.API.Headers _ (Servant.API.HCons v _)) =
     Header n -> Just n
     _ -> Nothing
 
-data TransferError = NonHTTP200 Word | BadResponse Text | ReqFailure Text
+data TransferError = BadResponse Text Word | ReqFailure Text
