@@ -29,6 +29,7 @@ import           Reflex.Network
 import           Servant.Common.Req hiding (note)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
+import           Chainweb.Api.StringEncoded
 import           ChainwebData.AccountDetail
 import           ChainwebData.Pagination
 import           Common.Route
@@ -208,7 +209,7 @@ drawRow n token account chainid acc = do
       height = _acDetail_height acc
       fromAccount = _acDetail_fromAccount acc
       toAccount = _acDetail_toAccount acc
-      amount = _acDetail_amount acc
+      StringEncoded amount = _acDetail_amount acc
   elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
     if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
   when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain ID") $ text $ tshow cid
