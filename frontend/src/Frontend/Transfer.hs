@@ -30,7 +30,7 @@ import           Servant.Common.Req hiding (note)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.StringEncoded
-import           ChainwebData.AccountDetail
+import           ChainwebData.TransferDetail
 import           ChainwebData.Pagination
 import           Common.Route
 import           Common.Types
@@ -180,13 +180,13 @@ type TransferRequester t m =
         -> QParam Offset
         -> Dynamic t (QParam NextToken)
         -> Event t ()
-        -> m (Event t (Either TransferError ([AccountDetail], Maybe NextToken)))
+        -> m (Event t (Either TransferError ([TransferDetail], Maybe NextToken)))
 
 produceNewRowsOnToken
   :: (MonadApp r t m, MonadJSM (Performable m),
   HasJSContext (Performable m), Prerender js t m,
   RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, MonadIO m)
-  => TransferRequester t m -> Event t Text -> m (Event t (Either TransferError ([AccountDetail], Maybe Text)))
+  => TransferRequester t m -> Event t Text -> m (Event t (Either TransferError ([TransferDetail], Maybe Text)))
 produceNewRowsOnToken mkXhr nextToken_ = do
     newTokenDyn <- holdDyn QNone (QParamSome . NextToken <$> nextToken_)
     mkXhr QNone QNone newTokenDyn (() <$ nextToken_) <&&> \case
@@ -201,15 +201,15 @@ drawRow
    => SetRoute t (R FrontendRoute) m
    => DomBuilder t m
    => Prerender js t m
-   => NetId -> Text -> Text -> Maybe Integer -> AccountDetail -> m ()
+   => NetId -> Text -> Text -> Maybe Integer -> TransferDetail -> m ()
 drawRow n token account chainid acc = do
-  let hash = _acDetail_blockHash acc
-      requestKey = _acDetail_requestKey acc
-      cid = _acDetail_chainid acc
-      height = _acDetail_height acc
-      fromAccount = _acDetail_fromAccount acc
-      toAccount = _acDetail_toAccount acc
-      StringEncoded amount = _acDetail_amount acc
+  let hash = _trDetail_blockHash acc
+      requestKey = _trDetail_requestKey acc
+      cid = _trDetail_chainid acc
+      height = _trDetail_height acc
+      fromAccount = _trDetail_fromAccount acc
+      toAccount = _trDetail_toAccount acc
+      StringEncoded amount = _trDetail_amount acc
   elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
     if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
   when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain ID") $ text $ tshow cid
@@ -235,5 +235,5 @@ mkTransferSearchRoute netId account token = mkNetRoute netId $
     , apChain = Nothing
     }
 
-getAccountDetail :: Text -> Maybe [AccountDetail]
-getAccountDetail = A.decode . T.encodeUtf8 . fromStrict
+getTransferDetail :: Text -> Maybe [TransferDetail]
+getTransferDetail = A.decode . T.encodeUtf8 . fromStrict
