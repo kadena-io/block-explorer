@@ -60,7 +60,7 @@ import           Chainweb.Api.PactCommand
 import           Chainweb.Api.Payload
 import           Chainweb.Api.RespItems
 import           Chainweb.Api.Transaction
-import           ChainwebData.AccountDetail
+import           ChainwebData.TransferDetail
 import           ChainwebData.Api
 import           ChainwebData.Pagination
 import           ChainwebData.TxDetail
@@ -638,7 +638,7 @@ getTransfers
     -> Dynamic t (QParam ChainId)
     -> Dynamic t (QParam NextToken)
     -> Event t ()
-    -> m (Event t (Either TransferError ([AccountDetail], Maybe NextToken)))
+    -> m (Event t (Either TransferError ([TransferDetail], Maybe NextToken)))
 getTransfers nc lim off account token chain nextToken evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
