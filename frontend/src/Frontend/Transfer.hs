@@ -205,7 +205,7 @@ drawRow
 drawRow n token account chainid acc = do
   let hash = _trDetail_blockHash acc
       requestKey = _trDetail_requestKey acc
-      cid = _trDetail_chainid acc
+      cid = _trDetail_chain acc
       height = _trDetail_height acc
       fromAccount = _trDetail_fromAccount acc
       toAccount = _trDetail_toAccount acc
