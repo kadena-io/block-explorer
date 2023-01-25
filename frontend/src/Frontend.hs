@@ -22,7 +22,7 @@ import           Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import           Data.Maybe
+import           Data.Maybe hiding (mapMaybe)
 import           Data.Ord
 import qualified Data.Set as Set
 import           Data.Text (Text)
@@ -356,8 +356,9 @@ searchWidget netId = do
     ti <- inputElement $ def
       & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
         ("placeholder" =: "Search term..." <> "style" =: "border-radius: 0;")
+    let onEnter w = if w == 13 then Just () else Nothing
     (e,_) <- elAttr' "button" ("class" =: "ui button") $ text "Search"
-    setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> st) (domEvent Click e))
+    setRoute (tag (current $ mkSearchRoute netId <$> value ti <*> st) (leftmost [mapMaybe onEnter $ domEvent Keypress ti, domEvent Click e]))
     return ()
 
 
