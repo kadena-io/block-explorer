@@ -191,6 +191,8 @@ mkCoinAccountSearchRoute netId account = mkNetRoute netId $
     { apToken = "coin"
     , apAccount = account
     , apChain = Nothing
+    , apMinHeight = Nothing
+    , apMaxHeight = Nothing
     }
 
 blockPayloadWidget

@@ -233,6 +233,8 @@ mkTransferSearchRoute netId account token = mkNetRoute netId $
     { apToken = token
     , apAccount = account
     , apChain = Nothing
+    , apMinHeight = Nothing
+    , apMaxHeight = Nothing
     }
 
 getTransferDetail :: Text -> Maybe [TransferDetail]

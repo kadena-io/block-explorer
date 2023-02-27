@@ -66,6 +66,8 @@ data AccountParams = AccountParams
   { apToken :: T.Text
   , apAccount :: T.Text
   , apChain :: Maybe Integer
+  , apMinHeight :: Maybe Integer
+  , apMaxHeight :: Maybe Integer
   }
 
 accountParamsEncoder :: Applicative check =>
@@ -83,11 +85,25 @@ accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
          Just (Just chainIdTxt) -> case readMaybe @Integer (T.unpack chainIdTxt) of
              Nothing -> Left $ "Chain \"" <> chainIdTxt <> "\" must be an int"
              Just cid -> Right $ Just cid
+      minHeight <- case M.lookup "min-height" params of
+        Nothing -> return Nothing
+        Just Nothing -> Left "Expected a value for the min-height parameter!"
+        Just (Just minHeightTxt) -> case readMaybe @Integer (T.unpack minHeightTxt) of
+           Nothing -> Left $ "min-height \"" <> minHeightTxt <> "\" must be an int"
+           Just minHeight -> Right $ Just minHeight
+      maxHeight <- case M.lookup "max-height" params of
+        Nothing -> return Nothing
+        Just Nothing -> Left "Expected a value for the max-height parameter!"
+        Just (Just maxHeightTxt) -> case readMaybe @Integer (T.unpack maxHeightTxt) of
+           Nothing -> Left $ "max-height \"" <> maxHeightTxt <> "\" must be an int"
+           Just maxHeight -> Right $ Just maxHeight
       return AccountParams
          {
            apToken = token
          , apAccount = account
          , apChain = chain
+         , apMinHeight = minHeight
+         , apMaxHeight = maxHeight
          }
     [] -> Left "Something about no account name in the url."
     _ -> Left "Something about unexpected path segments after the account name."
