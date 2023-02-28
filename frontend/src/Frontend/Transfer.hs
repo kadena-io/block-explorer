@@ -124,7 +124,7 @@ transferWidget account token chainid nc = do
                 maybe (el "th" $ text "Chain") (const $ pure ()) chainid
                 elAttr "th" ("style" =: "width: auto") $ text "Time"
                 elAttr "th" ("style" =: "width: auto") $ text "Height"
-                elAttr "th" ("style" =: "width: 1%") $ text "Request Key"
+                elAttr "th" ("style" =: "width: auto") $ text "Request Key"
                 elAttr "th" ("style" =: "width: auto") $ text "From/To"
                 elAttr "th" ("style" =: "width: auto") $ text "Amount"
               el "tbody" $ do
