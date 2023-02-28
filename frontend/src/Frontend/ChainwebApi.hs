@@ -475,9 +475,11 @@ searchTxs
     -> Dynamic t (Maybe Limit)
     -> Dynamic t (Maybe Offset)
     -> Dynamic t (QParam Text)
+    -> Dynamic t (QParam Int)
+    -> Dynamic t (QParam Int)
     -> Event t ()
     -> m (Event t (Either Text (Bool,[TxSummary])))
-searchTxs nc lim off needle evt = do
+searchTxs nc lim off needle minHeight maxHeight evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
@@ -487,7 +489,7 @@ searchTxs nc lim off needle evt = do
                 (Proxy :: Proxy (LooperTag TxSummary ()))
                 (constDyn $ mkDataUrl dh)
                 nextHeaderOpts
-        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf needle nextToken evt') lim off evt
+        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf needle minHeight maxHeight nextToken evt') lim off evt
         return $ handleLooperResults <$> txResp
 
 handleLooperResults :: Either (ReqResult t [result]) (LooperTag result callerTag) -> Either Text (Bool, [result])
@@ -574,9 +576,10 @@ searchEvents
     -> Dynamic t (QParam EventName)
     -> Dynamic t (QParam EventModuleName)
     -> Dynamic t (QParam BlockHeight)
+    -> Dynamic t (QParam BlockHeight)
     -> Event t ()
     -> m (Event t (Either Text (Bool, [EventDetail])))
-searchEvents nc lim off search param name moduleName minHeight evt = do
+searchEvents nc lim off search param name moduleName minHeight maxHeight evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
@@ -586,7 +589,7 @@ searchEvents nc lim off search param name moduleName minHeight evt = do
                 (Proxy :: Proxy (LooperTag EventDetail ()))
                 (constDyn $ mkDataUrl dh)
                 nextHeaderOpts
-        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf search param name moduleName minHeight nextToken evt') lim off evt
+        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf search param name moduleName minHeight maxHeight nextToken evt') lim off evt
         return $ handleLooperResults <$> txResp
 
 
@@ -636,10 +639,12 @@ getTransfers
     -> Dynamic t (Either Text Text) -- Account Name
     -> Dynamic t (QParam Text) -- Token
     -> Dynamic t (QParam ChainId)
+    -> Dynamic t (QParam Int)
+    -> Dynamic t (QParam Int)
     -> Dynamic t (QParam NextToken)
     -> Event t ()
     -> m (Event t (Either TransferError ([TransferDetail], Maybe NextToken)))
-getTransfers nc lim off account token chain nextToken evt = do
+getTransfers nc lim off account token chain minHeight maxHeight nextToken evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
@@ -649,7 +654,7 @@ getTransfers nc lim off account token chain nextToken evt = do
                 (Proxy :: Proxy ())
                 (constDyn $ mkDataUrl dh)
                 nextHeaderOpts
-        trResp <- go account token chain lim off nextToken evt
+        trResp <- go account token chain minHeight maxHeight lim off nextToken evt
         return $ go_ <$> trResp
   where
     go_ = \case

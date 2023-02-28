@@ -97,7 +97,7 @@ transactionSearch = do
         res <- searchTxs nc
                  (constDyn $ Just $ Limit itemsPerPage)
                  (Just . Offset . (*itemsPerPage) . pred <$> page)
-                 (QParamSome <$> needle) newSearch
+                 (QParamSome <$> needle) (constDyn QNone) (constDyn QNone) newSearch
 
         divClass "ui pagination menu" $ do
           let setSearchRoute f e = setRoute $
@@ -153,6 +153,7 @@ eventSearch = do
             (Just . Offset . (*itemsPerPage) . pred <$> page)
             (QParamSome <$> needle)
             (constDyn QNone) 
+            (constDyn QNone)
             (constDyn QNone)
             (constDyn QNone)
             (constDyn QNone)
