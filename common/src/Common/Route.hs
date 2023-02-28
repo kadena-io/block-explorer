@@ -85,25 +85,25 @@ accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
          Just (Just chainIdTxt) -> case readMaybe @Integer (T.unpack chainIdTxt) of
              Nothing -> Left $ "Chain \"" <> chainIdTxt <> "\" must be an int"
              Just cid -> Right $ Just cid
-      minHeight <- case M.lookup "min-height" params of
+      minheight <- case M.lookup "minheight" params of
         Nothing -> return Nothing
-        Just Nothing -> Left "Expected a value for the min-height parameter!"
-        Just (Just minHeightTxt) -> case readMaybe @Integer (T.unpack minHeightTxt) of
-           Nothing -> Left $ "min-height \"" <> minHeightTxt <> "\" must be an int"
-           Just minHeight -> Right $ Just minHeight
-      maxHeight <- case M.lookup "max-height" params of
+        Just Nothing -> Left "Expected a value for the minheight parameter!"
+        Just (Just minheightTxt) -> case readMaybe @Integer (T.unpack minheightTxt) of
+           Nothing -> Left $ "minheight \"" <> minheightTxt <> "\" must be an int"
+           Just minheight -> Right $ Just minheight
+      maxheight <- case M.lookup "maxheight" params of
         Nothing -> return Nothing
-        Just Nothing -> Left "Expected a value for the max-height parameter!"
-        Just (Just maxHeightTxt) -> case readMaybe @Integer (T.unpack maxHeightTxt) of
-           Nothing -> Left $ "max-height \"" <> maxHeightTxt <> "\" must be an int"
-           Just maxHeight -> Right $ Just maxHeight
+        Just Nothing -> Left "Expected a value for the maxheight parameter!"
+        Just (Just maxheightTxt) -> case readMaybe @Integer (T.unpack maxheightTxt) of
+           Nothing -> Left $ "maxheight \"" <> maxheightTxt <> "\" must be an int"
+           Just maxheight -> Right $ Just maxheight
       return AccountParams
          {
            apToken = token
          , apAccount = account
          , apChain = chain
-         , apMinHeight = minHeight
-         , apMaxHeight = maxHeight
+         , apMinHeight = minheight
+         , apMaxHeight = maxheight
          }
     [] -> Left "Something about no account name in the url."
     _ -> Left "Something about unexpected path segments after the account name."
@@ -111,8 +111,8 @@ accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
     params = 
       M.singleton "token" (Just $ apToken ap) 
       <> maybe mempty (M.singleton "chain" . Just . T.pack . show)  (apChain ap)
-      <> maybe mempty (M.singleton "min-height" . Just . T.pack . show) (apMinHeight ap)
-      <> maybe mempty (M.singleton "max-height" . Just . T.pack . show) (apMaxHeight ap)
+      <> maybe mempty (M.singleton "minheight" . Just . T.pack . show) (apMinHeight ap)
+      <> maybe mempty (M.singleton "maxHeight" . Just . T.pack . show) (apMaxHeight ap)
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
