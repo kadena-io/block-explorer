@@ -28,6 +28,7 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 import           Servant.Common.Req hiding (note)
+import           Text.Printf (printf)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.StringEncoded
@@ -118,6 +119,17 @@ transferWidget AccountParams{..} nc = do
               tfield "Token" $ text apToken
               tfield "Account" $ accountSearchLink n apToken apAccount apAccount
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
+              case (apMinHeight, apMaxHeight) of
+                (Nothing, Nothing) -> pure ()
+                (Nothing, Just maxHeight) -> do
+                  let rangeText = T.pack $ printf "Possibly genesis until height=%d" maxHeight
+                  tfield "Block Height Range" $ text rangeText
+                (Just minHeight, Nothing) -> do
+                  let rangeText = T.pack $ printf "From height=%d to present time" minHeight
+                  tfield "Block Height Range" $ text rangeText
+                (Just minHeight, Just maxHeight) -> do
+                  let rangeText = T.pack $ printf "%d-%d" minHeight maxHeight
+                  tfield "Block Height Range" $ text rangeText
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui celled table" $ do
               el "thead" $ el "tr" $ do
