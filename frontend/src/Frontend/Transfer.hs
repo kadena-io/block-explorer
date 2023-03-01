@@ -127,7 +127,7 @@ transferWidget AccountParams{..} nc = do
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui compact celled table" $ do
               el "thead" $ el "tr" $ do
-                maybe (el "th" $ text "Chain") (const $ pure ()) chainid
+                maybe (el "th" $ text "Chain") (const $ pure ()) apChain
                 elAttr "th" ("style" =: "width: auto") $ text "Time"
                 elAttr "th" ("style" =: "width: auto") $ text "Height"
                 elAttr "th" ("style" =: "width: auto") $ text "Request Key"
