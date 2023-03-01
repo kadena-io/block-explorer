@@ -158,7 +158,7 @@ accountInfo token account mInfos = do
             totalCount = length infos
             balances = foldl' addTo mempty good
         let linkText = "View most recent transfers associated to this account."
-        el "p" $ routeLink (mkTransferViewRoute n account token Nothing) (text linkText)
+        el "p" $ routeLink (mkTransferViewRoute n account token Nothing Nothing Nothing) (text linkText)
         el "p" $ do
           text $ "Got data from " <> tshow goodCount <> " chains"
           when (totalCount > goodCount) $
@@ -185,7 +185,7 @@ accountInfo token account mInfos = do
                 let mkAttrs open = "style" =: if open then  "cursor: auto;" else "display: none;"
                 elDynAttr "tr" (mkAttrs <$> openDyn) $ do
                   el "td" blank
-                  el "td" $ routeLink (mkTransferViewRoute n account "coin" (Just chain)) $
+                  el "td" $ routeLink (mkTransferViewRoute n account "coin" (Just chain) Nothing Nothing) $
                     text $ "Chain " <> T.pack (show chain)
                   el "td" $ text $ tshow bal
 
@@ -208,20 +208,24 @@ limParam = "lim"
 pageParam :: Text
 pageParam = "page"
 
-mkTransferViewRoute :: NetId -> Text -> Text -> Maybe Integer -> R FrontendRoute
-mkTransferViewRoute netId account token chainid =
+mkTransferViewRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
+mkTransferViewRoute netId account token chainid minHeight maxHeight =
   mkNetRoute netId $ NetRoute_TransferSearch :/ AccountParams
     { apToken = token
     , apAccount = account
     , apChain = chainid
+    , apMinHeight = minHeight
+    , apMaxHeight = maxHeight
     }
 
-mkAccountRoute :: NetId -> Text -> Text -> Maybe Integer -> R FrontendRoute
-mkAccountRoute netId token account chain = mkNetRoute netId $
+mkAccountRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
+mkAccountRoute netId token account chain minHeight maxHeight = mkNetRoute netId $
   NetRoute_AccountSearch :/ AccountParams
     { apToken = token
     , apAccount = account
     , apChain = chain
+    , apMinHeight = minHeight
+    , apMaxHeight = maxHeight
     }
 
 accountSearchLink
@@ -235,4 +239,4 @@ accountSearchLink
   -> Text
   -> m ()
 accountSearchLink netId token account linkText =
-  routeLink (mkAccountRoute netId token account Nothing) $ text linkText
+  routeLink (mkAccountRoute netId token account Nothing Nothing Nothing) $ text linkText
