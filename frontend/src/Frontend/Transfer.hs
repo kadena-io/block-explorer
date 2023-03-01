@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecursiveDo                #-}
+{-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
@@ -27,6 +28,7 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 import           Servant.Common.Req hiding (note)
+import           Text.Printf (printf)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.StringEncoded
@@ -74,7 +76,7 @@ transferHelper aps = do
      (AppState _ _ cw _) <- ask
      case cw >>= _netConfig_dataHost of
        Nothing -> text "Transfers view is not supported unless a chainweb-data url is included in the config!"
-       Just _dataHost -> transferWidget (apAccount aps) (apToken aps) (apChain aps) (fromJust cw) -- We can assume the netconfig exists if we got to this branch!
+       Just _dataHost -> transferWidget aps (fromJust cw) -- We can assume the netconfig exists if we got to this branch!
 
 transferWidget
   :: ( MonadApp r t m
@@ -87,12 +89,10 @@ transferWidget
      , SetRoute t (R FrontendRoute) m
      , MonadIO m
      )
-  => Text
-  -> Text
-  -> Maybe Integer
+  => AccountParams
   -> NetConfig
   -> App r t m ()
-transferWidget account token chainid nc = do
+transferWidget AccountParams{..} nc = do
     pb <- getPostBuild
     res <- mkXhr QNone QNone (constDyn QNone) pb
     void $ networkHold (inlineLoader "Loading...") (f <$> res)
@@ -102,31 +102,37 @@ transferWidget account token chainid nc = do
       nc
       (constDyn lim)
       (constDyn off)
-      (constDyn $ Right account)
-      (constDyn $ QParamSome token)
-      (constDyn $ maybe QNone (QParamSome . ChainId . fromIntegral) chainid)
+      (constDyn $ Right apAccount)
+      (constDyn $ QParamSome apToken)
+      (constDyn $ maybe QNone (QParamSome . ChainId . fromIntegral) apChain)
+      (constDyn $ maybe QNone (QParamSome . fromIntegral) apMinHeight)
+      (constDyn $ maybe QNone (QParamSome . fromIntegral) apMaxHeight)
       nextToken_
         evt
     f = \case
         Left _ -> pure ()
         Right (accs, nextHeaderToken) -> mdo
           (AppState n _ _ _) <- ask
-          elAttr "h2" ("data-tooltip" =: account) $ text $ "Transfer Info"
+          elAttr "h2" ("data-tooltip" =: apAccount) $ text $ "Transfer Info"
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
-              tfield "Token" $ text token
-              tfield "Account" $ accountSearchLink n token account account
-              maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) chainid
+              tfield "Token" $ text apToken
+              tfield "Account" $ accountSearchLink n apToken apAccount apAccount
+              maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
+              let rangeText = T.pack $ printf "From %s down to at most %s"
+                    (maybe "PRESENT TIME" show apMaxHeight)
+                    (maybe "POSSIBLY GENESIS" show apMinHeight)
+              when (isJust apMaxHeight || isJust apMinHeight) $ tfield "Height Range" $ text rangeText
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui celled table" $ do
               el "thead" $ el "tr" $ do
                 el "th" $ text "Request Key"
-                maybe (el "th" $ text "Chain ID") (const $ pure ()) chainid
+                maybe (el "th" $ text "Chain ID") (const $ pure ()) apChain
                 el "th" $ text "Block Height"
                 el "th" $ text "From/To"
                 el "th" $ text "Amount"
               el "tbody" $ do
-                let rowsToRender details = forM_ details $ \detail -> el "tr" $ drawRow n token account chainid detail
+                let rowsToRender details = forM_ details $ \detail -> el "tr" $ drawRow n apToken apAccount apChain detail
                 rowsToRender accs
                 p <- produceNewRowsOnToken mkXhr e
                 let (errorE, goodE) = fanEither p
@@ -233,6 +239,8 @@ mkTransferSearchRoute netId account token = mkNetRoute netId $
     { apToken = token
     , apAccount = account
     , apChain = Nothing
+    , apMinHeight = Nothing
+    , apMaxHeight = Nothing
     }
 
 getTransferDetail :: Text -> Maybe [TransferDetail]

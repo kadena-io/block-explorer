@@ -66,6 +66,8 @@ data AccountParams = AccountParams
   { apToken :: T.Text
   , apAccount :: T.Text
   , apChain :: Maybe Integer
+  , apMinHeight :: Maybe Integer
+  , apMaxHeight :: Maybe Integer
   }
 
 accountParamsEncoder :: Applicative check =>
@@ -83,11 +85,25 @@ accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
          Just (Just chainIdTxt) -> case readMaybe @Integer (T.unpack chainIdTxt) of
              Nothing -> Left $ "Chain \"" <> chainIdTxt <> "\" must be an int"
              Just cid -> Right $ Just cid
+      minheight <- case M.lookup "minheight" params of
+        Nothing -> return Nothing
+        Just Nothing -> Left "Expected a value for the minheight parameter!"
+        Just (Just minheightTxt) -> case readMaybe @Integer (T.unpack minheightTxt) of
+           Nothing -> Left $ "minheight \"" <> minheightTxt <> "\" must be an int"
+           Just minheight -> Right $ Just minheight
+      maxheight <- case M.lookup "maxheight" params of
+        Nothing -> return Nothing
+        Just Nothing -> Left "Expected a value for the maxheight parameter!"
+        Just (Just maxheightTxt) -> case readMaybe @Integer (T.unpack maxheightTxt) of
+           Nothing -> Left $ "maxheight \"" <> maxheightTxt <> "\" must be an int"
+           Just maxheight -> Right $ Just maxheight
       return AccountParams
          {
            apToken = token
          , apAccount = account
          , apChain = chain
+         , apMinHeight = minheight
+         , apMaxHeight = maxheight
          }
     [] -> Left "Something about no account name in the url."
     _ -> Left "Something about unexpected path segments after the account name."
@@ -95,6 +111,8 @@ accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
     params = 
       M.singleton "token" (Just $ apToken ap) 
       <> maybe mempty (M.singleton "chain" . Just . T.pack . show)  (apChain ap)
+      <> maybe mempty (M.singleton "minheight" . Just . T.pack . show) (apMinHeight ap)
+      <> maybe mempty (M.singleton "maxheight" . Just . T.pack . show) (apMaxHeight ap)
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
