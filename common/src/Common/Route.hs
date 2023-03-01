@@ -112,7 +112,7 @@ accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
       M.singleton "token" (Just $ apToken ap) 
       <> maybe mempty (M.singleton "chain" . Just . T.pack . show)  (apChain ap)
       <> maybe mempty (M.singleton "minheight" . Just . T.pack . show) (apMinHeight ap)
-      <> maybe mempty (M.singleton "maxHeight" . Just . T.pack . show) (apMaxHeight ap)
+      <> maybe mempty (M.singleton "maxheight" . Just . T.pack . show) (apMaxHeight ap)
 
 data NetRoute :: * -> * where
   NetRoute_Chainweb :: NetRoute ()
