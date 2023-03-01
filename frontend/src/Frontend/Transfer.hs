@@ -14,6 +14,7 @@ import qualified Data.Aeson as A
 import           Data.Foldable
 import           Data.Functor
 import           Data.Scientific
+import           Data.Time.Format
 import           Control.Monad
 import           Control.Monad.Reader
 import qualified Data.Map as M
@@ -124,13 +125,14 @@ transferWidget AccountParams{..} nc = do
                     (maybe "POSSIBLY GENESIS" show apMinHeight)
               when (isJust apMaxHeight || isJust apMinHeight) $ tfield "Height Range" $ text rangeText
           elAttr "div" ("style" =: "display: grid") $ mdo
-            t <- elClass "table" "ui celled table" $ do
+            t <- elClass "table" "ui compact celled table" $ do
               el "thead" $ el "tr" $ do
-                el "th" $ text "Request Key"
-                maybe (el "th" $ text "Chain ID") (const $ pure ()) apChain
-                el "th" $ text "Block Height"
-                el "th" $ text "From/To"
-                el "th" $ text "Amount"
+                maybe (el "th" $ text "Chain") (const $ pure ()) apChain
+                elAttr "th" ("style" =: "width: auto") $ text "Time"
+                elAttr "th" ("style" =: "width: auto") $ text "Height"
+                elAttr "th" ("style" =: "width: auto") $ text "Request Key"
+                elAttr "th" ("style" =: "width: auto") $ text "From/To"
+                elAttr "th" ("style" =: "width: auto") $ text "Amount"
               el "tbody" $ do
                 let rowsToRender details = forM_ details $ \detail -> el "tr" $ drawRow n apToken apAccount apChain detail
                 rowsToRender accs
@@ -216,11 +218,13 @@ drawRow n token account chainid acc = do
       fromAccount = _trDetail_fromAccount acc
       toAccount = _trDetail_toAccount acc
       StringEncoded amount = _trDetail_amount acc
+      timestamp = _trDetail_blockTime acc
+  when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain" <> "style" =: "white-space: nowrap;width: 0px;") $ text $ tshow cid
+  elAttr "td" ("data-label" =: "Time" <> "style" =: "white-space: nowrap; width: 0px;") $ text $ T.pack $ formatTime defaultTimeLocale "%F %T" timestamp
+  elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash <> "style" =: "white-space: nowrap; width: 0px;") $
+    blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
   elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
     if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
-  when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain ID") $ text $ tshow cid
-  elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash) $
-    blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
   let showAccount = listToMaybe [a | a <- [fromAccount, toAccount], a /= account, not $ T.null a]
   elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> foldMap (\s -> "data-tooltip" =: s) showAccount) $
     case showAccount of
@@ -229,7 +233,7 @@ drawRow n token account chainid acc = do
         text $ if s == fromAccount then "From: " else "To: "
         accountSearchLink n token s s
   let isNegAmt = fromAccount == account
-  elAttr "td" ("data-label" =: "Amount" <> "style" =: if isNegAmt then "color: red" else "color: green") $ do
+  elAttr "td" ("data-label" =: "Amount" <> "style" =: ((if isNegAmt then "color: red;" else "color: green;") <> "white-space: nowrap;width: 0px;")) $ do
     let printedAmount amt = formatScientific Fixed Nothing amt
     text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
 
