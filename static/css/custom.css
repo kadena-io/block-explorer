@@ -181,7 +181,6 @@ div.summary-inner {
 .cut-text {
     text-overflow: ellipsis;
     overflow: hidden;
-    /* width: 80px; */
     height: 1.2em;
     white-space: nowrap;
     max-width: 200px;
