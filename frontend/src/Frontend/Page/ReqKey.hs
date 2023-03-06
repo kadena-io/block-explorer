@@ -48,6 +48,7 @@ import Text.Printf (printf)
 
 import Chainweb.Api.ChainId
 
+import Common.Api
 import Common.Route
 import Common.Types
 import Common.Utils
@@ -67,6 +68,7 @@ requestKeyWidget
        , Prerender js t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
+       , RouteClick t m
        )
     => ServerInfo
     -> NetId
@@ -118,6 +120,7 @@ requestKeyResultPage
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        , Prerender js t m
+       , RouteClick t m
        )
     => NetId
     -> ChainId

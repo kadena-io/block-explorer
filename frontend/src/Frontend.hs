@@ -51,6 +51,7 @@ import           Chainweb.Api.Common
 import           Chainweb.Api.Cut
 import           Chainweb.Api.Hash
 import           ChainwebData.Api
+import           Common.Api
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -128,7 +129,7 @@ networkDispatch route ndbs netId = prerender_ blank $ do
 chainRouteHandler
   :: (MonadApp r t m, Monad (Client m), MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      Prerender js t m, RouteClick t m
      )
   => ServerInfo
   -> NetId
@@ -371,7 +372,7 @@ mkSearchRoute netId str AccountSearch = mkAccountRoute netId "coin" str Nothing 
 mainPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      DomBuilderSpace m ~ GhcjsDomSpace)
+      DomBuilderSpace m ~ GhcjsDomSpace, RouteClick t m)
   => NetId
   -> Maybe BlockHeight
   -> App r t m ()
@@ -467,7 +468,7 @@ mainPageWidget netId (Just height) = do
 searchPageWidget
   :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      DomBuilderSpace m ~ GhcjsDomSpace)
+      DomBuilderSpace m ~ GhcjsDomSpace, RouteClick t m)
   => NetId
   -> App r t m ()
 searchPageWidget netId = do
@@ -495,7 +496,8 @@ chainDifficulty cid bt =
 rowsWidget
   :: (MonadAppIO r t m, Prerender js t m,
       HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      RouteClick t m)
   => Dynamic t TickInfo
   -> AllGraphs
   -> Dynamic t (Maybe BlockRef)
@@ -511,7 +513,8 @@ rowsWidget ti gis hoveredBlock maxNumChains (Down bh) cs = do
 blockHeightRow
   :: (MonadAppIO r t m, Prerender js t m,
       HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      RouteClick t m)
   => Dynamic t TickInfo
   -> AllGraphs
   -> Dynamic t (Maybe BlockRef)
@@ -535,7 +538,8 @@ blockHeightRow ti gis hoveredBlock maxNumChains height headers = do
 blockWidget0
   :: (MonadAppIO r t m, Prerender js t m,
       HasJSContext (Performable m),
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      RouteClick t m)
   => Dynamic t TickInfo
   -> AllGraphs
   -> Dynamic t (Maybe BlockRef)

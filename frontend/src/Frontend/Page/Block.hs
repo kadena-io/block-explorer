@@ -36,6 +36,7 @@ import           Chainweb.Api.ChainId
 import           Chainweb.Api.Common
 import           Chainweb.Api.Hash
 import           Chainweb.Api.MinerData
+import           Common.Api
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -51,7 +52,8 @@ import           Frontend.Page.Transaction
 blockHashWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => ServerInfo
   -> NetId
@@ -71,7 +73,8 @@ blockHashWidget si netId cid = do
 blockHeightWidget
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => ServerInfo
   -> NetId
@@ -91,7 +94,8 @@ blockHeightWidget si netId cid = do
 blockLink
   :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilder t m,
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => NetId
   -> ChainId
@@ -104,7 +108,8 @@ blockLink netId chainId height linkText =
 blockHashLink
   :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilder t m,
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => NetId
   -> ChainId
@@ -117,7 +122,8 @@ blockHashLink netId chainId blockHash linkText =
 blockPageNoPayload
   :: (MonadApp r t m, MonadJSM (Performable m), HasJSContext (Performable m),
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Monad (Client m),
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => NetId
   -> ChainwebHost
@@ -141,7 +147,8 @@ blockHeaderPage
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       HasJSContext (Performable m),
       MonadJSM (Performable m),
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => NetId
   -> ChainwebHost
@@ -198,7 +205,8 @@ mkCoinAccountSearchRoute netId account = mkNetRoute netId $
 blockPayloadWidget
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => NetId
   -> ChainId
@@ -223,7 +231,8 @@ blockPayloadWidget netId c bh bp = do
 blockPayloadWithOutputsWidget
   :: (MonadApp r t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => NetId
   -> ChainId

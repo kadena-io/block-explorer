@@ -30,6 +30,7 @@ import           Chainweb.Api.ChainId
 import           ChainwebData.Pagination
 import           ChainwebData.TxSummary
 import           ChainwebData.EventDetail
+import           Common.Api
 import           Common.Route
 import           Common.Types
 import           Common.Utils
@@ -46,7 +47,8 @@ recentTransactions
       HasJSContext (Performable m), MonadJSM (Performable m),
       DomBuilder t m, PerformEvent t m, TriggerEvent t m, PostBuild t m,
       Prerender js t m,
-      MonadHold t m)
+      MonadHold t m,
+      RouteClick t m)
   => Int
   -> RecentTxs
   -> m ()
@@ -77,6 +79,7 @@ transactionSearch
        , HasJSContext (Performable m)
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
+       , RouteClick t m
        )
     => App (Map Text (Maybe Text)) t m ()
 transactionSearch = do
@@ -132,6 +135,7 @@ eventSearch
        , HasJSContext (Performable m)
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
+       , RouteClick t m
        )
     => App (Map Text (Maybe Text)) t m ()
 eventSearch = do
@@ -185,7 +189,8 @@ uiPagination = do
 
 txTable
   :: (DomBuilder t m, Prerender js t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      RouteClick t m)
   => NetId
   -> Text
   -> (Bool,[TxSummary])
@@ -242,7 +247,8 @@ txTable net hdr (t,txs) = do
 
 evTable
   :: (DomBuilder t m, Prerender js t m,
-      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m)
+      RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
+      RouteClick t m)
   => NetId
   -> (Bool, [EventDetail])
   -> m ()
@@ -292,7 +298,8 @@ senderWidget tx = text $
 txDetailLink
   :: (RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilder t m,
-      Prerender js t m
+      Prerender js t m,
+      RouteClick t m
      )
   => NetId
   -> Text

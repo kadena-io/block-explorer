@@ -35,6 +35,7 @@ import Chainweb.Api.Signer
 import Chainweb.Api.Transaction
 import Common.Types
 import Common.Utils
+import Common.Api
 import Common.Route
 import Frontend.App
 import Frontend.Common
@@ -50,6 +51,7 @@ transactionPage
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
      , Prerender js t m
+     , RouteClick t m
      )
   => NetId
   -> ChainId

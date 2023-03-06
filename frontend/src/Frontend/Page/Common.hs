@@ -51,6 +51,7 @@ import Chainweb.Api.Payload
 -- ------------------------------------------------------------------------ --
 -- Reflex modules
 
+import Common.Api
 import Common.Route
 import Common.Types
 import Common.Utils
@@ -99,6 +100,7 @@ transactionsLink
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
      , Prerender js t m
+     , RouteClick t m
      )
   => NetId
   -> ChainId
@@ -117,6 +119,7 @@ renderMetaData
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
        , Prerender js t m
+       , RouteClick t m
        )
     => NetId
     -> ChainId

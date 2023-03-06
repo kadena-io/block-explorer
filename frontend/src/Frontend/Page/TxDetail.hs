@@ -31,6 +31,7 @@ import Chainweb.Api.Hash
 import ChainwebData.Api
 import ChainwebData.TxDetail
 
+import Common.Api
 import Common.Types
 import Common.Utils
 import Common.Route
@@ -49,6 +50,7 @@ txDetailWidget
        , Prerender js t m
        , RouteToUrl (R FrontendRoute) m
        , SetRoute t (R FrontendRoute) m
+       , RouteClick t m
        )
     => NetId
     -> App T.Text t m ()
@@ -75,6 +77,7 @@ txDetailPage
      , HasJSContext (Performable m)
      , MonadJSM (Performable m)
      , Prerender js t m
+     , RouteClick t m
      )
   => NetId
   -> ChainwebVersion
