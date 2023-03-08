@@ -23,6 +23,7 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Lazy (fromStrict)
 import qualified Data.Text.Lazy.Encoding as T
+import           Data.Text.Read (decimal)
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
@@ -124,6 +125,29 @@ transferWidget AccountParams{..} nc = do
                     (maybe "PRESENT TIME" show apMaxHeight)
                     (maybe "POSSIBLY GENESIS" show apMinHeight)
               when (isJust apMaxHeight || isJust apMinHeight) $ tfield "Height Range" $ text rangeText
+          minHeightInput <- elAttr "div" ("class" =: "ui labeled input") $ elAttr "div" ("class" =: "ui label") $ do
+              text "From Height "
+              inputElement $ def &
+                inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                ("style" =: "border-radius: 0;")
+          maxHeightInput <- elAttr "div" ("class" =: "ui labeled input") $ elAttr "div" ("class" =: "ui label") $ do
+              text "To Height "
+              inputElement $ def &
+                inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                ("style" =: "border-radius: 0;")
+          let buttonClass a b = case (decimal @Integer a, decimal @Integer b) of
+                 (_, Left _) -> Left "ui disabled button"
+                 (Left _, _) -> Left "ui disabled button"
+                 (Right (parsedA, restA), Right (parsedB, restB)) 
+                    | T.null restA && T.null restB && parsedA <= parsedB -> Right ("ui button", (parsedA,parsedB))
+                    | otherwise -> Left "ui disabled button"
+          let filterButtonWidget a b = case buttonClass a b of
+               Left t -> fmap (fmap (const (Left ())) . domEvent Click . fst) $ elAttr' "button" ("class" =: t) $ text "Filter results"
+               Right (enabled, parsed) -> fmap (fmap (const (Right parsed)) . (domEvent Click . fst)) $ elAttr' "button" ("class" =: enabled) $ text "Filter results" 
+          e' <- dyn $ zipDynWith filterButtonWidget (_inputElement_value minHeightInput) (_inputElement_value maxHeightInput) 
+          (_e,f) <- fanEither <$> switchHoldPromptOnly never e'
+          let toNewPage = f <&> \(minHeight,maxHeight) -> mkTransferSearchRoute n apAccount apToken apChain (Just minHeight) (Just maxHeight) 
+          setRoute toNewPage
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui compact celled table" $ do
               el "thead" $ el "tr" $ do
@@ -237,15 +261,16 @@ drawRow n token account chainid acc = do
     let printedAmount amt = formatScientific Fixed Nothing amt
     text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
 
-mkTransferSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
-mkTransferSearchRoute netId account token = mkNetRoute netId $
+mkTransferSearchRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
+mkTransferSearchRoute netId account token chain minheight maxheight = mkNetRoute netId $
   NetRoute_TransferSearch :/ AccountParams
     { apToken = token
     , apAccount = account
-    , apChain = Nothing
-    , apMinHeight = Nothing
-    , apMaxHeight = Nothing
+    , apChain = chain
+    , apMinHeight = minheight
+    , apMaxHeight = maxheight
     }
 
 getTransferDetail :: Text -> Maybe [TransferDetail]
 getTransferDetail = A.decode . T.encodeUtf8 . fromStrict
+
