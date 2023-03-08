@@ -135,7 +135,7 @@ transferWidget AccountParams{..} nc = do
               inputElement $ def &
                 inputElementConfig_elementConfig . elementConfig_initialAttributes .~
                 ("style" =: "border-radius: 0;")
-          let buttonClass a b = case (decimal @Integer a, decimal @Integer b) of
+          let buttonClass a b = case (decimal @Integer $ T.strip a, decimal @Integer $ T.strip b) of
                  (_, Left _) -> Left "ui disabled button"
                  (Left _, _) -> Left "ui disabled button"
                  (Right (parsedA, restA), Right (parsedB, restB)) 
