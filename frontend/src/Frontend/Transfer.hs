@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Frontend.Transfer where
 
@@ -120,28 +121,41 @@ transferWidget AccountParams{..} nc = do
               tfield "Token" $ text apToken
               tfield "Account" $ accountSearchLink n apToken apAccount apAccount
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
+          let initialMinHeight = maybe "" tshow apMinHeight 
+              initialMaxHeight = maybe "" tshow apMaxHeight
           (minHeightInput, maxHeightInput) <- elAttr "div" ("class" =: "ui labeled input") $ do
               elAttr "div" ("class" =: "ui label") $ text "Minimum Height"
-              minInput <- inputElement $ def &
-                   inputElementConfig_elementConfig . elementConfig_initialAttributes .~
-                   ("style" =: "border-radius: 0;" <> "placeholder" =: maybe "Genesis" tshow apMinHeight)
+              minInput <- inputElement $ def 
+                   & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                      ("style" =: "border-radius: 0;" <> "placeholder" =: "Genesis")
+                   & inputElementConfig_initialValue .~ initialMinHeight
               elAttr "div" ("class" =: "ui label") $ text "Maximum Height"
-              maxInput <- inputElement $ def &
-                    inputElementConfig_elementConfig . elementConfig_initialAttributes .~
-                    ("style" =: "border-radius: 0;" <> "placeholder" =: maybe "Current Time" tshow apMaxHeight)
+              maxInput <- inputElement $ def 
+                   & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                      ("style" =: "border-radius: 0;" <> "placeholder" =: "Current Time")
+                   & inputElementConfig_initialValue .~ initialMaxHeight
               return (minInput, maxInput)
-          let buttonClass a b = case (decimal @Integer $ T.strip a, decimal @Integer $ T.strip b) of
-                 (_, Left _) -> Left "ui disabled button"
-                 (Left _, _) -> Left "ui disabled button"
-                 (Right (parsedA, restA), Right (parsedB, restB)) 
-                    | T.null restA && T.null restB && parsedA <= parsedB -> Right ("ui button", (parsedA,parsedB))
-                    | otherwise -> Left "ui disabled button"
+          let parseHeight :: Text -> Either String (Maybe Integer)
+              parseHeight (T.stripEnd -> a)
+               | T.null a = Right Nothing
+               | otherwise = case decimal @Integer a of
+                   Left l -> Left l
+                   Right (t,rest)
+                      | not (T.null rest) -> Left $ "parseHeight: unexpected suffix " <> T.unpack rest
+                      | otherwise -> Right (Just t)
+          let buttonClass a b = case (parseHeight a, parseHeight b) of
+                 (_, Left _) -> Left ("ui disabled button", "max height is not an integer")
+                 (Left _, _) -> Left ("ui disabled button", "min height is not an integer")
+                 (Right (Just parsedA), Right (Just parsedB)) | not (parsedA <= parsedB) -> Left ("ui disabled button", "Min height must be less than or equal to min height")
+                 (Right parsedA, Right parsedB) 
+                    | a == initialMinHeight && b == initialMaxHeight -> Left ("ui disabled button", "The height range has not changed!")
+                    | otherwise -> Right ("ui button", (parsedA,parsedB))
           let filterButtonWidget a b = case buttonClass a b of
-               Left t -> fmap (fmap (const (Left ())) . domEvent Click . fst) $ elAttr' "button" ("class" =: t) $ text "Filter results"
+               Left (t,errToolTip) -> fmap (fmap (const (Left ())) . domEvent Click . fst) $ elAttr "span" ("data-tooltip" =: errToolTip) $ elAttr' "button" ("class" =: t) $ text "Filter results"
                Right (enabled, parsed) -> fmap (fmap (const (Right parsed)) . (domEvent Click . fst)) $ elAttr' "button" ("class" =: enabled) $ text "Filter results" 
           e' <- dyn $ zipDynWith filterButtonWidget (_inputElement_value minHeightInput) (_inputElement_value maxHeightInput) 
           (_e,f) <- fanEither <$> switchHoldPromptOnly never e'
-          let toNewPage = f <&> \(minHeight,maxHeight) -> mkTransferSearchRoute n apAccount apToken apChain (Just minHeight) (Just maxHeight) 
+          let toNewPage = f <&> \(minHeight,maxHeight) -> mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight 
           setRoute toNewPage
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui compact celled table" $ do
