@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Frontend.Transfer where
 
@@ -23,13 +24,13 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Text.Lazy (fromStrict)
 import qualified Data.Text.Lazy.Encoding as T
+import           Data.Text.Read (decimal)
 import           GHCJS.DOM.Types (MonadJSM)
 import           Obelisk.Route
 import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 import           Servant.Common.Req hiding (note)
-import           Text.Printf (printf)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.StringEncoded
@@ -120,10 +121,49 @@ transferWidget AccountParams{..} nc = do
               tfield "Token" $ text apToken
               tfield "Account" $ accountSearchLink n apToken apAccount apAccount
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
-              let rangeText = T.pack $ printf "From %s down to at most %s"
-                    (maybe "PRESENT TIME" show apMaxHeight)
-                    (maybe "POSSIBLY GENESIS" show apMinHeight)
-              when (isJust apMaxHeight || isJust apMinHeight) $ tfield "Height Range" $ text rangeText
+          let initialMinHeight = maybe "" tshow apMinHeight
+              initialMaxHeight = maybe "" tshow apMaxHeight
+          (minHeightInput, maxHeightInput) <- elAttr "div" ("class" =: "ui labeled input") $ do
+              elAttr "div" ("class" =: "ui label") $ text "Minimum Height"
+              minInput <- inputElement $ def
+                   & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                      ("style" =: "border-radius: 0;" <> "placeholder" =: "Genesis")
+                   & inputElementConfig_initialValue .~ initialMinHeight
+              elAttr "div" ("class" =: "ui label") $ text "Maximum Height"
+              maxInput <- inputElement $ def
+                   & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                      ("style" =: "border-radius: 0;" <> "placeholder" =: "Current Time")
+                   & inputElementConfig_initialValue .~ initialMaxHeight
+              return (minInput, maxInput)
+          let parseHeight :: Text -> Either String (Maybe Integer)
+              parseHeight (T.stripEnd -> a)
+               | T.null a = Right Nothing
+               | otherwise = case decimal @Integer a of
+                   Left l -> Left l
+                   Right (t,rest)
+                      | not (T.null rest) -> Left $ "parseHeight: unexpected suffix " <> T.unpack rest
+                      | otherwise -> Right (Just t)
+          let buttonClass a b = case (parseHeight a, parseHeight b) of
+                 (_, Left _) -> Left ("ui disabled button", "max height is not an integer")
+                 (Left _, _) -> Left ("ui disabled button", "min height is not an integer")
+                 (Right (Just parsedA), Right (Just parsedB)) 
+                     | not (parsedA <= parsedB) -> 
+                       Left ("ui disabled button", "Min height must be less than or equal to Max height")
+                 (Right parsedA, Right parsedB)
+                    | a == initialMinHeight && b == initialMaxHeight -> 
+                        Left ("ui disabled button", "The height range has not changed!")
+                    | otherwise -> Right ("ui button", (parsedA,parsedB))
+          let filterButtonWidget a b = case buttonClass a b of
+               Left (t,errToolTip) -> void 
+                   $ elAttr "span" ("data-tooltip" =: errToolTip) 
+                   $ elAttr' "button" ("class" =: t) $ text "Filter results"
+               Right (enabled, (minHeight,maxHeight)) -> do
+                   (d,_) <- elAttr' "button" ("class" =: enabled) $ text "Filter results" 
+                   let route = mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight
+                   setRoute $ route <$ domEvent Click d
+          void $ dyn $ zipDynWith filterButtonWidget 
+              (_inputElement_value minHeightInput) 
+              (_inputElement_value maxHeightInput) 
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui compact celled table" $ do
               el "thead" $ el "tr" $ do
@@ -237,15 +277,16 @@ drawRow n token account chainid acc = do
     let printedAmount amt = formatScientific Fixed Nothing amt
     text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
 
-mkTransferSearchRoute :: NetId -> Text -> Text -> R FrontendRoute
-mkTransferSearchRoute netId account token = mkNetRoute netId $
+mkTransferSearchRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
+mkTransferSearchRoute netId account token chain minheight maxheight = mkNetRoute netId $
   NetRoute_TransferSearch :/ AccountParams
     { apToken = token
     , apAccount = account
-    , apChain = Nothing
-    , apMinHeight = Nothing
-    , apMaxHeight = Nothing
+    , apChain = chain
+    , apMinHeight = minheight
+    , apMaxHeight = maxheight
     }
 
 getTransferDetail :: Text -> Maybe [TransferDetail]
 getTransferDetail = A.decode . T.encodeUtf8 . fromStrict
+
