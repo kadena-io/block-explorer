@@ -121,16 +121,16 @@ transferWidget AccountParams{..} nc = do
               tfield "Token" $ text apToken
               tfield "Account" $ accountSearchLink n apToken apAccount apAccount
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
-          let initialMinHeight = maybe "" tshow apMinHeight 
+          let initialMinHeight = maybe "" tshow apMinHeight
               initialMaxHeight = maybe "" tshow apMaxHeight
           (minHeightInput, maxHeightInput) <- elAttr "div" ("class" =: "ui labeled input") $ do
               elAttr "div" ("class" =: "ui label") $ text "Minimum Height"
-              minInput <- inputElement $ def 
+              minInput <- inputElement $ def
                    & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
                       ("style" =: "border-radius: 0;" <> "placeholder" =: "Genesis")
                    & inputElementConfig_initialValue .~ initialMinHeight
               elAttr "div" ("class" =: "ui label") $ text "Maximum Height"
-              maxInput <- inputElement $ def 
+              maxInput <- inputElement $ def
                    & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
                       ("style" =: "border-radius: 0;" <> "placeholder" =: "Current Time")
                    & inputElementConfig_initialValue .~ initialMaxHeight
@@ -147,7 +147,7 @@ transferWidget AccountParams{..} nc = do
                  (_, Left _) -> Left ("ui disabled button", "max height is not an integer")
                  (Left _, _) -> Left ("ui disabled button", "min height is not an integer")
                  (Right (Just parsedA), Right (Just parsedB)) | not (parsedA <= parsedB) -> Left ("ui disabled button", "Min height must be less than or equal to min height")
-                 (Right parsedA, Right parsedB) 
+                 (Right parsedA, Right parsedB)
                     | a == initialMinHeight && b == initialMaxHeight -> Left ("ui disabled button", "The height range has not changed!")
                     | otherwise -> Right ("ui button", (parsedA,parsedB))
           let filterButtonWidget a b = case buttonClass a b of
