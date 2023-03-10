@@ -30,7 +30,6 @@ import           Obelisk.Route.Frontend
 import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Network
 import           Servant.Common.Req hiding (note)
-import           Text.Printf (printf)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.ChainId
 import           Chainweb.Api.StringEncoded
@@ -121,20 +120,16 @@ transferWidget AccountParams{..} nc = do
               tfield "Token" $ text apToken
               tfield "Account" $ accountSearchLink n apToken apAccount apAccount
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
-              let rangeText = T.pack $ printf "From %s down to at most %s"
-                    (maybe "PRESENT TIME" show apMaxHeight)
-                    (maybe "POSSIBLY GENESIS" show apMinHeight)
-              when (isJust apMaxHeight || isJust apMinHeight) $ tfield "Height Range" $ text rangeText
-          minHeightInput <- elAttr "div" ("class" =: "ui labeled input") $ elAttr "div" ("class" =: "ui label") $ do
-              text "From Height "
-              inputElement $ def &
-                inputElementConfig_elementConfig . elementConfig_initialAttributes .~
-                ("style" =: "border-radius: 0;")
-          maxHeightInput <- elAttr "div" ("class" =: "ui labeled input") $ elAttr "div" ("class" =: "ui label") $ do
-              text "To Height "
-              inputElement $ def &
-                inputElementConfig_elementConfig . elementConfig_initialAttributes .~
-                ("style" =: "border-radius: 0;")
+          (minHeightInput, maxHeightInput) <- elAttr "div" ("class" =: "ui labeled input") $ do
+              elAttr "div" ("class" =: "ui label") $ text "Minimum Height"
+              minInput <- inputElement $ def &
+                   inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                   ("style" =: "border-radius: 0;" <> "placeholder" =: maybe "Genesis" tshow apMinHeight)
+              elAttr "div" ("class" =: "ui label") $ text "Maximum Height"
+              maxInput <- inputElement $ def &
+                    inputElementConfig_elementConfig . elementConfig_initialAttributes .~
+                    ("style" =: "border-radius: 0;" <> "placeholder" =: maybe "Current Time" tshow apMaxHeight)
+              return (minInput, maxInput)
           let buttonClass a b = case (decimal @Integer $ T.strip a, decimal @Integer $ T.strip b) of
                  (_, Left _) -> Left "ui disabled button"
                  (Left _, _) -> Left "ui disabled button"
