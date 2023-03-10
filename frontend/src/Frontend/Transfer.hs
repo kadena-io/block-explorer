@@ -146,17 +146,24 @@ transferWidget AccountParams{..} nc = do
           let buttonClass a b = case (parseHeight a, parseHeight b) of
                  (_, Left _) -> Left ("ui disabled button", "max height is not an integer")
                  (Left _, _) -> Left ("ui disabled button", "min height is not an integer")
-                 (Right (Just parsedA), Right (Just parsedB)) | not (parsedA <= parsedB) -> Left ("ui disabled button", "Min height must be less than or equal to Max height")
+                 (Right (Just parsedA), Right (Just parsedB)) 
+                     | not (parsedA <= parsedB) -> 
+                       Left ("ui disabled button", "Min height must be less than or equal to Max height")
                  (Right parsedA, Right parsedB)
-                    | a == initialMinHeight && b == initialMaxHeight -> Left ("ui disabled button", "The height range has not changed!")
+                    | a == initialMinHeight && b == initialMaxHeight -> 
+                        Left ("ui disabled button", "The height range has not changed!")
                     | otherwise -> Right ("ui button", (parsedA,parsedB))
           let filterButtonWidget a b = case buttonClass a b of
-               Left (t,errToolTip) -> fmap (fmap (const (Left ())) . domEvent Click . fst) $ elAttr "span" ("data-tooltip" =: errToolTip) $ elAttr' "button" ("class" =: t) $ text "Filter results"
-               Right (enabled, parsed) -> fmap (fmap (const (Right parsed)) . (domEvent Click . fst)) $ elAttr' "button" ("class" =: enabled) $ text "Filter results" 
-          e' <- dyn $ zipDynWith filterButtonWidget (_inputElement_value minHeightInput) (_inputElement_value maxHeightInput) 
-          (_e,f) <- fanEither <$> switchHoldPromptOnly never e'
-          let toNewPage = f <&> \(minHeight,maxHeight) -> mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight 
-          setRoute toNewPage
+               Left (t,errToolTip) -> void 
+                   $ elAttr "span" ("data-tooltip" =: errToolTip) 
+                   $ elAttr' "button" ("class" =: t) $ text "Filter results"
+               Right (enabled, (minHeight,maxHeight)) -> do
+                   (d,_) <- elAttr' "button" ("class" =: enabled) $ text "Filter results" 
+                   let route = mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight
+                   setRoute $ route <$ domEvent Click d
+          void $ dyn $ zipDynWith filterButtonWidget 
+              (_inputElement_value minHeightInput) 
+              (_inputElement_value maxHeightInput) 
           elAttr "div" ("style" =: "display: grid") $ mdo
             t <- elClass "table" "ui compact celled table" $ do
               el "thead" $ el "tr" $ do
