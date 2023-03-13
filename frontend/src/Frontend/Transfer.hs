@@ -96,14 +96,14 @@ transferWidget
   -> App r t m ()
 transferWidget AccountParams{..} nc = do
     pb <- getPostBuild
-    res <- mkXhr QNone QNone (constDyn QNone) pb
+    res <- mkXhr (constDyn QNone) pb
     void $ networkHold (inlineLoader "Loading...") (f <$> res)
   where
-    mkXhr lim off nextToken_ evt =
+    mkXhr nextToken_ evt =
       getTransfers
       nc
-      (constDyn lim)
-      (constDyn off)
+      (constDyn $ QParamSome $ Limit 20)
+      (constDyn QNone)
       (constDyn $ Right apAccount)
       (constDyn $ QParamSome apToken)
       (constDyn $ maybe QNone (QParamSome . ChainId . fromIntegral) apChain)
@@ -123,69 +123,73 @@ transferWidget AccountParams{..} nc = do
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
           let initialMinHeight = maybe "" tshow apMinHeight
               initialMaxHeight = maybe "" tshow apMaxHeight
-          (minHeightInput, maxHeightInput) <- elAttr "div" ("class" =: "ui labeled input") $ do
-              elAttr "div" ("class" =: "ui label") $ text "Minimum Height"
-              minInput <- inputElement $ def
+          elClass "div" "ui labeled input" $ do
+              elClass "div" "ui label" $ text "Minimum Height"
+              minHeightInput <- inputElement $ def
                    & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
                       ("style" =: "border-radius: 0;" <> "placeholder" =: "Genesis")
                    & inputElementConfig_initialValue .~ initialMinHeight
-              elAttr "div" ("class" =: "ui label") $ text "Maximum Height"
-              maxInput <- inputElement $ def
+              elClass "div" "ui label" $ text "Maximum Height"
+              maxHeightInput <- inputElement $ def
                    & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
                       ("style" =: "border-radius: 0;" <> "placeholder" =: "Current Time")
                    & inputElementConfig_initialValue .~ initialMaxHeight
-              return (minInput, maxInput)
-          let parseHeight :: Text -> Either String (Maybe Integer)
-              parseHeight (T.stripEnd -> a)
-               | T.null a = Right Nothing
-               | otherwise = case decimal @Integer a of
-                   Left l -> Left l
-                   Right (t,rest)
-                      | not (T.null rest) -> Left $ "parseHeight: unexpected suffix " <> T.unpack rest
-                      | otherwise -> Right (Just t)
-          let buttonClass a b = case (parseHeight a, parseHeight b) of
-                 (_, Left _) -> Left ("ui disabled button", "max height is not an integer")
-                 (Left _, _) -> Left ("ui disabled button", "min height is not an integer")
-                 (Right (Just parsedA), Right (Just parsedB)) 
-                     | not (parsedA <= parsedB) -> 
-                       Left ("ui disabled button", "Min height must be less than or equal to Max height")
-                 (Right parsedA, Right parsedB)
-                    | a == initialMinHeight && b == initialMaxHeight -> 
-                        Left ("ui disabled button", "The height range has not changed!")
-                    | otherwise -> Right ("ui button", (parsedA,parsedB))
-          let filterButtonWidget a b = case buttonClass a b of
-               Left (t,errToolTip) -> void 
-                   $ elAttr "span" ("data-tooltip" =: errToolTip) 
-                   $ elAttr' "button" ("class" =: t) $ text "Filter results"
-               Right (enabled, (minHeight,maxHeight)) -> do
-                   (d,_) <- elAttr' "button" ("class" =: enabled) $ text "Filter results" 
-                   let route = mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight
-                   setRoute $ route <$ domEvent Click d
-          void $ dyn $ zipDynWith filterButtonWidget 
-              (_inputElement_value minHeightInput) 
-              (_inputElement_value maxHeightInput) 
-          elAttr "div" ("style" =: "display: grid") $ mdo
-            t <- elClass "table" "ui compact celled table" $ do
-              el "thead" $ el "tr" $ do
-                maybe (el "th" $ text "Chain") (const $ pure ()) apChain
-                elAttr "th" ("style" =: "width: auto") $ text "Time"
-                elAttr "th" ("style" =: "width: auto") $ text "Height"
-                elAttr "th" ("style" =: "width: auto") $ text "Request Key"
-                elAttr "th" ("style" =: "width: auto") $ text "From/To"
-                elAttr "th" ("style" =: "width: auto") $ text "Amount"
-              el "tbody" $ do
-                let rowsToRender details = forM_ details $ \detail -> el "tr" $ drawRow n apToken apAccount apChain detail
-                rowsToRender accs
-                p <- produceNewRowsOnToken mkXhr e
-                let (errorE, goodE) = fanEither p
-                let (details,newToken) = splitE goodE
-                indexWithRender <- accum (\(key,_oldDetails) newDetails -> (succ key, rowsToRender newDetails)) (0 :: Integer, pure ()) details
-                void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
-                return $ leftmost [fmap Left errorE, fmap Right newToken]
-            e <- case nextHeaderToken of
-              Nothing -> pure never
-              Just (NextToken next) -> evaporateButtonOnClick next t
-            pure ()
+              let parseHeight :: Text -> Either String (Maybe Integer)
+                  parseHeight (T.stripEnd -> a)
+                   | T.null a = Right Nothing
+                   | otherwise = case decimal @Integer a of
+                       Left l -> Left l
+                       Right (tt,rest)
+                          | not (T.null rest) -> Left $ "parseHeight: unexpected suffix " <> T.unpack rest
+                          | otherwise -> Right (Just tt)
+              let buttonClass a b = case (parseHeight a, parseHeight b) of
+                     (_, Left _) -> Left ("ui disabled button", "max height is not an integer")
+                     (Left _, _) -> Left ("ui disabled button", "min height is not an integer")
+                     (Right (Just parsedA), Right (Just parsedB))
+                         | not (parsedA <= parsedB) ->
+                           Left ("ui disabled button", "Min height must be less than or equal to Max height")
+                     (Right parsedA, Right parsedB)
+                        | a == initialMinHeight && b == initialMaxHeight ->
+                            Left ("ui disabled button", "The height range has not changed!")
+                        | otherwise -> Right ("ui button", (parsedA,parsedB))
+              let onEnter w = if w == 13 then Just () else Nothing
+              let filterButtonWidget a b = case buttonClass a b of
+                   Left (tt,errToolTip) -> void
+                       $ elAttr "span" ("data-tooltip" =: errToolTip)
+                       $ elAttr' "button" ("class" =: tt) $ text "Filter results"
+                   Right (enabled, (minHeight,maxHeight)) -> do
+                       (d,_) <- elAttr' "button" ("class" =: enabled) $ text "Filter results"
+                       let route = mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight
+                       setRoute
+                           $ route
+                           <$ leftmost
+                           [ mapMaybe onEnter $ domEvent Keypress minHeightInput
+                           , mapMaybe onEnter $ domEvent Keypress maxHeightInput
+                           , domEvent Click d]
+              dyn_ $ zipDynWith filterButtonWidget
+                  (_inputElement_value minHeightInput)
+                  (_inputElement_value maxHeightInput)
+          t <- elClass "table" "ui compact celled table" $ do
+            el "thead" $ el "tr" $ do
+              maybe (el "th" $ text "Chain") (const $ pure ()) apChain
+              elAttr "th" ("style" =: "width: auto") $ text "Time"
+              elAttr "th" ("style" =: "width: auto") $ text "Height"
+              elAttr "th" ("style" =: "width: auto") $ text "Request Key"
+              elAttr "th" ("style" =: "width: auto") $ text "From/To"
+              elAttr "th" ("style" =: "width: auto") $ text "Amount"
+            el "tbody" $ do
+              let rowsToRender details = forM_ details $ \detail -> el "tr" $ drawRow n apToken apAccount apChain detail
+              rowsToRender accs
+              p <- produceNewRowsOnToken mkXhr e
+              let (errorE, goodE) = fanEither p
+              let (details,newToken) = splitE goodE
+              indexWithRender <- accum (\(key,_oldDetails) newDetails -> (succ key, rowsToRender newDetails)) (0 :: Integer, pure ()) details
+              void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
+              return $ leftmost [fmap Left errorE, fmap Right newToken]
+          e <- case nextHeaderToken of
+            Nothing -> pure never
+            Just (NextToken next) -> elAttr "div" ("style" =: "display: grid;") $ evaporateButtonOnClick next t
+          pure ()
 
 
 nextButtonText :: Text
@@ -224,9 +228,7 @@ evaporateButtonOnClick token t = mdo
   pure click
 
 type TransferRequester t m =
-        QParam Limit
-        -> QParam Offset
-        -> Dynamic t (QParam NextToken)
+           Dynamic t (QParam NextToken)
         -> Event t ()
         -> m (Event t (Either TransferError ([TransferDetail], Maybe NextToken)))
 
@@ -237,7 +239,7 @@ produceNewRowsOnToken
   => TransferRequester t m -> Event t Text -> m (Event t (Either TransferError ([TransferDetail], Maybe Text)))
 produceNewRowsOnToken mkXhr nextToken_ = do
     newTokenDyn <- holdDyn QNone (QParamSome . NextToken <$> nextToken_)
-    mkXhr QNone QNone newTokenDyn (() <$ nextToken_) <&&> \case
+    mkXhr newTokenDyn (() <$ nextToken_) <&&> \case
             Left err -> Left err
             Right (details, nextTokenHeader) -> Right (details, unNextToken <$> nextTokenHeader)
   where
@@ -289,4 +291,3 @@ mkTransferSearchRoute netId account token chain minheight maxheight = mkNetRoute
 
 getTransferDetail :: Text -> Maybe [TransferDetail]
 getTransferDetail = A.decode . T.encodeUtf8 . fromStrict
-
