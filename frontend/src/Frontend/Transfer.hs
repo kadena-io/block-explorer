@@ -123,16 +123,14 @@ transferWidget AccountParams{..} nc = do
               maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
           let initialMinHeight = maybe "" tshow apMinHeight
               initialMaxHeight = maybe "" tshow apMaxHeight
-          elClass "div" "ui labeled input" $ do
-              elClass "div" "ui label" $ text "Minimum Height"
-              minHeightInput <- inputElement $ def
+          elClass "table" "ui definition table" $ do
+              minHeightInput <- tfield "Minimum Height" $ inputElement $ def
                    & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
-                      ("style" =: "border-radius: 0;" <> "placeholder" =: "Genesis")
+                      ("placeholder" =: "Genesis")
                    & inputElementConfig_initialValue .~ initialMinHeight
-              elClass "div" "ui label" $ text "Maximum Height"
-              maxHeightInput <- inputElement $ def
+              maxHeightInput <- tfield "Maximum Height" $ inputElement $ def
                    & inputElementConfig_elementConfig . elementConfig_initialAttributes .~
-                      ("style" =: "border-radius: 0;" <> "placeholder" =: "Current Time")
+                      ("placeholder" =: "Current Time")
                    & inputElementConfig_initialValue .~ initialMaxHeight
               let parseHeight :: Text -> Either String (Maybe Integer)
                   parseHeight (T.stripEnd -> a)
@@ -153,12 +151,15 @@ transferWidget AccountParams{..} nc = do
                             Left ("ui disabled button", "The height range has not changed!")
                         | otherwise -> Right ("ui button", (parsedA,parsedB))
               let onEnter w = if w == 13 then Just () else Nothing
+              let filterText = "Filter Results"
+              let greenCheckMark = "✅"
+              let redCrossMark = "✗"
               let filterButtonWidget a b = case buttonClass a b of
                    Left (tt,errToolTip) -> void
-                       $ elAttr "span" ("data-tooltip" =: errToolTip)
-                       $ elAttr' "button" ("class" =: tt) $ text "Filter results"
+                       $ tfield filterText $ elAttr "span" ("data-tooltip" =: errToolTip <> "style" =: "display: contents;")
+                       $ elAttr' "button" ("class" =: tt) $ text redCrossMark
                    Right (enabled, (minHeight,maxHeight)) -> do
-                       (d,_) <- elAttr' "button" ("class" =: enabled) $ text "Filter results"
+                       (d,_) <- tfield filterText $ elAttr' "button" ("class" =: enabled) $ text greenCheckMark
                        let route = mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight
                        setRoute
                            $ route
