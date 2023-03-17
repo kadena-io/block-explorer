@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE RecordWildCards            #-}
@@ -261,19 +262,33 @@ drawRow n token account chainid acc = do
       toAccount = _trDetail_toAccount acc
       StringEncoded amount = _trDetail_amount acc
       timestamp = _trDetail_blockTime acc
+      crossChainId = _trDetail_crossChainId acc
+      crossChainAccount = _trDetail_crossChainAccount acc
+      crossChainInfo = (,) <$> crossChainId <*> crossChainAccount
   when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain" <> "style" =: "white-space: nowrap;width: 0px;") $ text $ tshow cid
   elAttr "td" ("data-label" =: "Time" <> "style" =: "white-space: nowrap; width: 0px;") $ text $ T.pack $ formatTime defaultTimeLocale "%F %T" timestamp
   elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash <> "style" =: "white-space: nowrap; width: 0px;") $
     blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
-  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
+  elAttr "td" ("data-label" =: "Request Key" <> "data-tooltip" =: requestKey <> "class" =: "cut-text") $ 
     if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
   let showAccount = listToMaybe [a | a <- [fromAccount, toAccount], a /= account, not $ T.null a]
   elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> foldMap (\s -> "data-tooltip" =: s) showAccount) $
-    case showAccount of
-      Nothing -> pure ()
-      Just s -> do
-        text $ if s == fromAccount then "From: " else "To: "
-        accountSearchLink n token s s
+    if 
+      | fromAccount == account -> case crossChainInfo of
+         Just (xCid,xToAccount) -> do 
+           text "To: "
+           accountSearchLink n token xToAccount xToAccount
+         Nothing -> do 
+           text "To: "
+           accountSearchLink n token fromAccount fromAccount
+      | toAccount == account ->  case crossChainInfo of
+         Just (xCid,xFromAccount) -> do
+           text "From: "
+           accountSearchLink n token xFromAccount xFromAccount
+         Nothing -> do
+           text "From: "
+           accountSearchLink n token toAccount toAccount
+      | otherwise -> text "impossible case"
   let isNegAmt = fromAccount == account
   elAttr "td" ("data-label" =: "Amount" <> "style" =: ((if isNegAmt then "color: red;" else "color: green;") <> "white-space: nowrap;width: 0px;")) $ do
     let printedAmount amt = formatScientific Fixed Nothing amt
