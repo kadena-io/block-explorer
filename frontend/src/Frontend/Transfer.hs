@@ -349,7 +349,7 @@ drawRow n token account chainid acc = do
         mainTooltip override = elDynAttr "span" $ override <&> \mbMsg ->
           M.singleton "data-tooltip" $ fromMaybe (tmTooltip tokenMovement) mbMsg
     tooltipOverride <- mainTooltip tooltipOverride $ cutText $ case tokenMovement of
-      Coinbase -> constDyn Nothing <$ text "Coinbase"
+      Coinbase -> mkTag "Coinbase" "Rewarded for mining"
       Incoming eiOther -> do
         text "From: "
         case eiOther of
