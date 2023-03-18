@@ -17,6 +17,7 @@ import           Data.Foldable
 import           Data.Functor
 import           Data.Scientific
 import           Data.Time.Format
+import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Reader
 import qualified Data.Map as M
@@ -301,11 +302,13 @@ tmTooltip = \case
   Unknown reason -> "Failed to determine, please inspect the transaction: " <> reason
 
 drawRow
-  :: Monad m
+  :: MonadFix m
+   => MonadHold t m
    => RouteToUrl (R FrontendRoute) m
    => SetRoute t (R FrontendRoute) m
    => DomBuilder t m
    => Prerender js t m
+   => PostBuild t m
    => NetId -> Text -> Text -> Maybe Integer -> TransferDetail -> m ()
 drawRow n token account chainid acc = do
   let hash = _trDetail_blockHash acc
@@ -319,24 +322,38 @@ drawRow n token account chainid acc = do
   elAttr "td" ("data-label" =: "Time" <> "style" =: "white-space: nowrap; width: 0px;") $ text $ T.pack $ formatTime defaultTimeLocale "%F %T" timestamp
   elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash <> "style" =: "white-space: nowrap; width: 0px;") $
     blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
-  elAttr "td" ("data-label" =: "Request Key" <> "data-tooltip" =: requestKey <> "class" =: "cut-text") $
-    if requestKey == "<coinbase>" then text "Coinbase" else txDetailLink n requestKey requestKey
-  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> "data-tooltip" =: tmTooltip tokenMovement ) $ do
-    let mkTag txt = elClass "span" "cross-chain-tag" $ text txt
-        chainTag chainId = mkTag $ "Chain " <> tshow chainId
-    case tokenMovement of
-      Coinbase -> text "Coinbase"
+  let cutText = elAttr "div" ("class" =: "cut-text")
+      addTooltip msg = elAttr "span" ("data-tooltip" =: msg)
+  elAttr "td" ("data-label" =: "Request Key" <> "style" =: "max-width: 200px; padding: 0px") $
+    addTooltip requestKey $ cutText $
+      if requestKey == "<coinbase>" then text "Coinbase" else txDetailLink n requestKey requestKey
+  elAttr "td" ("data-label" =: "From/To" <> "style" =: "max-width: 200px; padding: 0px") $ mdo
+    let mkTag txt tooltip = do
+          (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
+          isHoveringDyn <- hoverDyn e
+          return $ isHoveringDyn <&> \isHovering -> if isHovering then Just tooltip else Nothing
+        fromMaybeDyn = fromMaybe (constDyn Nothing)
+        chainTag chainId = mkTag ("Chain " <> tshow chainId) "This account is on a different chain"
+        mainTooltip override = elDynAttr "span" $ override <&> \mbMsg ->
+          M.singleton "data-tooltip" $ fromMaybe (tmTooltip tokenMovement) mbMsg
+    tooltipOverride <- mainTooltip tooltipOverride $ cutText $ case tokenMovement of
+      Coinbase -> constDyn Nothing <$ text "Coinbase"
       Incoming other -> do
         text "From: "
-        forM_ (_oa_chainId other) chainTag
+        hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
         accountSearchLink n token (_oa_account other) (_oa_account other)
+        return hoveringChainLabel
       Outgoing other -> do
-        forM_ (_oa_chainId other) $ \_ -> mkTag "Needs Confirmation"
+        hoveringConfirmationDyn <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \_ ->
+          mkTag "Needs Completion"
+            "This is an outgoing cross chain transaction, it needs to be completed on the target chain"
         text "To: "
-        forM_ (_oa_chainId other) chainTag
+        hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
         accountSearchLink n token (_oa_account other) (_oa_account other)
+        return $ (<|>) <$> hoveringConfirmationDyn <*> hoveringChainLabel
       Unknown _ -> do
-        mkTag "Unknown"
+        mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
+    return ()
   elAttr "td" ("data-label" =: "Amount" <> "style" =: (tmAmountStyle tokenMovement <> "white-space: nowrap;width: 0px;")) $ do
     let printedAmount amt = formatScientific Fixed Nothing amt
     text $ T.pack $ printedAmount $ if tmAmountNegate tokenMovement then (negate amount) else amount
