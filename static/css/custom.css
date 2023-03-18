@@ -185,12 +185,6 @@ div.summary-inner {
     white-space: nowrap;
     max-width: 200px;
 }
-.table-cell {
-  max-width: 200px; /* adjust as needed */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .cross-chain-tag {
   display: inline-block;
