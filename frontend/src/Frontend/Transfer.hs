@@ -324,10 +324,10 @@ drawRow n token account chainid acc = do
     blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
   let cutText = elAttr "div" ("class" =: "cut-text")
       addTooltip msg = elAttr "span" ("data-tooltip" =: msg)
-  elAttr "td" ("data-label" =: "Request Key" <> "style" =: "max-width: 200px; padding: 0px") $
+  elAttr "td" ("data-label" =: "Request Key" <> "style" =: "max-width: 150px; padding: 0px") $
     addTooltip requestKey $ cutText $
       if requestKey == "<coinbase>" then text "Coinbase" else txDetailLink n requestKey requestKey
-  elAttr "td" ("data-label" =: "From/To" <> "style" =: "max-width: 200px; padding: 0px") $ mdo
+  elAttr "td" ("data-label" =: "From/To" <> "style" =: "max-width: 250px; padding: 0px") $ mdo
     let mkTag txt tooltip = do
           (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
           isHoveringDyn <- hoverDyn e
