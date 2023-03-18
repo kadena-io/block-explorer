@@ -246,6 +246,60 @@ produceNewRowsOnToken mkXhr nextToken_ = do
   where
     (<&&>) = flip (fmap . fmap)
 
+data TokenMovement
+  = Unknown Text
+  | Coinbase
+  | Incoming OtherAccount
+  | Outgoing OtherAccount
+
+data OtherAccount = OtherAccount
+  { _oa_chainId :: Maybe Int
+  , _oa_account :: Text
+  }
+
+decideTokenMovement :: Text -> TransferDetail -> TokenMovement
+decideTokenMovement account tr
+  | _trDetail_requestKey tr == "<coinbase>" = Coinbase
+  | _trDetail_fromAccount tr == account = either Unknown Outgoing $ determineOther (_trDetail_toAccount tr)
+  | _trDetail_toAccount tr == account = either Unknown Incoming $ determineOther (_trDetail_fromAccount tr)
+  | otherwise = Unknown "Could not determine token movement"
+  where
+    determineOther other =
+      case (other, _trDetail_crossChainId tr, _trDetail_crossChainAccount tr) of
+      (_, Just _, Nothing) ->
+        Left "Cross chain account is missing but cross chain id is present"
+      (_, Nothing, Just _) ->
+        Left "Cross chain id is missing but cross chain account is present"
+      ("", Just chain, Just otherAccount) -> Right $ OtherAccount (Just chain) otherAccount
+      ("", Nothing, Nothing) ->
+        Left "Could not determine the other account"
+      (_, _, _) -> Right $ OtherAccount Nothing other
+
+tmAmountStyle :: TokenMovement -> Text
+tmAmountStyle = \case
+  Coinbase -> "color: green;"
+  Incoming _ -> "color: green;"
+  Outgoing _ -> "color: red;"
+  Unknown _ -> "color: gray;"
+
+tmAmountNegate :: TokenMovement -> Bool
+tmAmountNegate = \case
+  Coinbase -> False
+  Incoming _ -> False
+  Outgoing _ -> True
+  Unknown _ -> False
+
+tmTooltip :: TokenMovement -> Text
+tmTooltip = \case
+  Coinbase -> "Rewarded for mining"
+  Incoming other -> case _oa_chainId other of
+    Just chainId -> "Cross chain transaction received from " <> _oa_account other <> " on chain " <> tshow chainId
+    Nothing -> "Transaction received from " <> _oa_account other
+  Outgoing other -> case _oa_chainId other of
+    Just chainId -> "Cross chain transaction sent to " <> _oa_account other <> " on chain " <> tshow chainId
+    Nothing -> "Transaction sent to " <> _oa_account other
+  Unknown reason -> "Failed to determine, please inspect the transaction: " <> reason
+
 drawRow
   :: Monad m
    => RouteToUrl (R FrontendRoute) m
@@ -258,41 +312,34 @@ drawRow n token account chainid acc = do
       requestKey = _trDetail_requestKey acc
       cid = _trDetail_chain acc
       height = _trDetail_height acc
-      fromAccount = _trDetail_fromAccount acc
-      toAccount = _trDetail_toAccount acc
       StringEncoded amount = _trDetail_amount acc
       timestamp = _trDetail_blockTime acc
-      crossChainId = _trDetail_crossChainId acc
-      crossChainAccount = _trDetail_crossChainAccount acc
-      crossChainInfo = (,) <$> crossChainId <*> crossChainAccount
+      tokenMovement = decideTokenMovement account acc
   when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain" <> "style" =: "white-space: nowrap;width: 0px;") $ text $ tshow cid
   elAttr "td" ("data-label" =: "Time" <> "style" =: "white-space: nowrap; width: 0px;") $ text $ T.pack $ formatTime defaultTimeLocale "%F %T" timestamp
   elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash <> "style" =: "white-space: nowrap; width: 0px;") $
     blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
-  elAttr "td" ("data-label" =: "Request Key" <> "data-tooltip" =: requestKey <> "class" =: "cut-text") $ 
-    if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
-  let showAccount = listToMaybe [a | a <- [fromAccount, toAccount], a /= account, not $ T.null a]
-  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> foldMap (\s -> "data-tooltip" =: s) showAccount) $
-    if 
-      | fromAccount == account -> case crossChainInfo of
-         Just (xCid,xToAccount) -> do 
-           text "To: "
-           accountSearchLink n token xToAccount xToAccount
-         Nothing -> do 
-           text "To: "
-           accountSearchLink n token fromAccount fromAccount
-      | toAccount == account ->  case crossChainInfo of
-         Just (xCid,xFromAccount) -> do
-           text "From: "
-           accountSearchLink n token xFromAccount xFromAccount
-         Nothing -> do
-           text "From: "
-           accountSearchLink n token toAccount toAccount
-      | otherwise -> text "impossible case"
-  let isNegAmt = fromAccount == account
-  elAttr "td" ("data-label" =: "Amount" <> "style" =: ((if isNegAmt then "color: red;" else "color: green;") <> "white-space: nowrap;width: 0px;")) $ do
+  elAttr "td" ("data-label" =: "Request Key" <> "data-tooltip" =: requestKey <> "class" =: "cut-text") $
+    if requestKey == "<coinbase>" then text "Coinbase" else txDetailLink n requestKey requestKey
+  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> "data-tooltip" =: tmTooltip tokenMovement ) $ do
+    let mkTag txt = elClass "span" "cross-chain-tag" $ text txt
+        chainTag chainId = mkTag $ "Chain " <> tshow chainId
+    case tokenMovement of
+      Coinbase -> text "Coinbase"
+      Incoming other -> do
+        text "From: "
+        forM_ (_oa_chainId other) chainTag
+        accountSearchLink n token (_oa_account other) (_oa_account other)
+      Outgoing other -> do
+        forM_ (_oa_chainId other) $ \_ -> mkTag "Needs Confirmation"
+        text "To: "
+        forM_ (_oa_chainId other) chainTag
+        accountSearchLink n token (_oa_account other) (_oa_account other)
+      Unknown _ -> do
+        mkTag "Unknown"
+  elAttr "td" ("data-label" =: "Amount" <> "style" =: (tmAmountStyle tokenMovement <> "white-space: nowrap;width: 0px;")) $ do
     let printedAmount amt = formatScientific Fixed Nothing amt
-    text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
+    text $ T.pack $ printedAmount $ if tmAmountNegate tokenMovement then (negate amount) else amount
 
 mkTransferSearchRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
 mkTransferSearchRoute netId account token chain minheight maxheight = mkNetRoute netId $
