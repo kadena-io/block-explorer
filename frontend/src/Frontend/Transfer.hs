@@ -293,12 +293,12 @@ tmAmountNegate = \case
 tmTooltip :: TokenMovement -> Text
 tmTooltip = \case
   Coinbase -> "Rewarded for mining"
-  Incoming other -> case other of
+  Incoming eiOther -> case eiOther of
     Left reason -> "Failed to determine the sender, please inspect the transaction:\n" <> reason
     Right other -> case _oa_chainId other of
       Just chainId -> "Cross chain transaction received from " <> _oa_account other <> " on chain " <> tshow chainId
       Nothing -> "Transaction received from " <> _oa_account other
-  Outgoing other -> case other of
+  Outgoing eiOther -> case eiOther of
     Left reason -> "Failed to determine the recipient, please inspect the transaction:\n" <> reason
     Right other -> case _oa_chainId other of
       Just chainId -> "Cross chain transaction sent to " <> _oa_account other <> " on chain " <> tshow chainId
