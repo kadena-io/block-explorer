@@ -327,6 +327,14 @@ drawRow n token account chainid acc = do
   elAttr "td" ("data-label" =: "Request Key" <> "style" =: "max-width: 150px; padding: 0px") $
     addTooltip requestKey $ cutText $
       if requestKey == "<coinbase>" then text "Coinbase" else txDetailLink n requestKey requestKey
+  -- The From/To column is a bit more complicated because we want all of the following to work:
+  -- 1. If the account name is too long to fit in the column, we want to cut it off with ellipsis
+  -- 2. We want to have a tooltip for the whole cell
+  -- 3. We want to have specialized tooltips when the user hovers over the tags
+  -- The problem is that in order for the text cut off to work, the content needs to be surrounded
+  -- by a div with overflow: hidden. However, this also hides the tooltips of the child elements.
+  -- so we want the tooltip to be set outside of the div. That's why we have the tooltipOverride
+  -- dynamic, which is used by the tag hover handlers to override the tooltip.
   elAttr "td" ("data-label" =: "From/To" <> "style" =: "max-width: 250px; padding: 0px") $ mdo
     let mkTag txt tooltip = do
           (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
