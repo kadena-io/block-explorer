@@ -250,8 +250,8 @@ produceNewRowsOnToken mkXhr nextToken_ = do
 data TokenMovement
   = Unknown Text
   | Coinbase
-  | Incoming OtherAccount
-  | Outgoing OtherAccount
+  | Incoming (Either Text OtherAccount)
+  | Outgoing (Either Text OtherAccount)
 
 data OtherAccount = OtherAccount
   { _oa_chainId :: Maybe Int
@@ -261,8 +261,8 @@ data OtherAccount = OtherAccount
 decideTokenMovement :: Text -> TransferDetail -> TokenMovement
 decideTokenMovement account tr
   | _trDetail_requestKey tr == "<coinbase>" = Coinbase
-  | _trDetail_fromAccount tr == account = either Unknown Outgoing $ determineOther (_trDetail_toAccount tr)
-  | _trDetail_toAccount tr == account = either Unknown Incoming $ determineOther (_trDetail_fromAccount tr)
+  | _trDetail_fromAccount tr == account = Outgoing $ determineOther (_trDetail_toAccount tr)
+  | _trDetail_toAccount tr == account = Incoming $ determineOther (_trDetail_fromAccount tr)
   | otherwise = Unknown "Could not determine token movement"
   where
     determineOther other =
@@ -293,12 +293,16 @@ tmAmountNegate = \case
 tmTooltip :: TokenMovement -> Text
 tmTooltip = \case
   Coinbase -> "Rewarded for mining"
-  Incoming other -> case _oa_chainId other of
-    Just chainId -> "Cross chain transaction received from " <> _oa_account other <> " on chain " <> tshow chainId
-    Nothing -> "Transaction received from " <> _oa_account other
-  Outgoing other -> case _oa_chainId other of
-    Just chainId -> "Cross chain transaction sent to " <> _oa_account other <> " on chain " <> tshow chainId
-    Nothing -> "Transaction sent to " <> _oa_account other
+  Incoming other -> case other of
+    Left reason -> "Failed to determine the sender, please inspect the transaction:\n" <> reason
+    Right other -> case _oa_chainId other of
+      Just chainId -> "Cross chain transaction received from " <> _oa_account other <> " on chain " <> tshow chainId
+      Nothing -> "Transaction received from " <> _oa_account other
+  Outgoing other -> case other of
+    Left reason -> "Failed to determine the recipient, please inspect the transaction:\n" <> reason
+    Right other -> case _oa_chainId other of
+      Just chainId -> "Cross chain transaction sent to " <> _oa_account other <> " on chain " <> tshow chainId
+      Nothing -> "Transaction sent to " <> _oa_account other
   Unknown reason -> "Failed to determine, please inspect the transaction: " <> reason
 
 drawRow
@@ -346,19 +350,29 @@ drawRow n token account chainid acc = do
           M.singleton "data-tooltip" $ fromMaybe (tmTooltip tokenMovement) mbMsg
     tooltipOverride <- mainTooltip tooltipOverride $ cutText $ case tokenMovement of
       Coinbase -> constDyn Nothing <$ text "Coinbase"
-      Incoming other -> do
+      Incoming eiOther -> do
         text "From: "
-        hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
-        accountSearchLink n token (_oa_account other) (_oa_account other)
-        return hoveringChainLabel
-      Outgoing other -> do
-        hoveringConfirmationDyn <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \_ ->
-          mkTag "Needs Completion"
-            "This is an outgoing cross chain transaction, it needs to be completed on the target chain"
+        case eiOther of
+          Left reason -> do
+            mkTag "Unknown" $ "Failed to determine the sender, please inspect the transaction:\n" <> reason
+          Right other -> do
+            hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
+            accountSearchLink n token (_oa_account other) (_oa_account other)
+            return hoveringChainLabel
+      Outgoing eiOther -> do
+        case eiOther of
+          Right other | isJust $ _oa_chainId other -> do
+            mkTag "Needs Completion"
+              "This is an outgoing cross chain transaction, it needs to be completed on the target chain"
+          _ -> return $ constDyn Nothing
         text "To: "
-        hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
-        accountSearchLink n token (_oa_account other) (_oa_account other)
-        return $ (<|>) <$> hoveringConfirmationDyn <*> hoveringChainLabel
+        case eiOther of
+          Left reason -> do
+            mkTag "Unknown" $ "Failed to determine the recipient, please inspect the transaction:\n" <> reason
+          Right other -> do
+            hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
+            accountSearchLink n token (_oa_account other) (_oa_account other)
+            return hoveringChainLabel
       Unknown _ -> do
         mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
     return ()
