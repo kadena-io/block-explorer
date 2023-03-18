@@ -360,19 +360,20 @@ drawRow n token account chainid acc = do
             accountSearchLink n token (_oa_account other) (_oa_account other)
             return hoveringChainLabel
       Outgoing eiOther -> do
-        case eiOther of
+        hoveringNeedsCompletion <- case eiOther of
           Right other | isJust $ _oa_chainId other -> do
             mkTag "Needs Completion"
               "This is an outgoing cross chain transaction, it needs to be completed on the target chain"
           _ -> return $ constDyn Nothing
         text "To: "
-        case eiOther of
+        hoveringChainLabel <- case eiOther of
           Left reason -> do
             mkTag "Unknown" $ "Failed to determine the recipient, please inspect the transaction:\n" <> reason
           Right other -> do
             hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
             accountSearchLink n token (_oa_account other) (_oa_account other)
             return hoveringChainLabel
+        return $ (<|>) <$> hoveringNeedsCompletion <*> hoveringChainLabel
       Unknown _ -> do
         mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
     return ()
