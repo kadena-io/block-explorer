@@ -178,7 +178,7 @@ transferWidget AccountParams{..} nc = do
               elAttr "th" ("style" =: "width: auto") $ text "Height"
               elAttr "th" ("style" =: "width: auto") $ text "Request Key"
               elAttr "th" ("style" =: "width: auto") $ text "From/To"
-              elAttr "th" ("style" =: "width: auto") $ text "Amount"
+              elAttr "th" ("style" =: "width: auto; text-align: right;") $ text "Amount"
             el "tbody" $ mdo
               let rowsToRender tds = forM_ tds $ \td ->
                     el "tr" $ drawRow n apToken apAccount apChain decimalPointsDyn td
