@@ -179,12 +179,16 @@ transferWidget AccountParams{..} nc = do
               elAttr "th" ("style" =: "width: auto") $ text "Request Key"
               elAttr "th" ("style" =: "width: auto") $ text "From/To"
               elAttr "th" ("style" =: "width: auto") $ text "Amount"
-            el "tbody" $ do
-              let rowsToRender details = forM_ details $ \detail -> el "tr" $ drawRow n apToken apAccount apChain detail
+            el "tbody" $ mdo
+              let rowsToRender tds = forM_ tds $ \td ->
+                    el "tr" $ drawRow n apToken apAccount apChain decimalPointsDyn td
               rowsToRender accs
+              let maxDecimalPoints tds = maximum $ 0 : fmap (decimalPoints . _trDetail_amount) tds
               p <- produceNewRowsOnToken mkXhr e
               let (errorE, goodE) = fanEither p
               let (details,newToken) = splitE goodE
+                  gatherDecimalPoints oldDecPoints newDetails = max oldDecPoints (maxDecimalPoints newDetails)
+              decimalPointsDyn :: Dynamic t Int <- accum gatherDecimalPoints (maxDecimalPoints accs) details
               indexWithRender <- accum (\(key,_oldDetails) newDetails -> (succ key, rowsToRender newDetails)) (0 :: Integer, pure ()) details
               void $ listHoldWithKey mempty (indexWithRender <&> \(i,r) -> M.singleton i (Just r)) (\_ r -> r)
               return $ leftmost [fmap Left errorE, fmap Right newToken]
@@ -193,6 +197,13 @@ transferWidget AccountParams{..} nc = do
             Just (NextToken next) -> elAttr "div" ("style" =: "display: grid;") $ evaporateButtonOnClick next t
           pure ()
 
+displayAmount :: Scientific-> Text
+displayAmount s = T.pack $ formatScientific Fixed Nothing s
+
+decimalPoints :: StringEncoded Scientific-> Int
+decimalPoints (StringEncoded s) = case T.splitOn "." $ displayAmount s of
+  [_,b] -> T.length b
+  _ -> 0
 
 nextButtonText :: Text
 nextButtonText = "Fetch more results..."
@@ -276,12 +287,12 @@ decideTokenMovement account tr
         Left "Could not determine the other account"
       (_, _, _) -> Right $ OtherAccount Nothing other
 
-tmAmountStyle :: TokenMovement -> Text
-tmAmountStyle = \case
-  Coinbase -> "color: green;"
-  Incoming _ -> "color: green;"
-  Outgoing _ -> "color: red;"
-  Unknown _ -> "color: gray;"
+tmAmountClass :: TokenMovement -> Text
+tmAmountClass tm = "token-amount " <> case tm of
+  Coinbase -> "token-amount-incoming"
+  Incoming _ -> "token-amount-incoming"
+  Outgoing _ -> "token-amount-outgoing"
+  Unknown _ -> "token-amount-unknown"
 
 tmAmountNegate :: TokenMovement -> Bool
 tmAmountNegate = \case
@@ -313,8 +324,8 @@ drawRow
    => DomBuilder t m
    => Prerender js t m
    => PostBuild t m
-   => NetId -> Text -> Text -> Maybe Integer -> TransferDetail -> m ()
-drawRow n token account chainid acc = do
+   => NetId -> Text -> Text -> Maybe Integer -> Dynamic t Int -> TransferDetail -> m ()
+drawRow n token account chainid decimalPointsDyn acc = do
   let hash = _trDetail_blockHash acc
       requestKey = _trDetail_requestKey acc
       cid = _trDetail_chain acc
@@ -377,9 +388,23 @@ drawRow n token account chainid acc = do
       Unknown _ -> do
         mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
     return ()
-  elAttr "td" ("data-label" =: "Amount" <> "style" =: (tmAmountStyle tokenMovement <> "white-space: nowrap;width: 0px;")) $ do
-    let printedAmount amt = formatScientific Fixed Nothing amt
-    text $ T.pack $ printedAmount $ if tmAmountNegate tokenMovement then (negate amount) else amount
+  elAttr "td" ("data-label" =: "Amount" <> "class" =: tmAmountClass tokenMovement <> "style" =: "text-align: right;") $ do
+    let nonBreakingSpace = "\x00A0"
+        signedAmount = if tmAmountNegate tokenMovement then (negate amount) else amount
+        mkPadding = dynText $ decimalPointsDyn <&> \tableDecimalPoints ->
+          let thisDecimalPoints = decimalPoints $ _trDetail_amount acc
+              missingPoints = tableDecimalPoints - thisDecimalPoints
+          in T.replicate missingPoints nonBreakingSpace
+    case T.splitOn "." $ displayAmount signedAmount of
+      [whole,decimals] -> do
+        text $ whole <> "."
+        elClass "em" "token-amount-decimal" $ do
+          text $ decimals
+          mkPadding
+      [whole] -> do
+        text $ whole <> nonBreakingSpace
+        elClass "em" "token-amount-decimal" $ mkPadding
+      _ -> text $ displayAmount signedAmount -- Impossible case because displayAmount always returns a decimal number
 
 mkTransferSearchRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
 mkTransferSearchRoute netId account token chain minheight maxheight = mkNetRoute netId $
