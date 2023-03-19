@@ -314,7 +314,7 @@ drawRow
    => Prerender js t m
    => PostBuild t m
    => NetId -> Text -> Text -> Maybe Integer -> TransferDetail -> m ()
-drawRow n token account chainid acc = do
+drawRow n token account chainid acc = mdo
   let hash = _trDetail_blockHash acc
       requestKey = _trDetail_requestKey acc
       cid = _trDetail_chain acc
@@ -327,10 +327,13 @@ drawRow n token account chainid acc = do
   elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash <> "style" =: "white-space: nowrap; width: 0px;") $
     blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
   let cutText = elAttr "div" ("class" =: "cut-text")
-      addTooltip msg = elAttr "span" ("data-tooltip" =: msg)
-  elAttr "td" ("data-label" =: "Request Key" <> "style" =: "max-width: 150px; padding: 0px") $
-    addTooltip requestKey $ cutText $
-      if requestKey == "<coinbase>" then text "Coinbase" else txDetailLink n requestKey requestKey
+  elAttr "td"
+    ( "data-label" =: "Request Key"
+   <> "style" =: "max-width: 150px; padding: 0px"
+   <> "data-tooltip" =: requestKey
+    ) $ cutText $ if requestKey == "<coinbase>"
+        then text "Coinbase"
+        else txDetailLink n requestKey requestKey
   -- The From/To column is a bit more complicated because we want all of the following to work:
   -- 1. If the account name is too long to fit in the column, we want to cut it off with ellipsis
   -- 2. We want to have a tooltip for the whole cell
@@ -339,16 +342,18 @@ drawRow n token account chainid acc = do
   -- by a div with overflow: hidden. However, this also hides the tooltips of the child elements.
   -- so we want the tooltip to be set outside of the div. That's why we have the tooltipOverride
   -- dynamic, which is used by the tag hover handlers to override the tooltip.
-  elAttr "td" ("data-label" =: "From/To" <> "style" =: "max-width: 250px; padding: 0px") $ mdo
+  let fromToCell override = elDynAttr "td" $ override <&> \mbMsg ->
+           M.singleton "data-label" "From/To"
+        <> M.singleton "style" "max-width: 250px; padding: 0px"
+        <> M.singleton "data-tooltip" (fromMaybe (tmTooltip tokenMovement) mbMsg)
+  tooltipOverride <- fromToCell tooltipOverride $ do
     let mkTag txt tooltip = do
           (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
           isHoveringDyn <- hoverDyn e
           return $ isHoveringDyn <&> \isHovering -> if isHovering then Just tooltip else Nothing
         fromMaybeDyn = fromMaybe (constDyn Nothing)
         chainTag chainId = mkTag ("Chain " <> tshow chainId) "This account is on a different chain"
-        mainTooltip override = elDynAttr "span" $ override <&> \mbMsg ->
-          M.singleton "data-tooltip" $ fromMaybe (tmTooltip tokenMovement) mbMsg
-    tooltipOverride <- mainTooltip tooltipOverride $ cutText $ case tokenMovement of
+    cutText $ case tokenMovement of
       Coinbase -> mkTag "Coinbase" "Rewarded for mining"
       Incoming eiOther -> do
         text "From: "
@@ -376,7 +381,6 @@ drawRow n token account chainid acc = do
         return $ (<|>) <$> hoveringNeedsCompletion <*> hoveringChainLabel
       Unknown _ -> do
         mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
-    return ()
   elAttr "td" ("data-label" =: "Amount" <> "style" =: (tmAmountStyle tokenMovement <> "white-space: nowrap;width: 0px;")) $ do
     let printedAmount amt = formatScientific Fixed Nothing amt
     text $ T.pack $ printedAmount $ if tmAmountNegate tokenMovement then (negate amount) else amount
