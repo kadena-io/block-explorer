@@ -344,7 +344,7 @@ drawRow n token account chainid acc = mdo
   -- dynamic, which is used by the tag hover handlers to override the tooltip.
   let fromToCell override = elDynAttr "td" $ override <&> \mbMsg ->
            M.singleton "data-label" "From/To"
-        <> M.singleton "style" "max-width: 250px; padding: 0px"
+        <> M.singleton "style" "max-width: 250px; padding: 0px;"
         <> M.singleton "data-tooltip" (fromMaybe (tmTooltip tokenMovement) mbMsg)
   let puzzleEmoji = "\x1F9E9"
       chainEmoji = "\x1F517"
@@ -354,7 +354,6 @@ drawRow n token account chainid acc = mdo
           isHoveringDyn <- hoverDyn e
           return $ isHoveringDyn <&> \isHovering -> if isHovering then Just tooltip else Nothing
         fromMaybeDyn = fromMaybe (constDyn Nothing)
-        chainTag chainId = mkTag (chainEmoji <> tshow chainId) "This account is on a different chain"
     cutText $ case tokenMovement of
       Coinbase -> mkTag "Coinbase" "Rewarded for mining"
       Incoming eiOther -> do
@@ -363,24 +362,20 @@ drawRow n token account chainid acc = mdo
           Left reason -> do
             mkTag "Unknown" $ "Failed to determine the sender, please inspect the transaction:\n" <> reason
           Right other -> do
-            hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
+            hoveringChainLabel <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \chainId ->
+                mkTag (chainEmoji <> tshow chainId) "This account is on a different chain"
             accountSearchLink n token (_oa_account other) (_oa_account other)
             return hoveringChainLabel
       Outgoing eiOther -> do
-        hoveringNeedsCompletion <- case eiOther of
-          Right other | isJust $ _oa_chainId other -> do
-            mkTag puzzleEmoji
-              "This is an outgoing cross chain transaction, it needs to be completed on the target chain"
-          _ -> return $ constDyn Nothing
         text "To: "
-        hoveringChainLabel <- case eiOther of
+        case eiOther of
           Left reason -> do
             mkTag "Unknown" $ "Failed to determine the recipient, please inspect the transaction:\n" <> reason
           Right other -> do
-            hoveringChainLabel <- fromMaybeDyn <$> forM (_oa_chainId other) chainTag
+            hoveringChainLabel <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \chainId ->
+                mkTag (puzzleEmoji <> chainEmoji <> tshow chainId) "Completion is required for this transaction involving an account on a different chain."
             accountSearchLink n token (_oa_account other) (_oa_account other)
             return hoveringChainLabel
-        return $ (<|>) <$> hoveringNeedsCompletion <*> hoveringChainLabel
       Unknown _ -> do
         mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
   elAttr "td" ("data-label" =: "Amount" <> "style" =: (tmAmountStyle tokenMovement <> "white-space: nowrap;width: 0px;")) $ do
