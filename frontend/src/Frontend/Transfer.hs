@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE RecordWildCards            #-}
@@ -16,6 +17,7 @@ import           Data.Foldable
 import           Data.Functor
 import           Data.Scientific
 import           Data.Time.Format
+import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Reader
 import qualified Data.Map as M
@@ -245,39 +247,140 @@ produceNewRowsOnToken mkXhr nextToken_ = do
   where
     (<&&>) = flip (fmap . fmap)
 
+data TokenMovement
+  = Unknown Text
+  | Coinbase
+  | Incoming (Either Text OtherAccount)
+  | Outgoing (Either Text OtherAccount)
+
+data OtherAccount = OtherAccount
+  { _oa_chainId :: Maybe Int
+  , _oa_account :: Text
+  }
+
+decideTokenMovement :: Text -> TransferDetail -> TokenMovement
+decideTokenMovement account tr
+  | _trDetail_requestKey tr == "<coinbase>" = Coinbase
+  | _trDetail_fromAccount tr == account = Outgoing $ determineOther (_trDetail_toAccount tr)
+  | _trDetail_toAccount tr == account = Incoming $ determineOther (_trDetail_fromAccount tr)
+  | otherwise = Unknown "Could not determine token movement"
+  where
+    determineOther other =
+      case (other, _trDetail_crossChainId tr, _trDetail_crossChainAccount tr) of
+      (_, Just _, Nothing) ->
+        Left "Cross chain account is missing but cross chain id is present"
+      (_, Nothing, Just _) ->
+        Left "Cross chain id is missing but cross chain account is present"
+      ("", Just chain, Just otherAccount) -> Right $ OtherAccount (Just chain) otherAccount
+      ("", Nothing, Nothing) ->
+        Left "Could not determine the other account"
+      (_, _, _) -> Right $ OtherAccount Nothing other
+
+tmAmountStyle :: TokenMovement -> Text
+tmAmountStyle = \case
+  Coinbase -> "color: green;"
+  Incoming _ -> "color: green;"
+  Outgoing _ -> "color: red;"
+  Unknown _ -> "color: gray;"
+
+tmAmountNegate :: TokenMovement -> Bool
+tmAmountNegate = \case
+  Coinbase -> False
+  Incoming _ -> False
+  Outgoing _ -> True
+  Unknown _ -> False
+
+tmTooltip :: TokenMovement -> Text
+tmTooltip = \case
+  Coinbase -> "Rewarded for mining"
+  Incoming eiOther -> case eiOther of
+    Left reason -> "Failed to determine the sender, please inspect the transaction:\n" <> reason
+    Right other -> case _oa_chainId other of
+      Just chainId -> "Cross chain transaction received from " <> _oa_account other <> " on chain " <> tshow chainId
+      Nothing -> "Transaction received from " <> _oa_account other
+  Outgoing eiOther -> case eiOther of
+    Left reason -> "Failed to determine the recipient, please inspect the transaction:\n" <> reason
+    Right other -> case _oa_chainId other of
+      Just chainId -> "Cross chain transaction sent to " <> _oa_account other <> " on chain " <> tshow chainId
+      Nothing -> "Transaction sent to " <> _oa_account other
+  Unknown reason -> "Failed to determine, please inspect the transaction: " <> reason
+
 drawRow
-  :: Monad m
+  :: MonadFix m
+   => MonadHold t m
    => RouteToUrl (R FrontendRoute) m
    => SetRoute t (R FrontendRoute) m
    => DomBuilder t m
    => Prerender js t m
+   => PostBuild t m
    => NetId -> Text -> Text -> Maybe Integer -> TransferDetail -> m ()
-drawRow n token account chainid acc = do
+drawRow n token account chainid acc = mdo
   let hash = _trDetail_blockHash acc
       requestKey = _trDetail_requestKey acc
       cid = _trDetail_chain acc
       height = _trDetail_height acc
-      fromAccount = _trDetail_fromAccount acc
-      toAccount = _trDetail_toAccount acc
       StringEncoded amount = _trDetail_amount acc
       timestamp = _trDetail_blockTime acc
+      tokenMovement = decideTokenMovement account acc
   when (isNothing chainid) $ elAttr "td" ("data-label" =: "Chain" <> "style" =: "white-space: nowrap;width: 0px;") $ text $ tshow cid
   elAttr "td" ("data-label" =: "Time" <> "style" =: "white-space: nowrap; width: 0px;") $ text $ T.pack $ formatTime defaultTimeLocale "%F %T" timestamp
   elAttr "td" ("data-label" =: "Block Height" <> "data-tooltip" =: hash <> "style" =: "white-space: nowrap; width: 0px;") $
     blockHashLink n (ChainId $ fromIntegral cid) hash (tshow height)
-  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "Request Key" <> "data-tooltip" =: requestKey) $
-    if requestKey == "<coinbase>" then text "coinbase" else txDetailLink n requestKey requestKey
-  let showAccount = listToMaybe [a | a <- [fromAccount, toAccount], a /= account, not $ T.null a]
-  elAttr "td" ("class" =: "cut-text" <> "data-label" =: "From/To" <> foldMap (\s -> "data-tooltip" =: s) showAccount) $
-    case showAccount of
-      Nothing -> pure ()
-      Just s -> do
-        text $ if s == fromAccount then "From: " else "To: "
-        accountSearchLink n token s s
-  let isNegAmt = fromAccount == account
-  elAttr "td" ("data-label" =: "Amount" <> "style" =: ((if isNegAmt then "color: red;" else "color: green;") <> "white-space: nowrap;width: 0px;")) $ do
+  let cutText = elAttr "div" ("class" =: "cut-text")
+  elAttr "td"
+    ( "data-label" =: "Request Key"
+   <> "style" =: "max-width: 150px; padding: 0px"
+   <> "data-tooltip" =: requestKey
+    ) $ cutText $ if requestKey == "<coinbase>"
+        then text "Coinbase"
+        else txDetailLink n requestKey requestKey
+  -- The From/To column is a bit more complicated because we want all of the following to work:
+  -- 1. If the account name is too long to fit in the column, we want to cut it off with ellipsis
+  -- 2. We want to have a tooltip for the whole cell
+  -- 3. We want to have specialized tooltips when the user hovers over the tags
+  -- The problem is that in order for the text cut off to work, the content needs to be surrounded
+  -- by a div with overflow: hidden. However, this also hides the tooltips of the child elements.
+  -- so we want the tooltip to be set outside of the div. That's why we have the tooltipOverride
+  -- dynamic, which is used by the tag hover handlers to override the tooltip.
+  let fromToCell override = elDynAttr "td" $ override <&> \mbMsg ->
+           M.singleton "data-label" "From/To"
+        <> M.singleton "style" "max-width: 250px; padding: 0px;"
+        <> M.singleton "data-tooltip" (fromMaybe (tmTooltip tokenMovement) mbMsg)
+  let puzzleEmoji = "\x1F9E9"
+      chainEmoji = "\x1F517"
+  tooltipOverride <- fromToCell tooltipOverride $ do
+    let mkTag txt tooltip = do
+          (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
+          isHoveringDyn <- hoverDyn e
+          return $ isHoveringDyn <&> \isHovering -> if isHovering then Just tooltip else Nothing
+        fromMaybeDyn = fromMaybe (constDyn Nothing)
+    cutText $ case tokenMovement of
+      Coinbase -> mkTag "Coinbase" "Rewarded for mining"
+      Incoming eiOther -> do
+        text "From: "
+        case eiOther of
+          Left reason -> do
+            mkTag "Unknown" $ "Failed to determine the sender, please inspect the transaction:\n" <> reason
+          Right other -> do
+            hoveringChainLabel <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \chainId ->
+                mkTag (chainEmoji <> tshow chainId) "This account is on a different chain"
+            accountSearchLink n token (_oa_account other) (_oa_account other)
+            return hoveringChainLabel
+      Outgoing eiOther -> do
+        text "To: "
+        case eiOther of
+          Left reason -> do
+            mkTag "Unknown" $ "Failed to determine the recipient, please inspect the transaction:\n" <> reason
+          Right other -> do
+            hoveringChainLabel <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \chainId ->
+                mkTag (puzzleEmoji <> chainEmoji <> tshow chainId) "Completion is required for this transaction involving an account on a different chain."
+            accountSearchLink n token (_oa_account other) (_oa_account other)
+            return hoveringChainLabel
+      Unknown _ -> do
+        mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
+  elAttr "td" ("data-label" =: "Amount" <> "style" =: (tmAmountStyle tokenMovement <> "white-space: nowrap;width: 0px;")) $ do
     let printedAmount amt = formatScientific Fixed Nothing amt
-    text $ T.pack $ if isNegAmt then printedAmount (negate amount) else printedAmount amount
+    text $ T.pack $ printedAmount $ if tmAmountNegate tokenMovement then (negate amount) else amount
 
 mkTransferSearchRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
 mkTransferSearchRoute netId account token chain minheight maxheight = mkNetRoute netId $

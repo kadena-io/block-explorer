@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -256,3 +257,14 @@ pactValueJSON v = case v of
         Nothing -> prettyJSON v
   String s -> s
   _ -> prettyJSON v
+
+hoverDyn ::
+  ( Reflex t, HasDomEvent t target 'MouseenterTag
+  , HasDomEvent t target 'MouseleaveTag, MonadHold t m
+  ) =>
+  target -> m (Dynamic t Bool)
+hoverDyn e = do
+  holdDyn False $ leftmost
+    [ True <$ domEvent Mouseenter e
+    , False <$ domEvent Mouseleave e
+    ]
