@@ -17,7 +17,6 @@ import           Data.Foldable
 import           Data.Functor
 import           Data.Scientific
 import           Data.Time.Format
-import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Reader
 import qualified Data.Map as M
@@ -398,13 +397,15 @@ drawRow n token account chainid decimalPointsDyn acc = mdo
           in T.replicate missingPoints nonBreakingSpace
     case T.splitOn "." $ displayAmount signedAmount of
       [whole,decimals] -> do
-        text $ whole <> "."
+        text $ whole
         elClass "em" "token-amount-decimal" $ do
-          text $ decimals
+          text $ "." <> decimals
           mkPadding
       [whole] -> do
-        text $ whole <> nonBreakingSpace
-        elClass "em" "token-amount-decimal" $ mkPadding
+        text whole
+        elClass "em" "token-amount-decimal" $ do
+          text nonBreakingSpace
+          mkPadding
       _ -> text $ displayAmount signedAmount -- Impossible case because displayAmount always returns a decimal number
 
 mkTransferSearchRoute :: NetId -> Text -> Text -> Maybe Integer -> Maybe Integer -> Maybe Integer -> R FrontendRoute
