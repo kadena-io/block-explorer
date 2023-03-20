@@ -223,7 +223,7 @@ div.summary-inner {
 }
 
 .token-amount-decimal {
-    vertical-align: 20%;
+    vertical-align: baseline;
     font-size: 0.8em;
     line-height: 0.8em;
 }
