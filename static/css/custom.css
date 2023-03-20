@@ -203,3 +203,27 @@ div.summary-inner {
     transform: translateY(-3px);
     box-shadow: 0px 5px 10px rgba(0,0,0,0.3);
 }
+
+.token-amount-incoming {
+    color: #1a8d35;
+}
+
+.token-amount-outgoing {
+    color: #911c1c;
+}
+
+.token-amount-unknown {
+    color: #afafaf;
+}
+
+.token-amount {
+    font-weight: bold;
+    font-family: monospace;
+    width: 0px;
+}
+
+.token-amount-decimal {
+    vertical-align: baseline;
+    font-size: 0.8em;
+    line-height: 0.8em;
+}
