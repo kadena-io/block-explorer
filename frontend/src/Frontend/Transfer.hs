@@ -346,13 +346,15 @@ drawRow n token account chainid acc = mdo
            M.singleton "data-label" "From/To"
         <> M.singleton "style" "max-width: 250px; padding: 0px"
         <> M.singleton "data-tooltip" (fromMaybe (tmTooltip tokenMovement) mbMsg)
+  let puzzleEmoji = "\x1F9E9"
+      chainEmoji = "\x1F517"
   tooltipOverride <- fromToCell tooltipOverride $ do
     let mkTag txt tooltip = do
           (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
           isHoveringDyn <- hoverDyn e
           return $ isHoveringDyn <&> \isHovering -> if isHovering then Just tooltip else Nothing
         fromMaybeDyn = fromMaybe (constDyn Nothing)
-        chainTag chainId = mkTag ("Chain " <> tshow chainId) "This account is on a different chain"
+        chainTag chainId = mkTag (chainEmoji <> tshow chainId) "This account is on a different chain"
     cutText $ case tokenMovement of
       Coinbase -> mkTag "Coinbase" "Rewarded for mining"
       Incoming eiOther -> do
@@ -367,7 +369,7 @@ drawRow n token account chainid acc = mdo
       Outgoing eiOther -> do
         hoveringNeedsCompletion <- case eiOther of
           Right other | isJust $ _oa_chainId other -> do
-            mkTag "Needs Completion"
+            mkTag puzzleEmoji
               "This is an outgoing cross chain transaction, it needs to be completed on the target chain"
           _ -> return $ constDyn Nothing
         text "To: "
