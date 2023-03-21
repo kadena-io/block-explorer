@@ -156,8 +156,8 @@ transferWidget AccountParams{..} nc = do
                         | otherwise -> Right ("ui blue button", (parsedA,parsedB))
               let onEnter w = if w == 13 then Just () else Nothing
               let filterText = "Filter Results"
-              let greenCheckMark = "✅"
-              let redCrossMark = "✗"
+              let greenCheckMark = "\x2705"
+              let redCrossMark = "\x2717"
               let filterButtonWidget a b = case buttonClass a b of
                    Left (tt,errToolTip) -> void
                        $ elAttr "span" ("data-tooltip" =: errToolTip <> "style" =: "display: contents;")
