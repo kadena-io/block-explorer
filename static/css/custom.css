@@ -192,8 +192,8 @@ div.summary-inner {
   background-color: #ccc;
   padding: 0px 5px;
   margin-right: 5px;
-  background-image: linear-gradient(to bottom, #fff 0%, #ccc 100%);
-  box-shadow: 0px 2px 5px rgba(0,0,0,0.3);
+  background-image: linear-gradient(to bottom, #fff 0%, #e9e9e9 100%);
+  box-shadow: 0px 2px 3px rgba(0,0,0,0.1);
   transition: transform 0.2s ease-in-out,
               box-shadow 0.2s ease-in-out;
   font-weight: bold;

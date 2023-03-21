@@ -356,8 +356,9 @@ drawRow n token account chainid decimalPointsDyn acc = mdo
            M.singleton "data-label" "From/To"
         <> M.singleton "style" "max-width: 250px; padding: 0px;"
         <> M.singleton "data-tooltip" (fromMaybe (tmTooltip tokenMovement) mbMsg)
-  let puzzleEmoji = "\x1F9E9"
+      nonBreakingSpace = "\x00A0"
       chainEmoji = "\x1F517"
+      chainDisplay chainId = chainEmoji <> nonBreakingSpace <> tshow chainId
   tooltipOverride <- fromToCell tooltipOverride $ do
     let mkTag txt tooltip = do
           (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
@@ -373,7 +374,7 @@ drawRow n token account chainid decimalPointsDyn acc = mdo
             mkTag "Unknown" $ "Failed to determine the sender, please inspect the transaction:\n" <> reason
           Right other -> do
             hoveringChainLabel <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \chainId ->
-                mkTag (chainEmoji <> tshow chainId) "This account is on a different chain"
+                mkTag (chainDisplay chainId) "This account is on a different chain"
             accountSearchLink n token (_oa_account other) (_oa_account other)
             return hoveringChainLabel
       Outgoing eiOther -> do
@@ -383,14 +384,14 @@ drawRow n token account chainid decimalPointsDyn acc = mdo
             mkTag "Unknown" $ "Failed to determine the recipient, please inspect the transaction:\n" <> reason
           Right other -> do
             hoveringChainLabel <- fmap fromMaybeDyn $ forM (_oa_chainId other) $ \chainId ->
-                mkTag (puzzleEmoji <> chainEmoji <> tshow chainId) "Completion is required for this transaction involving an account on a different chain."
+                mkTag (chainDisplay chainId)
+                  "Completion is required for this transaction involving an account on a different chain."
             accountSearchLink n token (_oa_account other) (_oa_account other)
             return hoveringChainLabel
       Unknown _ -> do
         mkTag "Unknown" "Failed to interpret the transfer, please inspect the transaction"
   elAttr "td" ("data-label" =: "Amount" <> "class" =: tmAmountClass tokenMovement <> "style" =: "text-align: right;") $ do
-    let nonBreakingSpace = "\x00A0"
-        signedAmount = if tmAmountNegate tokenMovement then (negate amount) else amount
+    let signedAmount = if tmAmountNegate tokenMovement then (negate amount) else amount
         mkPadding = dynText $ decimalPointsDyn <&> \tableDecimalPoints ->
           let thisDecimalPoints = decimalPoints $ _trDetail_amount acc
               missingPoints = tableDecimalPoints - thisDecimalPoints
