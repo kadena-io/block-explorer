@@ -12,7 +12,9 @@
 module Frontend.Page.Transaction where
 
 ------------------------------------------------------------------------------
+import Control.Applicative ((<|>))
 import Control.Monad
+import Data.Bool (bool)
 import Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
 import Chainweb.Api.BlockPayloadWithOutputs
@@ -43,25 +45,33 @@ transactionPage
   -> m ()
 transactionPage netId _cid bp = do
     let txs = _blockPayloadWithOutputs_transactionsWithOutputs bp
-    let status tout = case _toutResult tout of
-                PactResult (Left _) -> elAttr "i" ("class" =: "red close icon" <> "title" =: "Succeeded") blank
-                PactResult (Right _) -> elAttr "i" ("class" =: "green check icon" <> "title" =: "Failed") blank
+    let isSuccess tout = case _toutResult tout of
+          PactResult (Left _) -> False
+          PactResult (Right _) -> True
+    let status tout = if isSuccess tout then elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
+                else elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
     let requestkey tx = hashB64U $ _transaction_hash tx
-    let _continuationCodeStep _tx = undefined
+    let continuationCodeStep _tx = Nothing
     let continuationInitRequestKey tx = case _pactCommand_payload $ _transaction_cmd tx of
           ExecPayload _ -> Nothing
           ContPayload c -> Just $ _cont_pactId c
+    let execCode tx = case _pactCommand_payload $ _transaction_cmd tx of
+          ExecPayload e -> Just $ _exec_code e
+          ContPayload _ -> Nothing
     let mkTxDetailRoute n reqKey = mkNetRoute n (NetRoute_TxDetail :/ reqKey)
     el "h2" $ text $ (tshow $ length txs) <> " Transactions"
-    elClass "table" "ui definition celled table" $ do
+    elClass "table" "ui compact celled table" $ do
        el "thead" $ el "tr" $ do
-        elAttr "th" ("style" =: "width: auto") $ text "Status"
+        elAttr "th" ("style" =: "width:auto") $ text "Status"
         elAttr "th" ("style" =: "width:auto") $ text "Request Key"
-        elAttr "th" ("style" =: "width:auto") $ text "Continuation (include init request key later)"
+        elAttr "th" ("style" =: "width:auto") $ text "Continuation"
+        elAttr "th" ("style" =: "width:auto") $ text "Code Preview"
        el "tbody" $ do
         forM_ txs $ \(t, tout) -> do
           el "tr" $ do
-            el "td" $ status tout
-            el "td" $ routeLink (mkTxDetailRoute netId $ requestkey t) $ text $ requestkey t
-            el "td" $ maybe (pure ()) text $ continuationInitRequestKey t
+            elAttr "td" ("data-tooltip" =: bool "Failure" "Success" (isSuccess tout)) $ status tout
+            elAttr "td" ("class" =: "cut-text" <> "style" =: "max-width: 200px") $ routeLink (mkTxDetailRoute netId $ requestkey t) $ text $ requestkey t
+            elAttr "td" ("class" =: "cut-text" <> "style" =: "max-width: 200px") $ maybe (text "<No continuation>") text $ continuationInitRequestKey t
+            -- TODO: add continuation code preview
+            elAttr "td" ("class" =: "cut-text" <> "style" =: "max-width: 200px") $ maybe (text "no code to display") text $ (execCode t <|> continuationCodeStep t)
 
