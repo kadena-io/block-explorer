@@ -82,7 +82,7 @@ transactionPage netId netConfig _cid bp = do
               -- let previousSteps = (fmap (fmap (fmap _txDetail_previousSteps)) res)
               return initialCode
             False -> return never
-          elAttr "td" (mempty) $ do
+          el "td" $ do
             elAttr "span" ("data-tooltip" =: requestkey t) $
               elAttr "div" ("class" =: "cut-text" <> "style" =: "max-width: 200px;") $
                   routeLink (mkTxDetailRoute netId $ requestkey t) $ text $ requestkey t
