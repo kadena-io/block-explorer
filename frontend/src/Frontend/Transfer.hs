@@ -361,7 +361,7 @@ drawRow n token account chainid decimalPointsDyn acc = mdo
       chainDisplay chainId = chainEmoji <> nonBreakingSpace <> tshow chainId
   tooltipOverride <- fromToCell tooltipOverride $ do
     let mkTag txt tooltip = do
-          (e,_) <- elAttr' "span" ("class" =:"cross-chain-tag") $ text txt
+          (e,_) <- elAttr' "span" ("class" =:"bubble-tag") $ text txt
           isHoveringDyn <- hoverDyn e
           return $ isHoveringDyn <&> \isHovering -> if isHovering then Just tooltip else Nothing
         fromMaybeDyn = fromMaybe (constDyn Nothing)

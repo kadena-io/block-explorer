@@ -12,36 +12,30 @@
 module Frontend.Page.Transaction where
 
 ------------------------------------------------------------------------------
-import Control.Applicative
-import Control.Lens
 import Control.Monad
-import Data.Aeson as A
-import Data.Aeson.Lens
-import Data.Foldable
-import Data.Maybe
-import qualified Data.Text as T
-import Pact.Types.Continuation (PactExec)
+import Data.Functor ((<&>))
 import Reflex.Dom.Core hiding (Value)
 ------------------------------------------------------------------------------
--- import Chainweb.Api.BlockPayload
 import Chainweb.Api.BlockPayloadWithOutputs
 import Chainweb.Api.ChainId
-import Chainweb.Api.ChainwebMeta
 import Chainweb.Api.Hash
 import Chainweb.Api.PactCommand
 import Chainweb.Api.Payload
-import Chainweb.Api.Sig
-import Chainweb.Api.Signer
 import Chainweb.Api.Transaction
+import ChainwebData.Api
+import ChainwebData.TxDetail
 import Common.Types
 import Common.Utils
 import Common.Route
 import Frontend.App
+import Frontend.ChainwebApi
 import Frontend.Common
-import Frontend.Page.Common
+import Servant.Common.Req
 
+import Language.Javascript.JSaddle.Types (MonadJSM)
 import Obelisk.Route
 import Obelisk.Route.Frontend
+import Reflex.Network
 
 ------------------------------------------------------------------------------
 
@@ -50,94 +44,66 @@ transactionPage
      , RouteToUrl (R FrontendRoute) m
      , SetRoute t (R FrontendRoute) m
      , Prerender js t m
+     , HasJSContext (Performable m)
+     , MonadJSM (Performable m)
      )
   => NetId
+  -> Maybe NetConfig
   -> ChainId
   -> BlockPayloadWithOutputs
+  -> Hash -- blockhash
   -> m ()
-transactionPage netId cid bp = do
+transactionPage netId netConfig cid bp hash = do
     let txs = _blockPayloadWithOutputs_transactionsWithOutputs bp
-    el "h2" $ text $ (tshow $ length txs) <> " Transactions"
-    divClass "ui accordion" $ do
-      forM_ txs $ \(t, tout) -> mdo
-        open <- toggle False $ domEvent Click e
-        let cmd = _transaction_cmd t
-        let addActive cls active =
-              ("class" =: if active then ("active " <> cls) else cls)
-        (e,_) <- elDynAttr' "div" (addActive "title" <$> open) $ do
-          elClass "i" "dropdown icon" blank
-          elClass "pre" "custombreak" $ text $ payloadCode $ _pactCommand_payload cmd
-        elDynAttr "div" (addActive "content" <$> open) $ do
-          elClass "table" "ui definition table" $ do
-            el "tbody" $ do
-              tfield "Request Key" $ do
-                let reqKey = hashB64U $ _transaction_hash t
-                text reqKey
-              tfield "Transaction Output" $ do
-                elClass "table" "ui definition table" $ el "tbody" $ do
-                  tfield "Gas" $ text $ tshow $ _toutGas tout
-                  tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult tout
-                  tfield "Logs" $ text $ maybe "null " hashB64U $ _toutLogs tout
-                  tfield "Metadata" $ renderMetaData netId cid $ _toutMetaData tout
-                  tfield "Continuation" $ voidMaybe renderCont $ _toutContinuation tout
-                  tfield "Transaction ID" $ maybe blank (text . tshow) $  _toutTxId tout
-              tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
-                forM_ (_toutEvents tout) $ \ ev -> el "tr" $ do
-                  elClass "td" "two wide" $ text (ename ev)
-                  -- el "td" $ el "pre" $ text $ prettyJSON ev
-                  elClass "td" "evtd" $ elClass "table" "evtable" $
-                    forM_ (params ev) $ \v -> elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ pactValueJSON v
+    let isSuccess tout = case _toutResult tout of
+          PactResult (Left _) -> False
+          PactResult (Right _) -> True
+    let status tout = if isSuccess tout then elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
+                    else elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
+    let requestkey tx = hashB64U $ _transaction_hash tx
+    let onPayload f g tx = case _pactCommand_payload $ _transaction_cmd tx of
+          ExecPayload e -> f e
+          ContPayload c -> g c
+    let contExists = onPayload (const False) (const True)
+    let mkTxDetailRoute n reqKey = mkNetRoute n (NetRoute_TxDetail :/ reqKey)
+    let blockLink = routeLink (addNetRoute netId (unChainId cid) $
+          Chain_BlockHash :/ (hashB64U hash, Block_Header :/ ())) $ text $ hashB64U hash
 
+    let cutText = elAttr "div" ("class" =: "cut-text")
+    let lastMay = foldl (const Just) Nothing
+    pb <- getPostBuild
 
-              tfield "Payload" $ do
-                let payload = _pactCommand_payload cmd
-                renderPayload payload
-              tfield "Nonce" $ text $ _pactCommand_nonce cmd
-              tfield "Meta" $ do
-                let meta = _pactCommand_meta cmd
-                elClass "table" "ui definition table" $ el "tbody" $ do
-                  tfield "Chain" $ text $ _chainwebMeta_chainId meta
-                  tfield "Sender" $ text $ _chainwebMeta_sender meta
-                  tfield "Gas Price" $ text $ tshow $ _chainwebMeta_gasPrice meta
-                  tfield "Gas Limit" $ text $ tshow $ _chainwebMeta_gasLimit meta
-                  tfield "TTL" $ text $ tshow $ _chainwebMeta_ttl meta
-                  tfield "Creation Time" $ text $ tshow $ _chainwebMeta_creationTime meta
-              tfield "Signers" $ do
-                forM_ (_pactCommand_signers cmd) $ \s -> do
-                  elClass "table" "ui definition table" $ el "tbody" $ do
-                    tfield "Public Key" $ text $ _signer_pubKey s
-                    tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
-                    tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
-                    tfield "Signature Capabilites" $ do
-                      when (not $ null $ _signer_capList s) $ do
-                        elClass "table" "ui celled table" $ do
-                          el "thead" $ do
-                            el "tr" $ do
-                              el "th" $ text "Name"
-                              el "th" $ text "Arguments"
-                          forM_ (_signer_capList s) $ \c -> do
-                            el "tbody" $ do
-                              elClass "tr" "top aligned" $ do
-                                el "td" $ text $ _scName c
-                                elClass "td" "top aligned"
-                                  $ sequence
-                                  $ fmap (el "div" . text) (unwrapJSON <$> _scArgs c) <|> empty
-              tfield "Signatures" $ do
-                forM_ (_transaction_sigs t) $ \s -> do
-                  el "div" $ text $ unSig s
-  where
-    fromPactResult (PactResult pr) = pr
-
-    renderCont v = case fromJSON v of
-      Success (pe :: PactExec) -> renderPactExec pe
-      A.Error e -> text $ T.pack $ "Unable to render continuation" <> e
-
-    ename :: Value -> T.Text
-    ename ev = delimView (key "module" . key "namespace" . _String) ev
-        <> delimView (key "module" . key "name" . _String) ev
-        <> mayview (key "name" . _String) ev
-
-    params :: Value -> [Value]
-    params ev = case fmap toList $ preview (key "params" . _Array) ev of
-      Nothing -> []
-      Just l -> l
+    el "h2" $ text $ "Block Transactions"
+    elClass "table" "ui definition table" $ do
+      el "tbody" $ do
+        tfield "Block Hash" blockLink 
+    elClass "table" "ui compact celled table" $ do
+      el "thead" $ el "tr" $ do
+        elAttr "th" ("style" =: "width: auto") $ text "Status"
+        elAttr "th" ("style" =: "width: auto") $ text "Request Key"
+        elAttr "th" ("style" =: "width: auto") $ text "Code"
+      el "tbody" $ do
+        forM_ txs $ \(t,tout) -> el "tr" $ do
+          let reqKey = requestkey t
+          elAttr "td" ("class" =: "center aligned") $ status tout
+          elAttr "td" ("data-tooltip" =: requestkey t <> "style" =: "max-width: 400px; padding: 0px;") $ 
+              el "div" $ cutText $ 
+                  routeLink (mkTxDetailRoute netId $ requestkey t) $ text $ requestkey t
+          let chainEmoji = "\x1F517"
+              contToolTip = "This is a continuation of another transaction. The code is the initial code of the transaction that created this continuation."
+          elAttr "td" ("style" =: "max-width: 630px; padding: 0px;" <> if contExists t then "data-tooltip" =: contToolTip else mempty) $ cutText $ do
+            case _pactCommand_payload $ _transaction_cmd t of
+              ExecPayload e -> routeLink (mkTxDetailRoute netId reqKey) $ text $ _exec_code e
+              ContPayload _c -> do
+                elAttr "span" ("class" =: "bubble-tag") $ text $ chainEmoji <> " "
+                case netConfig of
+                  Nothing -> text "Continuation"
+                  Just nc -> do
+                    res <- getTxDetails nc (constDyn $ QParamSome $ RequestKey reqKey) pb
+                    void $ networkHold (el "it" $ text "Loading...") $ res <&> \case
+                        Left err -> text $ tshow $ "Error: " <> err
+                        Right rs -> case rs of
+                          [] -> text "Continuation missing in the supporting database."
+                          (r:_) -> case (,) <$> _txDetail_initialCode r <*> (lastMay =<< _txDetail_previousSteps r) of
+                            Nothing -> text "Continuation missing in the supporting database."
+                            Just (i,initReqKey) -> routeLink (mkTxDetailRoute netId initReqKey) $ text i

@@ -127,11 +127,12 @@ blockPageNoPayload
   -> App (R BlockRoute) t m ()
   -- -> m ()
 blockPageNoPayload netId h c bh resolveOrphan = do
+  (AppState _ _ netConfig _) <- ask
   let choose ep = case ep of
         Left e -> text $ "Block payload query failed: " <> T.pack e
         Right payload -> subRoute_ $ \case
           Block_Header -> blockHeaderPage netId h c bh payload resolveOrphan
-          Block_Transactions -> transactionPage netId c payload
+          Block_Transactions -> transactionPage netId netConfig c payload (_blockHeader_hash $ fst bh)
   pEvt <- getBlockPayloadWithOutputs h c (_blockHeader_payloadHash $ fst bh)
   void $ networkHold (inlineLoader "Retrieving payload...") (choose <$> pEvt)
 
