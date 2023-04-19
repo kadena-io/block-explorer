@@ -14,6 +14,7 @@ module Frontend.Page.TxDetail where
 
 import Control.Monad
 import Control.Monad.Reader
+import Control.Lens (iforM_)
 import Data.Aeson as A
 import qualified Data.Text as T
 import GHCJS.DOM.Types (MonadJSM)
@@ -100,7 +101,22 @@ txDetailPage netId cwVer txDetails = do
             tagIfOrphan (ChainId $ _txDetail_chain tx) (_txDetail_height tx) (_txDetail_blockHash tx)
       tfield "Code" $ case (_txDetail_code $ head txDetails) of
         Just c -> elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
-        Nothing -> text "Continuation"
+        Nothing -> do
+          let previousSteps = _txDetail_previousSteps $ head txDetails
+              initialCode = _txDetail_initialCode $ head txDetails
+              mkTxDetailRoute rk = mkNetRoute netId (NetRoute_TxDetail :/ rk)
+              txDetailLink rk = do
+                text "Continuation of "
+                routeLink (mkTxDetailRoute rk) $ text rk
+          case previousSteps of
+            Just steps -> do
+              let l = length steps
+              iforM_ steps $ \i step -> do
+                txDetailLink step
+                unless (i >= l - 1) $ el "br" blank
+              forM_ initialCode $ \c ->
+                elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
+            Nothing -> text "No previous steps?"
       tfield "Transaction Output" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
           tfield "Gas" $ text $ tshow $ (_txDetail_gas $ head txDetails)
