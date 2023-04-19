@@ -47,6 +47,7 @@ import Pact.Types.Pretty
 import Chainweb.Api.ChainId
 import Chainweb.Api.Hash
 import Chainweb.Api.Payload
+import ChainwebData.TxSummary
 
 -- ------------------------------------------------------------------------ --
 -- Reflex modules
@@ -170,9 +171,14 @@ renderPayload = \case
 --
 renderPactExec
     :: MonadApp r t m
+    => RouteToUrl (R FrontendRoute) m
+    => SetRoute t (R FrontendRoute) m
+    => Prerender js t m
     => PactExec
+    -> NetId
+    -> Either Text (Bool,[TxSummary])
     -> m ()
-renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
+renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
     detailsSection $ do
       tfield "Step Count" $ text $ tshow stepCount
       voidMaybe (tfield "Yield" . renderYield) y
@@ -181,6 +187,15 @@ renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
       tfield "Pact Id" $ text pid
       tfield "Continuation" $ renderContinuation pcont
       tfield "Rollback" $ text $ tshow rb
+      tfield "Next Step" $ case res of
+        Left err -> tfield "Error" $ text err
+        Right (False,_) -> pure ()
+        Right (True,[]) -> text "No succeeding continuation steps"
+        Right (True,next) -> do
+          txDetailLink $ _txSummary_requestKey $ head next
+  where
+    txDetailLink rk = routeLink (mkTxDetailRoute rk) $ text rk
+    mkTxDetailRoute rk = mkNetRoute netId $ NetRoute_TxDetail :/ rk
 
 -- | Render the 'Provenance' pact type
 --

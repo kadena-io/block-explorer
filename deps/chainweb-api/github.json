@@ -1,8 +1,8 @@
 {
   "owner": "kadena-io",
   "repo": "chainweb-api",
-  "branch": "master",
+  "branch": "emmanuel/add-search-param-txs-take2",
   "private": false,
-  "rev": "6725d8490fcf43fd5f6b8b0ca731565a58f9c8e6",
-  "sha256": "B3swFmWuEajZ42gpdvHsF2MpWxHU4YiIx/nV+1ZCx30="
+  "rev": "34aa7accb10408dc28fb75694eb10a80eca61099",
+  "sha256": "1m9x9n5mwmv97fkv2z3hvlhlj59xm2mpsc816hzriw28pv1jb9zh"
 }

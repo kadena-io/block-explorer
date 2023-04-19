@@ -475,11 +475,12 @@ searchTxs
     -> Dynamic t (Maybe Limit)
     -> Dynamic t (Maybe Offset)
     -> Dynamic t (QParam Text)
+    -> Dynamic t (QParam Text)
     -> Dynamic t (QParam Int)
     -> Dynamic t (QParam Int)
     -> Event t ()
     -> m (Event t (Either Text (Bool,[TxSummary])))
-searchTxs nc lim off needle minHeight maxHeight evt = do
+searchTxs nc lim off needle pactid minHeight maxHeight evt = do
     case _netConfig_dataHost nc of
       Nothing -> return never
       Just dh -> do
@@ -489,7 +490,7 @@ searchTxs nc lim off needle minHeight maxHeight evt = do
                 (Proxy :: Proxy (LooperTag TxSummary ()))
                 (constDyn $ mkDataUrl dh)
                 nextHeaderOpts
-        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf needle minHeight maxHeight nextToken evt') lim off evt
+        txResp <- requestLooper (\limm offf nextToken evt' -> go limm offf needle pactid minHeight maxHeight nextToken evt') lim off evt
         return $ handleLooperResults <$> txResp
 
 handleLooperResults :: Either (ReqResult t [result]) (LooperTag result callerTag) -> Either Text (Bool, [result])

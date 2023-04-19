@@ -65,7 +65,7 @@ txDetailWidget netId = do
           (leftmost [pb, () <$ updated reqKey])
       void
           $ networkHold (inlineLoader "Querying blockchain ...")
-          $ fmap (either text (txDetailPage netId (_siChainwebVer si))) res
+          $ fmap (either text (txDetailPage nc netId (_siChainwebVer si))) res
 
 
 
@@ -77,11 +77,12 @@ txDetailPage
      , MonadJSM (Performable m)
      , Prerender js t m
      )
-  => NetId
+  => NetConfig
+  -> NetId
   -> ChainwebVersion
   -> [TxDetail]
   -> m ()
-txDetailPage netId cwVer txDetails = do
+txDetailPage nc netId cwVer txDetails = do
   el "h2" $ text $ "Transaction Detail"
   elClass "table" "ui definition table" $ do
     el "tbody" $ do
@@ -128,7 +129,16 @@ txDetailPage netId cwVer txDetails = do
             text $ pactValueJSON (_txDetail_result $ head txDetails)
           tfield "Logs" $ text (_txDetail_logs $ head txDetails)
           tfield "Metadata" $ renderMetaData netId (ChainId (_txDetail_chain $ head txDetails)) (Just (_txDetail_metadata $ head txDetails))
-          tfield "Continuation" $ voidMaybe renderCont $ (_txDetail_continuation $ head txDetails)
+          tfield "Continuation" $ do
+            pb <- getPostBuild
+            res <- searchTxs nc
+               (constDyn Nothing)
+               (constDyn Nothing)
+               (constDyn QNone)
+               (constDyn (QParamSome $ _txDetail_requestKey $ head txDetails))
+               (constDyn QNone) (constDyn QNone) pb
+            forM_ (_txDetail_continuation $ head txDetails) $ \cont -> do
+              widgetHold_ (inlineLoader "Querying continuation info...") (renderCont cont <$> res)
           tfield "Transaction ID" $ text $ tshow (_txDetail_txid $ head txDetails)
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
         forM_ (_txDetail_events $ head txDetails) $ \ ev -> el "tr" $ do
@@ -175,6 +185,6 @@ txDetailPage netId cwVer txDetails = do
       --     el "div" $ text $ unSig s
   where
 
-    renderCont v = case fromJSON v of
-      Success (pe :: PactExec) -> renderPactExec pe
+    renderCont v res = case fromJSON v of
+      Success (pe :: PactExec) -> renderPactExec pe netId res
       A.Error e -> text $ T.pack $ "Unable to render continuation" <> e
