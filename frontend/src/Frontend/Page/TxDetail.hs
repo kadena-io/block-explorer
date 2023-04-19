@@ -108,15 +108,15 @@ txDetailPage netId cwVer txDetails = do
               txDetailLink rk = do
                 text "Continuation of "
                 routeLink (mkTxDetailRoute rk) $ text rk
-          case previousSteps of
-            Just steps -> do
-              let l = length steps
-              iforM_ steps $ \i step -> do
-                txDetailLink step
-                unless (i >= l - 1) $ el "br" blank
-              forM_ initialCode $ \c ->
-                elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
-            Nothing -> text "No previous steps?"
+          elClass "table" "ui definition table" $ el "tbody" $ do
+            case previousSteps of
+              Just steps -> tfield "Past Steps" $ do
+                let l = length steps
+                iforM_ steps $ \i step -> do
+                  txDetailLink step
+                  unless (i >= l - 1) $ el "br" blank
+              Nothing -> text "No previous steps?"
+            forM_ initialCode $ \c -> tfield "Initial Code" $ elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
       tfield "Transaction Output" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
           tfield "Gas" $ text $ tshow $ (_txDetail_gas $ head txDetails)
