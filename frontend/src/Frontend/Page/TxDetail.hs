@@ -24,7 +24,7 @@ import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
 import Servant.Reflex
 
-import Pact.Types.Continuation (PactExec)
+import Pact.Types.Continuation (PactExec(..))
 
 import Chainweb.Api.BlockHeader
 import Chainweb.Api.ChainId
@@ -131,14 +131,18 @@ txDetailPage nc netId cwVer txDetails = do
           tfield "Metadata" $ renderMetaData netId (ChainId (_txDetail_chain $ head txDetails)) (Just (_txDetail_metadata $ head txDetails))
           tfield "Continuation" $ do
             pb <- getPostBuild
-            res <- searchTxs nc
-               (constDyn Nothing)
-               (constDyn Nothing)
-               (constDyn QNone)
-               (constDyn (QParamSome $ _txDetail_requestKey $ head txDetails))
-               (constDyn QNone) (constDyn QNone) pb
-            forM_ (_txDetail_continuation $ head txDetails) $ \cont -> do
-              widgetHold_ (inlineLoader "Querying continuation info...") (renderCont cont <$> res)
+            let cont = _txDetail_continuation $ head txDetails
+            forM_ cont $ \c -> do
+              if determineIfLastStep c
+                then renderCont c (Right (True,[]))
+                else do
+                  res <- searchTxs nc
+                     (constDyn Nothing)
+                     (constDyn Nothing)
+                     (constDyn QNone)
+                     (constDyn (QParamSome $ _txDetail_requestKey $ head txDetails))
+                     (constDyn QNone) (constDyn QNone) pb
+                  widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c <$> res)
           tfield "Transaction ID" $ text $ tshow (_txDetail_txid $ head txDetails)
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
         forM_ (_txDetail_events $ head txDetails) $ \ ev -> el "tr" $ do
@@ -184,6 +188,9 @@ txDetailPage nc netId cwVer txDetails = do
       --   forM_ (_transaction_sigs t) $ \s -> do
       --     el "div" $ text $ unSig s
   where
+    determineIfLastStep v = case fromJSON v of
+      Success (PactExec {..}) -> succ _peStep == _peStepCount
+      A.Error _ -> False
 
     renderCont v res = case fromJSON v of
       Success (pe :: PactExec) -> renderPactExec pe netId res
