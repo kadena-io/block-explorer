@@ -178,7 +178,7 @@ renderPactExec
     => Prerender js t m
     => PactExec
     -> NetId
-    -> Either Text (Bool,[TxSummary])
+    -> Either Text [TxSummary]
     -> m ()
 renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
     detailsSection $ do
@@ -191,9 +191,7 @@ renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
       tfield "Rollback" $ text $ tshow rb
       tfield "Next Step" $ case res of
         Left err -> tfield "Error" $ text err
-        Right (False,_) -> pure () -- TODO: Should be impossible
-        Right (True,[]) -> text "No subsequent continuation steps"
-        Right (True,xs) -> case partition ((== TxSucceeded) . _txSummary_result) xs of
+        Right xs -> case partition ((== TxSucceeded) . _txSummary_result) xs of
           ([],[]) -> text "No subsequent continuation steps"
           ([next],[]) -> txDetailLink $ _txSummary_requestKey next
           (ys,[]) -> do

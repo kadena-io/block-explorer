@@ -132,6 +132,10 @@ txDetailPage nc netId cwVer txDetails = do
           tfield "Continuation" $ do
             pb <- getPostBuild
             let cont = _txDetail_continuation $ head txDetails
+            let ditchPartialResult = \case
+                       Left t -> Left t
+                       Right (False,_) -> Left "A partial response is impossible!"
+                       Right (True,r) -> Right r
             forM_ cont $ \c -> do
               res <- searchTxs nc
                  (constDyn Nothing)
@@ -139,7 +143,7 @@ txDetailPage nc netId cwVer txDetails = do
                  (constDyn QNone)
                  (constDyn (QParamSome $ _txDetail_requestKey $ head txDetails))
                  (constDyn QNone) (constDyn QNone) pb
-              widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c <$> res)
+              widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c . ditchPartialResult <$> res)
           tfield "Transaction ID" $ text $ tshow (_txDetail_txid $ head txDetails)
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
         forM_ (_txDetail_events $ head txDetails) $ \ ev -> el "tr" $ do
