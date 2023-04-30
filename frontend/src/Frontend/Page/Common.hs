@@ -194,40 +194,20 @@ renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
         Right (False,_) -> pure () -- TODO: Should be impossible
         Right (True,[]) -> text "No subsequent continuation steps"
         Right (True,xs) -> case partition ((== TxSucceeded) . _txSummary_result) xs of
-          ([],[]) -> text "No subsequent continuation steps"
-          ([next],[]) -> txDetailLink $ _txSummary_requestKey next
-          (ys,[]) -> do
-            text "Multiple subsequent continuation steps: "
-            iforM_ ys $ \i next -> do
-              text $ " " <> tshow i <> ": "
-              txDetailLink $ _txSummary_requestKey next
-              when (i < length ys - 1) $ el "br" blank
-          ([next], zs) -> do
-            text "This succeeded: "
-            txDetailLink $ _txSummary_requestKey next
-            el "br" blank
-            text $ "Multiple subsequent failed continuation steps; this many failed: " <> tshow (length zs)
-            el "br" blank
-            iforM_ (take 10 zs) $ \i z -> do
-              text "Failed: "
-              txDetailLink $ _txSummary_requestKey z
-              when (i < length zs - 1) $  el "br" blank
-            when (not $ null $ drop 10 zs) $ text "...and more"
           (ys,zs) -> do
             unless (null ys) $ do
-              el "br" $ text "These succeeded: "
+              text "Successful:"
+              el "br" blank
               iforM_ ys $ \i next -> do
-                text $ " " <> tshow i <> ": "
                 txDetailLink $ _txSummary_requestKey next
                 when (i < length ys - 1) $ el "br" blank
-            el "br" blank
-            text $ "Multiple subsequent continuation steps; this many failed: " <> tshow (length zs)
-            el "br" blank
-            iforM_ (take 10 zs) $ \i z -> do
-              text "Failed: "
-              txDetailLink $ _txSummary_requestKey z
-              when (i < length zs - 1) $  el "br" blank
-            when (not $ null $ drop 10 zs) $ text "...and more"
+            unless (null zs) $ do
+              text $ "Failed:"
+              el "br" blank
+              iforM_ (take 10 zs) $ \i z -> do
+                txDetailLink $ _txSummary_requestKey z
+                when (i < length zs - 1) $  el "br" blank
+              when (not $ null $ drop 10 zs) $ text "...and more"
   where
     txDetailLink rk = routeLink (mkTxDetailRoute rk) $ text rk
     mkTxDetailRoute rk = mkNetRoute netId $ NetRoute_TxDetail :/ rk
