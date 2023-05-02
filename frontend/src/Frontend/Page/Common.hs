@@ -199,6 +199,7 @@ renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
               iforM_ ys $ \i next -> do
                 txDetailLink $ _txSummary_requestKey next
                 when (i < length ys - 1) $ el "br" blank
+            el "br" blank
             unless (null zs) $ do
               text $ "Failed:"
               el "br" blank
