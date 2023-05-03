@@ -70,7 +70,8 @@ transactionPage netId netConfig cid bp hash = do
           Chain_BlockHash :/ (hashB64U hash, Block_Header :/ ())) $ text $ hashB64U hash
 
     let cutText = elAttr "div" ("class" =: "cut-text")
-    let lastMay = foldl (const Just) Nothing
+    let lastMay :: [a] -> Maybe a
+        lastMay = foldl (const Just) Nothing
     pb <- getPostBuild
 
     el "h2" $ text $ "Block Transactions"

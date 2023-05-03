@@ -14,6 +14,7 @@ module Frontend.Page.TxDetail where
 
 import Control.Monad
 import Control.Monad.Reader
+import Control.Lens (iforM_)
 import Data.Aeson as A
 import qualified Data.Text as T
 import GHCJS.DOM.Types (MonadJSM)
@@ -23,7 +24,7 @@ import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
 import Servant.Reflex
 
-import Pact.Types.Continuation (PactExec)
+import Pact.Types.Continuation (PactExec(..))
 
 import Chainweb.Api.BlockHeader
 import Chainweb.Api.ChainId
@@ -64,7 +65,7 @@ txDetailWidget netId = do
           (leftmost [pb, () <$ updated reqKey])
       void
           $ networkHold (inlineLoader "Querying blockchain ...")
-          $ fmap (either text (txDetailPage netId (_siChainwebVer si))) res
+          $ fmap (either text (txDetailPage nc netId (_siChainwebVer si))) res
 
 
 
@@ -76,11 +77,12 @@ txDetailPage
      , MonadJSM (Performable m)
      , Prerender js t m
      )
-  => NetId
+  => NetConfig
+  -> NetId
   -> ChainwebVersion
   -> [TxDetail]
   -> m ()
-txDetailPage netId cwVer txDetails = do
+txDetailPage nc netId cwVer txDetails = do
   el "h2" $ text $ "Transaction Detail"
   elClass "table" "ui definition table" $ do
     el "tbody" $ do
@@ -100,7 +102,22 @@ txDetailPage netId cwVer txDetails = do
             tagIfOrphan (ChainId $ _txDetail_chain tx) (_txDetail_height tx) (_txDetail_blockHash tx)
       tfield "Code" $ case (_txDetail_code $ head txDetails) of
         Just c -> elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
-        Nothing -> text "Continuation"
+        Nothing -> do
+          let previousSteps = _txDetail_previousSteps $ head txDetails
+              initialCode = _txDetail_initialCode $ head txDetails
+              mkTxDetailRoute rk = mkNetRoute netId (NetRoute_TxDetail :/ rk)
+              txDetailLink rk = do
+                text "Continuation of "
+                routeLink (mkTxDetailRoute rk) $ text rk
+          elClass "table" "ui definition table" $ el "tbody" $ do
+            case previousSteps of
+              Just steps -> tfield "Past Steps" $ do
+                let l = length steps
+                iforM_ steps $ \i step -> do
+                  txDetailLink step
+                  unless (i >= l - 1) $ el "br" blank
+              Nothing -> text "No previous steps?"
+            forM_ initialCode $ \c -> tfield "Initial Code" $ elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
       tfield "Transaction Output" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
           tfield "Gas" $ text $ tshow $ (_txDetail_gas $ head txDetails)
@@ -112,7 +129,21 @@ txDetailPage netId cwVer txDetails = do
             text $ pactValueJSON (_txDetail_result $ head txDetails)
           tfield "Logs" $ text (_txDetail_logs $ head txDetails)
           tfield "Metadata" $ renderMetaData netId (ChainId (_txDetail_chain $ head txDetails)) (Just (_txDetail_metadata $ head txDetails))
-          tfield "Continuation" $ voidMaybe renderCont $ (_txDetail_continuation $ head txDetails)
+          tfield "Continuation" $ do
+            pb <- getPostBuild
+            let cont = _txDetail_continuation $ head txDetails
+            let ditchPartialResult = \case
+                       Left t -> Left t
+                       Right (False,_) -> Left "A partial response is impossible!"
+                       Right (True,r) -> Right r
+            forM_ cont $ \c -> do
+              res <- searchTxs nc
+                 (constDyn Nothing)
+                 (constDyn Nothing)
+                 (constDyn QNone)
+                 (constDyn (QParamSome $ _txDetail_requestKey $ head txDetails))
+                 (constDyn QNone) (constDyn QNone) pb
+              widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c . ditchPartialResult <$> res)
           tfield "Transaction ID" $ text $ tshow (_txDetail_txid $ head txDetails)
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
         forM_ (_txDetail_events $ head txDetails) $ \ ev -> el "tr" $ do
@@ -158,7 +189,6 @@ txDetailPage netId cwVer txDetails = do
       --   forM_ (_transaction_sigs t) $ \s -> do
       --     el "div" $ text $ unSig s
   where
-
-    renderCont v = case fromJSON v of
-      Success (pe :: PactExec) -> renderPactExec pe
+    renderCont v res = case fromJSON v of
+      Success (pe :: PactExec) -> renderPactExec pe netId res
       A.Error e -> text $ T.pack $ "Unable to render continuation" <> e

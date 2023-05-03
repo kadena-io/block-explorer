@@ -21,6 +21,7 @@ module Frontend.Page.Common
 
 ------------------------------------------------------------------------------
 import Control.Lens
+import Control.Monad (unless, when)
 ------------------------------------------------------------------------------
 import Data.Aeson as A
 import Data.Foldable
@@ -47,6 +48,7 @@ import Pact.Types.Pretty
 import Chainweb.Api.ChainId
 import Chainweb.Api.Hash
 import Chainweb.Api.Payload
+import ChainwebData.TxSummary
 
 -- ------------------------------------------------------------------------ --
 -- Reflex modules
@@ -170,9 +172,14 @@ renderPayload = \case
 --
 renderPactExec
     :: MonadApp r t m
+    => RouteToUrl (R FrontendRoute) m
+    => SetRoute t (R FrontendRoute) m
+    => Prerender js t m
     => PactExec
+    -> NetId
+    -> Either Text [TxSummary]
     -> m ()
-renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
+renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
     detailsSection $ do
       tfield "Step Count" $ text $ tshow stepCount
       voidMaybe (tfield "Yield" . renderYield) y
@@ -181,6 +188,27 @@ renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) =
       tfield "Pact Id" $ text pid
       tfield "Continuation" $ renderContinuation pcont
       tfield "Rollback" $ text $ tshow rb
+      tfield "Next Step" $ case res of
+        Left err -> tfield "Error" $ text err
+        Right xs -> case span ((== TxSucceeded) . _txSummary_result) xs of
+          (ys,zs) -> do
+            unless (null ys) $ do
+              text "Successful:"
+              el "br" blank
+              iforM_ ys $ \i next -> do
+                txDetailLink $ _txSummary_requestKey next
+                when (i < length ys - 1) $ el "br" blank
+            el "br" blank
+            unless (null zs) $ do
+              text $ "Failed:"
+              el "br" blank
+              iforM_ (take 10 zs) $ \i z -> do
+                txDetailLink $ _txSummary_requestKey z
+                when (i < length zs - 1) $  el "br" blank
+              when (not $ null $ drop 10 zs) $ text "...and more"
+  where
+    txDetailLink rk = routeLink (mkTxDetailRoute rk) $ text rk
+    mkTxDetailRoute rk = mkNetRoute netId $ NetRoute_TxDetail :/ rk
 
 -- | Render the 'Provenance' pact type
 --
