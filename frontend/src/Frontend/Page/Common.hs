@@ -26,7 +26,6 @@ import Control.Monad (unless, when)
 import Data.Aeson as A
 import Data.Foldable
 import Data.Functor (void)
-import Data.List (partition)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.Maybe
@@ -191,7 +190,7 @@ renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
       tfield "Rollback" $ text $ tshow rb
       tfield "Next Step" $ case res of
         Left err -> tfield "Error" $ text err
-        Right (xs) -> case partition ((== TxSucceeded) . _txSummary_result) xs of
+        Right xs -> case span ((== TxSucceeded) . _txSummary_result) xs of
           (ys,zs) -> do
             unless (null ys) $ do
               text "Successful:"
