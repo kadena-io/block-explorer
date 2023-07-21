@@ -172,7 +172,7 @@ txDetailPage nc netId cwVer txDetails = do
         forM_ (_txDetail_signers $ head txDetails) $ \s -> do
           elClass "table" "ui definition table" $ el "tbody" $ do
             tfield "Public Key" $ text $ _signer_pubKey s
-            forM_ (_signer_addr s) $ tfield "Account" . text
+            forM_ (_signer_addr s) $ tfield "Address" . text
             forM_ (_signer_scheme s) $ tfield "Scheme" . text
             tfield "Signature Capabilites" $ do
               when (not $ null $ _signer_capList s) $ do
