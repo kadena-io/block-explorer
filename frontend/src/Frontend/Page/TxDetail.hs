@@ -17,7 +17,6 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Lens (iforM_)
 import Data.Aeson as A
-import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
@@ -173,8 +172,8 @@ txDetailPage nc netId cwVer txDetails = do
         forM_ (_txDetail_signers $ head txDetails) $ \s -> do
           elClass "table" "ui definition table" $ el "tbody" $ do
             tfield "Public Key" $ text $ _signer_pubKey s
-            tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
-            tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
+            forM_ (_signer_addr s) $ tfield "Account" . text
+            forM_ (_signer_scheme s) $ tfield "Scheme" . text
             tfield "Signature Capabilites" $ do
               when (not $ null $ _signer_capList s) $ do
                 elClass "table" "ui celled table" $ do
