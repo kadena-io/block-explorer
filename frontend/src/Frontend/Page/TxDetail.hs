@@ -12,10 +12,12 @@
 {-# LANGUAGE TypeFamilies               #-}
 module Frontend.Page.TxDetail where
 
+import Control.Applicative
 import Control.Monad
 import Control.Monad.Reader
 import Control.Lens (iforM_)
 import Data.Aeson as A
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
@@ -29,6 +31,8 @@ import Pact.Types.Continuation (PactExec(..))
 import Chainweb.Api.BlockHeader
 import Chainweb.Api.ChainId
 import Chainweb.Api.Hash
+import Chainweb.Api.Signer
+import Chainweb.Api.Sig
 import ChainwebData.Api
 import ChainwebData.TxDetail
 
@@ -165,29 +169,29 @@ txDetailPage nc netId cwVer txDetails = do
           tfield "Creation Time" $ text $ tshow $ (_txDetail_creationTime $ head txDetails)
 
 
-      -- tfield "Signers" $ do
-      --   forM_ (_pactCommand_signers cmd) $ \s -> do
-      --     elClass "table" "ui definition table" $ el "tbody" $ do
-      --       tfield "Public Key" $ text $ _signer_pubKey s
-      --       tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
-      --       tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
-      --       tfield "Signature Capabilites" $ do
-      --         when (not $ null $ _signer_capList s) $ do
-      --           elClass "table" "ui celled table" $ do
-      --             el "thead" $ do
-      --               el "tr" $ do
-      --                 el "th" $ text "Name"
-      --                 el "th" $ text "Arguments"
-      --             forM_ (_signer_capList s) $ \c -> do
-      --               el "tbody" $ do
-      --                 elClass "tr" "top aligned" $ do
-      --                   el "td" $ text $ _scName c
-      --                   elClass "td" "top aligned"
-      --                     $ sequence
-      --                     $ fmap (el "div" . text) (unwrapJSON <$> _scArgs c) <|> empty
-      -- tfield "Signatures" $ do
-      --   forM_ (_transaction_sigs t) $ \s -> do
-      --     el "div" $ text $ unSig s
+      tfield "Signers" $ do
+        forM_ (_txDetail_signers $ head txDetails) $ \s -> do
+          elClass "table" "ui definition table" $ el "tbody" $ do
+            tfield "Public Key" $ text $ _signer_pubKey s
+            tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
+            tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
+            tfield "Signature Capabilites" $ do
+              when (not $ null $ _signer_capList s) $ do
+                elClass "table" "ui celled table" $ do
+                  el "thead" $ do
+                    el "tr" $ do
+                      el "th" $ text "Name"
+                      el "th" $ text "Arguments"
+                  forM_ (_signer_capList s) $ \c -> do
+                    el "tbody" $ do
+                      elClass "tr" "top aligned" $ do
+                        el "td" $ text $ _scName c
+                        elClass "td" "top aligned"
+                          $ sequence
+                          $ fmap (el "div" . text) (unwrapJSON <$> _scArgs c) <|> empty
+      tfield "Signatures" $ do
+        forM_ (_txDetail_sigs $ head txDetails) $ \s -> do
+          el "div" $ text $ unSig s
   where
     renderCont v res = case fromJSON v of
       Success (pe :: PactExec) -> renderPactExec pe netId res
