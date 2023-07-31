@@ -12,7 +12,6 @@
 {-# LANGUAGE TypeFamilies               #-}
 module Frontend.Page.TxDetail where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.Reader
 import Control.Lens (iforM_)
@@ -174,20 +173,20 @@ txDetailPage nc netId cwVer txDetails = do
             tfield "Public Key" $ text $ _signer_pubKey s
             forM_ (_signer_addr s) $ tfield "Address" . text
             forM_ (_signer_scheme s) $ tfield "Scheme" . text
-            tfield "Signature Capabilites" $ do
+            tfield "Signature Capabilities" $ do
               when (not $ null $ _signer_capList s) $ do
                 elClass "table" "ui celled table" $ do
                   el "thead" $ do
                     el "tr" $ do
                       el "th" $ text "Name"
                       el "th" $ text "Arguments"
-                  forM_ (_signer_capList s) $ \c -> do
-                    el "tbody" $ do
-                      elClass "tr" "top aligned" $ do
-                        el "td" $ text $ _scName c
-                        elClass "td" "top aligned"
-                          $ sequence
-                          $ fmap (el "div" . text) (unwrapJSON <$> _scArgs c) <|> empty
+
+                  el "tbody" $
+                    forM_ (_signer_capList s) $ \c -> el "tr" $ do
+                      el "td" $ text $ _scName c
+                      elClass "td" "evtd" $ elClass "table" "evtable" $
+                        forM_ (_scArgs c) $ \arg -> elClass "tr" "evtable" $
+                          elClass "td" "evtable" $ text $ unwrapJSON arg
       tfield "Signatures" $ do
         forM_ (_txDetail_sigs $ head txDetails) $ \s -> do
           el "div" $ text $ unSig s
