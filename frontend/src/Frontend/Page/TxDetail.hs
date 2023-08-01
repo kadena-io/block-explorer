@@ -190,8 +190,9 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
                         forM_ (_scArgs c) $ \arg -> elClass "tr" "evtable" $
                           elClass "td" "evtable" $ text $ unwrapJSON arg
       tfield "Signatures" $ do
-        forM_ (_txDetail_sigs firstTx) $ \s -> do
-          el "div" $ text $ unSig s
+        elClass "table" "evtable" $
+          forM_ (_txDetail_sigs firstTx) $ \s ->
+            elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ unSig s
   where
     renderCont v res = case fromJSON v of
       Success (pe :: PactExec) -> renderPactExec pe netId res
