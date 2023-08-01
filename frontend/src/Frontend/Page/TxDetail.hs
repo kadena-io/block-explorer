@@ -86,14 +86,14 @@ txDetailPage
   -> ChainwebVersion
   -> NE.NonEmpty TxDetail
   -> m ()
-txDetailPage nc netId cwVer txDetails@(firstDetail NE.:| restDetail) = do
+txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
   el "h2" $ text $ "Transaction Detail"
   elClass "table" "ui definition table" $ do
     el "tbody" $ do
-      tfield "Request Key" $ text (_txDetail_requestKey $ firstDetail)
-      tfield "Chain" $ text $ tshow $ (_txDetail_chain $ firstDetail)
+      tfield "Request Key" $ text (_txDetail_requestKey $ firstTx)
+      tfield "Chain" $ text $ tshow $ (_txDetail_chain $ firstTx)
       tfield "Block" $ do
-        let tagIfOrphan cid height hash = if null restDetail
+        let tagIfOrphan cid height hash = if null restTxs
               then dynText $ constDyn mempty
               else do
                   let h = ChainwebHost (netHost netId) cwVer
@@ -101,14 +101,14 @@ txDetailPage nc netId cwVer txDetails@(firstDetail NE.:| restDetail) = do
                   t <- holdDyn " (Determining if an orphan...)" $
                         fmap (\whash -> if whash == hash then "" else " (orphan)") (fforMaybe winningHash (fmap hashB64U))
                   dynText t
-        forM_ txDetails $ \tx -> el "tr" $ do
+        forM_ txs $ \tx -> el "tr" $ do
             blockHashLink netId (ChainId (_txDetail_chain tx)) (_txDetail_blockHash tx) $ (_txDetail_blockHash tx)
             tagIfOrphan (ChainId $ _txDetail_chain tx) (_txDetail_height tx) (_txDetail_blockHash tx)
-      tfield "Code" $ case _txDetail_code firstDetail of
+      tfield "Code" $ case _txDetail_code firstTx of
         Just c -> elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
         Nothing -> do
-          let previousSteps = _txDetail_previousSteps firstDetail
-              initialCode = _txDetail_initialCode firstDetail
+          let previousSteps = _txDetail_previousSteps firstTx
+              initialCode = _txDetail_initialCode firstTx
               mkTxDetailRoute rk = mkNetRoute netId (NetRoute_TxDetail :/ rk)
               txDetailLink rk = do
                 text "Continuation of "
@@ -124,18 +124,18 @@ txDetailPage nc netId cwVer txDetails@(firstDetail NE.:| restDetail) = do
             forM_ initialCode $ \c -> tfield "Initial Code" $ elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
       tfield "Transaction Output" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
-          tfield "Gas" $ text $ tshow $ _txDetail_gas firstDetail
+          tfield "Gas" $ text $ tshow $ _txDetail_gas firstTx
           tfield "Result" $ do
-            if _txDetail_success firstDetail then
+            if _txDetail_success firstTx then
               elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
                 else
               elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
-            text $ pactValueJSON $ _txDetail_result firstDetail
-          tfield "Logs" $ text $ _txDetail_logs firstDetail
-          tfield "Metadata" $ renderMetaData netId (ChainId $ _txDetail_chain firstDetail) (Just $ _txDetail_metadata firstDetail)
+            text $ pactValueJSON $ _txDetail_result firstTx
+          tfield "Logs" $ text $ _txDetail_logs firstTx
+          tfield "Metadata" $ renderMetaData netId (ChainId $ _txDetail_chain firstTx) (Just $ _txDetail_metadata firstTx)
           tfield "Continuation" $ do
             pb <- getPostBuild
-            let cont = _txDetail_continuation firstDetail
+            let cont = _txDetail_continuation firstTx
             let ditchPartialResult = \case
                        Left t -> Left t
                        Right (False,_) -> Left "A partial response is impossible!"
@@ -145,32 +145,32 @@ txDetailPage nc netId cwVer txDetails@(firstDetail NE.:| restDetail) = do
                  (constDyn Nothing)
                  (constDyn Nothing)
                  (constDyn QNone)
-                 (constDyn (QParamSome $ _txDetail_requestKey firstDetail))
+                 (constDyn (QParamSome $ _txDetail_requestKey firstTx))
                  (constDyn QNone) (constDyn QNone) pb
               widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c . ditchPartialResult <$> res)
-          tfield "Transaction ID" $ text $ tshow $ _txDetail_txid firstDetail
+          tfield "Transaction ID" $ text $ tshow $ _txDetail_txid firstTx
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
-        forM_ (_txDetail_events firstDetail) $ \ ev -> el "tr" $ do
+        forM_ (_txDetail_events firstTx) $ \ ev -> el "tr" $ do
           elClass "td" "two wide" $ text (_txEvent_name ev)
           elClass "td" "evtd" $ elClass "table" "evtable" $
             forM_ (_txEvent_params ev) $ \v ->
               elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ pactValueJSON v
 
 
-      tfieldPre "Data" $ text $ prettyJSON $ _txDetail_data firstDetail
-      tfield "Nonce" $ text $ _txDetail_nonce firstDetail
+      tfieldPre "Data" $ text $ prettyJSON $ _txDetail_data firstTx
+      tfield "Nonce" $ text $ _txDetail_nonce firstTx
       tfield "Meta" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
-          tfield "Chain" $ text $ tshow $ _txDetail_chain firstDetail
-          tfield "Sender" $ text $ _txDetail_sender firstDetail
-          tfield "Gas Price" $ text $ tshow $ _txDetail_gasPrice firstDetail
-          tfield "Gas Limit" $ text $ tshow $ _txDetail_gasLimit firstDetail
-          tfield "TTL" $ text $ tshow $ _txDetail_ttl firstDetail
-          tfield "Creation Time" $ text $ tshow $ _txDetail_creationTime firstDetail
+          tfield "Chain" $ text $ tshow $ _txDetail_chain firstTx
+          tfield "Sender" $ text $ _txDetail_sender firstTx
+          tfield "Gas Price" $ text $ tshow $ _txDetail_gasPrice firstTx
+          tfield "Gas Limit" $ text $ tshow $ _txDetail_gasLimit firstTx
+          tfield "TTL" $ text $ tshow $ _txDetail_ttl firstTx
+          tfield "Creation Time" $ text $ tshow $ _txDetail_creationTime firstTx
 
 
       tfield "Signers" $ do
-        forM_ (_txDetail_signers firstDetail) $ \s -> do
+        forM_ (_txDetail_signers firstTx) $ \s -> do
           elClass "table" "ui definition table" $ el "tbody" $ do
             tfield "Public Key" $ text $ _signer_pubKey s
             forM_ (_signer_addr s) $ tfield "Address" . text
@@ -190,7 +190,7 @@ txDetailPage nc netId cwVer txDetails@(firstDetail NE.:| restDetail) = do
                         forM_ (_scArgs c) $ \arg -> elClass "tr" "evtable" $
                           elClass "td" "evtable" $ text $ unwrapJSON arg
       tfield "Signatures" $ do
-        forM_ (_txDetail_sigs firstDetail) $ \s -> do
+        forM_ (_txDetail_sigs firstTx) $ \s -> do
           el "div" $ text $ unSig s
   where
     renderCont v res = case fromJSON v of
