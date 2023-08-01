@@ -16,6 +16,8 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Lens (iforM_)
 import Data.Aeson as A
+import Data.Functor ((<&>))
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 import GHCJS.DOM.Types (MonadJSM)
 import Obelisk.Route
@@ -29,6 +31,8 @@ import Pact.Types.Continuation (PactExec(..))
 import Chainweb.Api.BlockHeader
 import Chainweb.Api.ChainId
 import Chainweb.Api.Hash
+import Chainweb.Api.Signer
+import Chainweb.Api.Sig
 import ChainwebData.Api
 import ChainwebData.TxDetail
 
@@ -63,11 +67,11 @@ txDetailWidget netId = do
       res <- getTxDetails nc
           (QParamSome . RequestKey <$> reqKey)
           (leftmost [pb, () <$ updated reqKey])
-      void
-          $ networkHold (inlineLoader "Querying blockchain ...")
-          $ fmap (either text (txDetailPage nc netId (_siChainwebVer si))) res
-
-
+      void $ networkHold (inlineLoader "Querying blockchain ...") $ res <&> \case
+        Left err -> text $ "Error fetching transactions: " <> err
+        Right txDetails -> case NE.nonEmpty txDetails of
+          Nothing -> text "No transaction found"
+          Just neTxDetails -> txDetailPage nc netId (_siChainwebVer si) neTxDetails
 
 txDetailPage
   :: ( MonadApp r t m
@@ -80,16 +84,16 @@ txDetailPage
   => NetConfig
   -> NetId
   -> ChainwebVersion
-  -> [TxDetail]
+  -> NE.NonEmpty TxDetail
   -> m ()
-txDetailPage nc netId cwVer txDetails = do
+txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
   el "h2" $ text $ "Transaction Detail"
   elClass "table" "ui definition table" $ do
     el "tbody" $ do
-      tfield "Request Key" $ text (_txDetail_requestKey $ head txDetails)
-      tfield "Chain" $ text $ tshow $ (_txDetail_chain $ head txDetails)
+      tfield "Request Key" $ text (_txDetail_requestKey $ firstTx)
+      tfield "Chain" $ text $ tshow $ (_txDetail_chain $ firstTx)
       tfield "Block" $ do
-        let tagIfOrphan cid height hash = if null $ drop 1 txDetails
+        let tagIfOrphan cid height hash = if null restTxs
               then dynText $ constDyn mempty
               else do
                   let h = ChainwebHost (netHost netId) cwVer
@@ -97,14 +101,14 @@ txDetailPage nc netId cwVer txDetails = do
                   t <- holdDyn " (Determining if an orphan...)" $
                         fmap (\whash -> if whash == hash then "" else " (orphan)") (fforMaybe winningHash (fmap hashB64U))
                   dynText t
-        forM_ txDetails $ \tx -> el "tr" $ do
+        forM_ txs $ \tx -> el "tr" $ do
             blockHashLink netId (ChainId (_txDetail_chain tx)) (_txDetail_blockHash tx) $ (_txDetail_blockHash tx)
             tagIfOrphan (ChainId $ _txDetail_chain tx) (_txDetail_height tx) (_txDetail_blockHash tx)
-      tfield "Code" $ case (_txDetail_code $ head txDetails) of
+      tfield "Code" $ case _txDetail_code firstTx of
         Just c -> elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
         Nothing -> do
-          let previousSteps = _txDetail_previousSteps $ head txDetails
-              initialCode = _txDetail_initialCode $ head txDetails
+          let previousSteps = _txDetail_previousSteps firstTx
+              initialCode = _txDetail_initialCode firstTx
               mkTxDetailRoute rk = mkNetRoute netId (NetRoute_TxDetail :/ rk)
               txDetailLink rk = do
                 text "Continuation of "
@@ -120,18 +124,18 @@ txDetailPage nc netId cwVer txDetails = do
             forM_ initialCode $ \c -> tfield "Initial Code" $ elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
       tfield "Transaction Output" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
-          tfield "Gas" $ text $ tshow $ (_txDetail_gas $ head txDetails)
+          tfield "Gas" $ text $ tshow $ _txDetail_gas firstTx
           tfield "Result" $ do
-            if (_txDetail_success $ head txDetails) then
+            if _txDetail_success firstTx then
               elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
                 else
               elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
-            text $ pactValueJSON (_txDetail_result $ head txDetails)
-          tfield "Logs" $ text (_txDetail_logs $ head txDetails)
-          tfield "Metadata" $ renderMetaData netId (ChainId (_txDetail_chain $ head txDetails)) (Just (_txDetail_metadata $ head txDetails))
+            text $ pactValueJSON $ _txDetail_result firstTx
+          tfield "Logs" $ text $ _txDetail_logs firstTx
+          tfield "Metadata" $ renderMetaData netId (ChainId $ _txDetail_chain firstTx) (Just $ _txDetail_metadata firstTx)
           tfield "Continuation" $ do
             pb <- getPostBuild
-            let cont = _txDetail_continuation $ head txDetails
+            let cont = _txDetail_continuation firstTx
             let ditchPartialResult = \case
                        Left t -> Left t
                        Right (False,_) -> Left "A partial response is impossible!"
@@ -141,53 +145,54 @@ txDetailPage nc netId cwVer txDetails = do
                  (constDyn Nothing)
                  (constDyn Nothing)
                  (constDyn QNone)
-                 (constDyn (QParamSome $ _txDetail_requestKey $ head txDetails))
+                 (constDyn (QParamSome $ _txDetail_requestKey firstTx))
                  (constDyn QNone) (constDyn QNone) pb
               widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c . ditchPartialResult <$> res)
-          tfield "Transaction ID" $ text $ tshow (_txDetail_txid $ head txDetails)
+          tfield "Transaction ID" $ text $ tshow $ _txDetail_txid firstTx
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
-        forM_ (_txDetail_events $ head txDetails) $ \ ev -> el "tr" $ do
+        forM_ (_txDetail_events firstTx) $ \ ev -> el "tr" $ do
           elClass "td" "two wide" $ text (_txEvent_name ev)
           elClass "td" "evtd" $ elClass "table" "evtable" $
             forM_ (_txEvent_params ev) $ \v ->
               elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ pactValueJSON v
 
 
-      tfieldPre "Data" $ text $ prettyJSON (_txDetail_data $ head txDetails)
-      tfield "Nonce" $ text $ (_txDetail_nonce $ head txDetails)
+      tfieldPre "Data" $ text $ prettyJSON $ _txDetail_data firstTx
+      tfield "Nonce" $ text $ _txDetail_nonce firstTx
       tfield "Meta" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
-          tfield "Chain" $ text $ tshow $ (_txDetail_chain $ head txDetails)
-          tfield "Sender" $ text $ (_txDetail_sender $ head txDetails)
-          tfield "Gas Price" $ text $ tshow $ (_txDetail_gasPrice $ head txDetails)
-          tfield "Gas Limit" $ text $ tshow $ (_txDetail_gasLimit $ head txDetails)
-          tfield "TTL" $ text $ tshow $ (_txDetail_ttl $ head txDetails)
-          tfield "Creation Time" $ text $ tshow $ (_txDetail_creationTime $ head txDetails)
+          tfield "Chain" $ text $ tshow $ _txDetail_chain firstTx
+          tfield "Sender" $ text $ _txDetail_sender firstTx
+          tfield "Gas Price" $ text $ tshow $ _txDetail_gasPrice firstTx
+          tfield "Gas Limit" $ text $ tshow $ _txDetail_gasLimit firstTx
+          tfield "TTL" $ text $ tshow $ _txDetail_ttl firstTx
+          tfield "Creation Time" $ text $ tshow $ _txDetail_creationTime firstTx
 
 
-      -- tfield "Signers" $ do
-      --   forM_ (_pactCommand_signers cmd) $ \s -> do
-      --     elClass "table" "ui definition table" $ el "tbody" $ do
-      --       tfield "Public Key" $ text $ _signer_pubKey s
-      --       tfield "Account" $ text $ fromMaybe "" $ _signer_addr s
-      --       tfield "Scheme" $ text $ fromMaybe "" $ _signer_scheme s
-      --       tfield "Signature Capabilites" $ do
-      --         when (not $ null $ _signer_capList s) $ do
-      --           elClass "table" "ui celled table" $ do
-      --             el "thead" $ do
-      --               el "tr" $ do
-      --                 el "th" $ text "Name"
-      --                 el "th" $ text "Arguments"
-      --             forM_ (_signer_capList s) $ \c -> do
-      --               el "tbody" $ do
-      --                 elClass "tr" "top aligned" $ do
-      --                   el "td" $ text $ _scName c
-      --                   elClass "td" "top aligned"
-      --                     $ sequence
-      --                     $ fmap (el "div" . text) (unwrapJSON <$> _scArgs c) <|> empty
-      -- tfield "Signatures" $ do
-      --   forM_ (_transaction_sigs t) $ \s -> do
-      --     el "div" $ text $ unSig s
+      tfield "Signers" $ do
+        forM_ (_txDetail_signers firstTx) $ \s -> do
+          elClass "table" "ui definition table" $ el "tbody" $ do
+            tfield "Public Key" $ text $ _signer_pubKey s
+            forM_ (_signer_addr s) $ tfield "Address" . text
+            forM_ (_signer_scheme s) $ tfield "Scheme" . text
+            tfield "Signature Capabilities" $ do
+              when (not $ null $ _signer_capList s) $ do
+                elClass "table" "ui celled table" $ do
+                  el "thead" $ do
+                    el "tr" $ do
+                      el "th" $ text "Name"
+                      el "th" $ text "Arguments"
+
+                  el "tbody" $
+                    forM_ (_signer_capList s) $ \c -> el "tr" $ do
+                      el "td" $ text $ _scName c
+                      elClass "td" "evtd" $ elClass "table" "evtable" $
+                        forM_ (_scArgs c) $ \arg -> elClass "tr" "evtable" $
+                          elClass "td" "evtable" $ text $ unwrapJSON arg
+      tfield "Signatures" $ do
+        elClass "table" "evtable" $
+          forM_ (_txDetail_sigs firstTx) $ \s ->
+            elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ unSig s
   where
     renderCont v res = case fromJSON v of
       Success (pe :: PactExec) -> renderPactExec pe netId res
