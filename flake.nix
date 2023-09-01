@@ -99,7 +99,7 @@
     packages = forAllSystems ({pkgs, system, ...}:
       pkgs.lib.optionalAttrs (system == "x86_64-linux") x86-linux-only-packages // rec {
         default = renderStatic { inherit pkgs; };
-        serve = pkgs.writeShellScriptBin "block-explorer-serve-default"
+        serve = pkgs.writeShellScriptBin "serve-block-explorer"
           ''
             exec ${pkgs.caddy}/bin/caddy run \
               --config <(${pkgs.caddy}/bin/caddy adapt --config ${pkgs.writeText "Caddyfile" ''
@@ -113,5 +113,11 @@
             ''})
           '';
       });
+    apps = forAllSystems ({pkgs, system, ...}: {
+      default = {
+        type = "app";
+        program = "${self.packages.${system}.serve}/bin/serve-block-explorer";
+      };
+    });
   };
 }
