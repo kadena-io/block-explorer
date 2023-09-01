@@ -39,8 +39,8 @@
       }: pkgs.runCommand "block-explorer-static" { buildInputs = [ pkgs.coreutils ]; } ''
         mkdir $out
         ln -s ${self.packages.x86_64-linux.static}/* $out
-        ROUTE=$(base64 <<< ${route})
-        DATA_BACKENDS=$(base64 <<< ${builtins.toJSON dataBackends})
+        ROUTE=$(base64 -w 0 <<< ${route})
+        DATA_BACKENDS=$(base64 -w 0 <<< ${builtins.toJSON dataBackends})
         ${pkgs.mustache-go}/bin/mustache $out/index.html.mustache > $out/index.html <<EOF
           {
             "route": "$ROUTE",
