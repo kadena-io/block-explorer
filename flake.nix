@@ -6,7 +6,10 @@
     forAllSystems = f:
       nixpkgs.lib.genAttrs [
         "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin"
-      ] (system: f nixpkgs.legacyPackages.${system});
+      ] (system: f {
+           pkgs = nixpkgs.legacyPackages.${system};
+           inherit system;
+        });
     selfWithoutFlake = builtins.path {
       name = "block-explorer-without-flake";
       path = ./.;
@@ -15,9 +18,35 @@
         baseNameOf path != "flake.lock" &&
         baseNameOf path != "flake";
     };
-  in {
-    inherit selfWithoutFlake;
-    packages.x86_64-linux = let
+    publicDataBackends = {
+      mainnet01 = {
+        p2p = "https://estats.chainweb.com:443";
+        service = "https://estats.chainweb.com:443";
+        data = "https://estats.chainweb.com:443";
+      };
+      testnet04 = {
+        p2p = "https://estats.testnet.chainweb.com:443";
+        service = "https://estats.testnet.chainweb.com:443";
+        data = "https://estats.testnet.chainweb.com:443";
+      };
+    };
+    renderStatic = {
+        pkgs,
+        route ? "http://localhost:8000",
+        dataBackends ? publicDataBackends
+      }: pkgs.runCommand "block-explorer-static" { buildInputs = [ pkgs.coreutils ]; } ''
+        mkdir $out
+        ln -s ${self.packages.x86_64-linux.static}/* $out
+        ROUTE=$(base64 <<< ${route})
+        DATA_BACKENDS=$(base64 <<< ${builtins.toJSON dataBackends})
+        ${pkgs.mustache-go}/bin/mustache $out/index.html.mustache > $out/index.html <<EOF
+          {
+            "route": "$ROUTE",
+            "dataBackends": "$DATA_BACKENDS"
+          }
+        EOF
+      '';
+    x86-linux-only-packages = let
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
       in rec {
         exe = pkgs.runCommand "block-explorer" {
@@ -35,41 +64,35 @@
           }
           ''
             mkdir -p config/common config/frontend
-            cat - > config/common/route <<EOF
-              http://localhost:8000
-            EOF
+            echo http://localhost:8000 > config/common/route
             ROUTE64=$(base64 config/common/route)
-            cat - > config/frontend/data-backends <<EOF
-              {
-                "mainnet01": {
-                  "p2p": "https://estats.chainweb.com:443",
-                  "service": "https://estats.chainweb.com:443",
-                  "data": "https://estats.chainweb.com:443"
-                },
-                "testnet04": {
-                  "p2p": "https://estats.testnet.chainweb.com:443",
-                  "service": "https://estats.testnet.chainweb.com:443",
-                  "data": "https://estats.testnet.chainweb.com:443"
-                }
-              }
-            EOF
+
+            echo '{ "mock": "mock" }' > config/frontend/data-backends
             DATA_BACKENDS64=$(base64 config/frontend/data-backends)
+
             ${exe}/backend &
             sleep 1
+
             curl -s -o index.html http://0.0.0.0:8000
+
             mkdir -p $out
             # We'll convert index.html into a mustache template in which ROUTE64
             # is replaced with {{route}} and DATA_BACKENDS64 is replaced with {{dataBackends}}
-            # sed -e "s|$ROUTE64|{{route}}|g" \
-            #     -e "s|$DATA_BACKENDS64|{{dataBackends}}|g" \
-            #     index.html > $out/index.html.mustache
-            cp index.html $out/index.html
+            sed -e "s|$ROUTE64|{{route}}|g" \
+                -e "s|$DATA_BACKENDS64|{{dataBackends}}|g" \
+                index.html > $out/index.html.mustache
 
             bash ${flake/copy-assets.sh} ${exe}/frontend.jsexe.assets $out/ghcjs
             bash ${flake/copy-assets.sh} ${exe}/static.assets $out/static
             cp ${exe}/version $out/version
           '';
-        serveDefault = pkgs.writeShellScriptBin "block-explorer-serve-default"
+      };
+  in {
+    inherit selfWithoutFlake;
+    packages = forAllSystems ({pkgs, system, ...}:
+      pkgs.lib.optionalAttrs (system == "x86_64-linux") x86-linux-only-packages // rec {
+        default = renderStatic { inherit pkgs; };
+        servePublic = pkgs.writeShellScriptBin "block-explorer-serve-default"
           ''
             exec ${pkgs.caddy}/bin/caddy run \
               --config <(${pkgs.caddy}/bin/caddy adapt --config ${pkgs.writeText "Caddyfile" ''
@@ -78,12 +101,12 @@
                     @root path /
                     redir @root /
 
-                    root * ${static}
+                    root * ${default}
                     file_server
                     try_files {path} {path}/ /index.html
                 }
             ''})
           '';
-      };
+      });
   };
 }
