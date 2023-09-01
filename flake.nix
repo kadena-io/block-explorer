@@ -20,18 +20,21 @@
         baseNameOf path != ".github"
       ;
     };
-    publicDataBackends = {
-      mainnet01 = {
-        p2p = "https://estats.chainweb.com:443";
-        service = "https://estats.chainweb.com:443";
-        data = "https://estats.chainweb.com:443";
+    publicDataBackends = let
+      estats = "https://estats.chainweb.com:443";
+      estats-testnet = "https://estats.testnet.chainweb.com:443";
+      devnet = "http://localhost:8080";
+      constNetConfig = url: {
+        p2p = url;
+        service = url;
+        data = url;
       };
-      testnet04 = {
-        p2p = "https://estats.testnet.chainweb.com:443";
-        service = "https://estats.testnet.chainweb.com:443";
-        data = "https://estats.testnet.chainweb.com:443";
+      in {
+        mainnet01 = constNetConfig estats;
+        testnet04 = constNetConfig estats-testnet;
+        development = constNetConfig devnet;
+        fast-development = constNetConfig devnet;
       };
-    };
     renderStatic = {
         pkgs,
         route ? "http://localhost:8000",

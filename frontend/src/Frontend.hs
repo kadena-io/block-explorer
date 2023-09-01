@@ -92,6 +92,8 @@ mainDispatch route ndbs = do
       aboutWidget
     FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
     FR_Testnet -> networkDispatch route ndbs NetId_Testnet
+    FR_Development -> networkDispatch route ndbs NetId_Development
+    FR_FastDevelopment -> networkDispatch route ndbs NetId_FastDevelopment
     FR_Customnet -> subPairRoute_ $ \host ->
       networkDispatch route ndbs (NetId_Custom host)
 

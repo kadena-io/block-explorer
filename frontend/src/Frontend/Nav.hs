@@ -98,6 +98,8 @@ linkItemNewTab nm url = do
 networkName :: NetId -> Text
 networkName NetId_Mainnet = "Mainnet"
 networkName NetId_Testnet = "Testnet"
+networkName NetId_Development = "Development"
+networkName NetId_FastDevelopment = "FastDevelopment"
 networkName (NetId_Custom _) = "Custom Network"
 
 networkWidget
