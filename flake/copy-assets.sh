@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eux
+set -e
 
 # Source directory
 src="$1"
