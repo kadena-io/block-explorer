@@ -16,7 +16,9 @@
       filter = path: type:
         baseNameOf path != "flake.nix" &&
         baseNameOf path != "flake.lock" &&
-        baseNameOf path != "flake";
+        baseNameOf path != "flake" &&
+        baseNameOf path != ".github"
+      ;
     };
     publicDataBackends = {
       mainnet01 = {
