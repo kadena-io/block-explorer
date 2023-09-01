@@ -3,8 +3,6 @@
     nixpkgs.url = "github:NixOS/nixpkgs";
   };
   outputs = { self, nixpkgs }: let
-    system = "x86_64-linux";
-    pkgs = nixpkgs.legacyPackages.${system};
     obelisk = builtins.fetchTarball {
       url = "https://github.com/obsidiansystems/obelisk/archive/7ad33cbe3e84b209e83c505ce25486445bbd602e.tar.gz";
       sha256 = "sha256:0dlk8y6rxc87crw7764zq2py7nqn38lw496ca1y893m9gdq8qdkz";
@@ -45,9 +43,12 @@
       url = "https://github.com/kadena-io/pact/archive/d4452cbf7cbf589be294ec0980bd44e97edb4729.tar.gz";
       sha256 = "sha256:0qk8hfpgcwg6s6ny71hnk1w4pwlrcy4bbba2riwmiiha7bapj3n2";
     };
-
+    forAllSystems = f:
+      nixpkgs.lib.genAttrs [
+        "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aaarch64-darwin"
+      ] (system: f nixpkgs.legacyPackages.${system});
   in {
-    defaultPackage.${system} = pkgs.runCommand "block-explorer"
+    defaultPackage = forAllSystems (pkgs: pkgs.runCommand "block-explorer"
       {
         buildInputs = [ pkgs.nix ];
         NIX_PATH = "nixpkgs=${nixpkgs.outPath}";
@@ -69,6 +70,6 @@
         OUT=$(nix-build ${self} -A exe)
         ln -s $OUT $out
       ''
-      ;
+    );
   };
 }
