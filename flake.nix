@@ -104,9 +104,7 @@
             exec ${pkgs.caddy}/bin/caddy run \
               --config <(${pkgs.caddy}/bin/caddy adapt --config ${pkgs.writeText "Caddyfile" ''
                 http://:8000 {
-                    # Redirect from root to /
-                    @root path /
-                    redir @root /
+                    redir / /mainnet
 
                     root * ${default}
                     file_server
