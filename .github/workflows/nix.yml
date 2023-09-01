@@ -37,7 +37,7 @@ jobs:
     - name: Build and cache artifacts
       run: |
         sudo sh -c 'echo "extra-experimental-features = recursive-nix" >> /etc/nix/nix.conf'
-        systemctl restart nix-daemon
+        sudo systemctl restart nix-daemon
 
         echo Build the static site
         nix build .#static --log-lines 500 --show-trace
