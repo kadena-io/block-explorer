@@ -84,8 +84,13 @@
                 -e "s|$DATA_BACKENDS64|{{dataBackends}}|g" \
                 index.html > $out/index.html.mustache
 
-            bash ${flake/copy-assets.sh} ${exe}/frontend.jsexe.assets $out/ghcjs
-            bash ${flake/copy-assets.sh} ${exe}/static.assets $out/static
+            bash ${flake/copy-assets.sh} ${exe}/frontend.jsexe.assets ghcjs
+            find ghcjs \( -name "*.unminified.js" -o -name "*.js.map" \) -exec rm -f {} +
+            cp -Lr ghcjs $out/ghcjs
+
+            bash ${flake/copy-assets.sh} ${exe}/static.assets static
+            cp -Lr static $out/static
+
             cp ${exe}/version $out/version
           '';
       };
