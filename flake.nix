@@ -45,7 +45,7 @@
     };
     forAllSystems = f:
       nixpkgs.lib.genAttrs [
-        "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aaarch64-darwin"
+        "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin"
       ] (system: f nixpkgs.legacyPackages.${system});
   in {
     defaultPackage = forAllSystems (pkgs: pkgs.runCommand "block-explorer"
