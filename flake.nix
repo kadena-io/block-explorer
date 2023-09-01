@@ -106,6 +106,11 @@
                 http://:8000 {
                     redir / /mainnet
 
+                    @notGhcjsOrStatic not path /ghcjs/* /static/*
+                    header @notGhcjsOrStatic Cache-Control "no-store, no-cache, must-revalidate, post-check=0, pre-check=0"
+                    header @notGhcjsOrStatic Pragma "no-cache"
+                    header @notGhcjsOrStatic Expires "0"
+
                     root * ${default}
                     file_server
                     try_files {path} {path}/ /index.html
