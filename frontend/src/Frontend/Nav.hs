@@ -112,8 +112,7 @@ networkWidget netId = mdo
     text $ networkName netId
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      networkItem "Testnet" $ FR_Prefix :/ FR_Testnet :/ NetRoute_Chainweb :/ ()
-      networkItem "Mainnet" $ FR_Prefix :/ FR_Mainnet :/ NetRoute_Chainweb :/ ()
+      networkItem "FastDevelopment" $ FR_Prefix :/ FR_FastDevelopment :/ NetRoute_Chainweb :/ ()
   route <- askRoute
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e

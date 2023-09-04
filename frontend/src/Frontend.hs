@@ -89,7 +89,7 @@ mainDispatch route ndbs = do
     FR_Prefix -> subRoute_ $ \case
       FR_Main -> setRoute ((FR_Prefix :/ FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
       FR_About -> prerender_ blank $ do
-        divClass "ui fixed inverted menu" $ nav NetId_Mainnet
+        divClass "ui fixed inverted menu" $ nav NetId_FastDevelopment
         aboutWidget
       FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
       FR_Testnet -> networkDispatch route ndbs NetId_Testnet
