@@ -87,7 +87,7 @@ mainDispatch route ndbs = do
   pb <- getPostBuild
   subRoute_ $ \case
     FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
-    FR_About -> do
+    FR_About -> prerender_ blank $ do
       divClass "ui fixed inverted menu" $ nav NetId_Mainnet
       aboutWidget
     FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
