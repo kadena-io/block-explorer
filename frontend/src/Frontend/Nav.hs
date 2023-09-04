@@ -31,13 +31,13 @@ nav
   -> m ()
 nav netId = do
   divClass "ui container" $ do
-    elAttr "a" ("class" =: "header item" <>
-                "href" =: "/" <>
-                "style" =: "color: #e8098f;") $
+    let mainLink = routeLinkAttr (FR_Prefix :/ FR_Main :/ ())
+    mainLink ("class" =: "header item" <> "style" =: "color: #e8098f;") $
       elAttr "img" ("class" =: "logo" <>
                     "src" =: static @"kadena-k-logo.png") $
         text "Kadena Block Explorer"
-    elAttr "a" ("class" =: "header item" <> "href" =: "/") $ text "Kadena Block Explorer"
+    routeLinkAttr (FR_Prefix :/ FR_Main :/ ()) ("class" =: "header item") $
+      text "Kadena Block Explorer"
     divClass "right menu" $ do
       routeLinkAttr (FR_Prefix :/ FR_About :/ ()) ("class" =: "item") $ text "About"
       getStarted
