@@ -415,8 +415,10 @@ mainPageWidget netId (Just height) = do
 
     _ <- divClass "ui segment" $ do
       elDynAttr "div" (statAttrs <$> stats) $ do
-          statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-          statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
+          -- These statistics are nonsensical on fast-development
+          unless (netId == NetId_FastDevelopment) $ do
+            statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+            statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
 
           networkView $ ffor (statsList <$> stats) $ \ps -> do
             forM ps $ \(n,v) -> statistic n $ text v
