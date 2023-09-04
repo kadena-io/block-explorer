@@ -382,7 +382,8 @@ mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
     appState <- ask
     let si = _as_serverInfo appState
-    (dbt, stats, mrecent) <- initBlockTable height
+    (dbt', stats, mrecent) <- initBlockTable height
+    dbt <- downsampleDynamic dbt'
     let maxBlockHeight = blockTableMaxHeight <$> dbt
 
     searchWidget netId
@@ -464,6 +465,19 @@ mainPageWidget netId (Just height) = do
           (h', m) = divMod m' 60
           (d, h) = divMod h' 24
       in (d, h, m , s)
+    downsampleDynamic d = do
+      initval <- sample $ current d
+      let e = updated d
+      downsampledE <- downsample e
+      holdDyn initval downsampledE
+    downsample e = do
+      cnt <- count e
+      return $ attachWithMaybe countAndFilter (current $ cnt) e
+      where
+        countAndFilter :: Int -> a -> Maybe a
+        countAndFilter n val | n `mod` 10 == 0 = Just val
+                             | otherwise      = Nothing
+
 
 --mkGrid n [] = []
 --mkGrid n xs = let (x,rest) = splitAt n xs
