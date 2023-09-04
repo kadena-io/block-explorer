@@ -383,7 +383,9 @@ mainPageWidget netId (Just height) = do
     appState <- ask
     let si = _as_serverInfo appState
     (dbt', stats, mrecent) <- initBlockTable height
-    dbt <- downsampleDynamic dbt'
+    dbt <- if netId == NetId_FastDevelopment
+      then downsampleDynamic dbt'
+      else return dbt'
     let maxBlockHeight = blockTableMaxHeight <$> dbt
 
     searchWidget netId
