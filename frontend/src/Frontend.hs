@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PackageImports             #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
@@ -42,9 +43,9 @@ import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Text.Printf
-import qualified JSDOM as DOM
-import qualified JSDOM.EventM as DOM
-import qualified JSDOM.Generated.Document as DOM
+import qualified GHCJS.DOM as DOM
+import qualified GHCJS.DOM.EventM as DOM
+import qualified "ghcjs-dom" GHCJS.DOM.Document as DOM
 import           Reflex.Dom.Builder.Immediate (wrapDomEvent)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.BlockHeader
