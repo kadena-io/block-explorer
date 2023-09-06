@@ -42,6 +42,10 @@ import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Text.Printf
+import qualified JSDOM as DOM
+import qualified JSDOM.EventM as DOM
+import qualified JSDOM.Generated.Document as DOM
+import           Reflex.Dom.Builder.Immediate (wrapDomEvent)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockHeaderTx
@@ -372,7 +376,7 @@ mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
 mkSearchRoute netId str AccountSearch = mkAccountRoute netId "coin" str Nothing Nothing Nothing
 
 mainPageWidget
-  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
+  :: forall js r t m. (MonadJSM m, MonadAppIO r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId
@@ -382,10 +386,16 @@ mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
     appState <- ask
     let si = _as_serverInfo appState
-    (dbt', stats, mrecent) <- initBlockTable height
-    dbt <- if netId == NetId_FastDevelopment
-      then downsampleDynamic dbt'
-      else return dbt'
+    (dbt'', stats, mrecent) <- initBlockTable height
+    dbt' <- if netId == NetId_FastDevelopment
+      then downsampleDynamic dbt''
+      else return dbt''
+    dbt <- do
+      visibilityEvent <- getPageVisibilityEvent
+      isVisible <- hold True (not <$> visibilityEvent)
+      initVal <- sample $ current dbt'
+      holdDyn initVal (gate isVisible (updated dbt'))
+
     let maxBlockHeight = blockTableMaxHeight <$> dbt
 
     searchWidget netId
@@ -467,6 +477,13 @@ mainPageWidget netId (Just height) = do
           (h', m) = divMod m' 60
           (d, h) = divMod h' 24
       in (d, h, m , s)
+
+    -- getPageVisibilityEvent :: MonadWidget t m => m (Event t Bool)
+    getPageVisibilityEvent = do
+      doc <- DOM.currentDocumentUnchecked
+      visibilityChangeEvent <- wrapDomEvent doc (`DOM.on` DOM.visibilitychange) (pure ())
+      performEvent $ (DOM.getHidden doc) <$ visibilityChangeEvent
+
     downsampleDynamic d = do
       initval <- sample $ current d
       let e = updated d
