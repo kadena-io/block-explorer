@@ -387,15 +387,12 @@ mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
     appState <- ask
     let si = _as_serverInfo appState
-    (dbt'', stats, mrecent) <- initBlockTable height
-    dbt' <- if netId == NetId_FastDevelopment
-      then downsampleDynamic dbt''
-      else return dbt''
-    dbt <- do
-      visibilityEvent <- getPageVisibilityEvent
-      isVisible <- hold True (not <$> visibilityEvent)
-      initVal <- sample $ current dbt'
-      holdDyn initVal (gate isVisible (updated dbt'))
+    (dbt, stats, mrecent) <- do
+      (dbt, stats, mrecent) <- initBlockTable height
+      (,,)
+        <$> cullMainPageUpdates dbt
+        <*> cullMainPageUpdates stats
+        <*> mapM cullMainPageUpdates mrecent
 
     let maxBlockHeight = blockTableMaxHeight <$> dbt
 
@@ -479,24 +476,27 @@ mainPageWidget netId (Just height) = do
           (d, h) = divMod h' 24
       in (d, h, m , s)
 
-    -- getPageVisibilityEvent :: MonadWidget t m => m (Event t Bool)
+    -- Filter down updates to the main page widget `Dynamic`s so that we don't
+    -- re-render more than once a second and also when the page is not visible.
+    cullMainPageUpdates :: Dynamic t a -> RoutedT t r m (Dynamic t a)
+    cullMainPageUpdates d = do
+      -- 1. Visibility Filtering
+      visibilityEvent <- getPageVisibilityEvent
+      isVisible <- hold True (not <$> visibilityEvent)
+      let visibilityFilteredE = gate isVisible (updated d)
+
+      -- 2. Time-based Downsampling
+      throttledE <- throttle 1 visibilityFilteredE
+
+      -- Construct final Dynamic
+      initval <- sample $ current d
+      holdDyn initval throttledE
+
+    getPageVisibilityEvent :: RoutedT t r m (Event t Bool)
     getPageVisibilityEvent = do
       doc <- DOM.currentDocumentUnchecked
       visibilityChangeEvent <- wrapDomEvent doc (`DOM.on` DOM.visibilitychange) (pure ())
       performEvent $ (DOM.getHidden doc) <$ visibilityChangeEvent
-
-    downsampleDynamic d = do
-      initval <- sample $ current d
-      let e = updated d
-      downsampledE <- downsample e
-      holdDyn initval downsampledE
-    downsample e = do
-      cnt <- count e
-      return $ attachWithMaybe countAndFilter (current $ cnt) e
-      where
-        countAndFilter :: Int -> a -> Maybe a
-        countAndFilter n val | n `mod` 10 == 0 = Just val
-                             | otherwise      = Nothing
 
 
 --mkGrid n [] = []
