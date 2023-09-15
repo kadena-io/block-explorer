@@ -477,7 +477,7 @@ mainPageWidget netId (Just height) = do
       in (d, h, m , s)
 
     -- Filter down updates to the main page widget `Dynamic`s so that we don't
-    -- re-render more than once a second and also when the page is not visible.
+    -- re-render too frequently and also when the page is not visible.
     cullMainPageUpdates :: Dynamic t a -> RoutedT t r m (Dynamic t a)
     cullMainPageUpdates d = do
       -- 1. Visibility Filtering
@@ -486,7 +486,7 @@ mainPageWidget netId (Just height) = do
       let visibilityFilteredE = gate isVisible (updated d)
 
       -- 2. Time-based Downsampling
-      throttledE <- throttle 1 visibilityFilteredE
+      throttledE <- throttle 2 visibilityFilteredE
 
       -- Construct final Dynamic
       initval <- sample $ current d
