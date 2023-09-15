@@ -31,15 +31,15 @@ nav
   -> m ()
 nav netId = do
   divClass "ui container" $ do
-    let mainLink = routeLinkAttr (FR_Prefix :/ FR_Main :/ ())
+    let mainLink = routeLinkAttr (FR_Main :/ ())
     mainLink ("class" =: "header item" <> "style" =: "color: #e8098f;") $
       elAttr "img" ("class" =: "logo" <>
                     "src" =: static @"kadena-k-logo.png") $
         text "Kadena Block Explorer"
-    routeLinkAttr (FR_Prefix :/ FR_Main :/ ()) ("class" =: "header item") $
+    routeLinkAttr (FR_Main :/ ()) ("class" =: "header item") $
       text "Kadena Block Explorer"
     divClass "right menu" $ do
-      routeLinkAttr (FR_Prefix :/ FR_About :/ ()) ("class" =: "item") $ text "About"
+      routeLinkAttr (FR_About :/ ()) ("class" =: "item") $ text "About"
       getStarted
       learnMore
       networkWidget netId
@@ -112,7 +112,8 @@ networkWidget netId = mdo
     text $ networkName netId
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      networkItem "FastDevelopment" $ FR_Prefix :/ FR_FastDevelopment :/ NetRoute_Chainweb :/ ()
+      networkItem "Testnet" $ FR_Testnet :/ NetRoute_Chainweb :/ ()
+      networkItem "Mainnet" $ FR_Mainnet :/ NetRoute_Chainweb :/ ()
   route <- askRoute
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e

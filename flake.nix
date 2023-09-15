@@ -78,7 +78,7 @@
             ${exe}/backend &
             sleep 1
 
-            curl -s -o index.html http://0.0.0.0:8000/explorer/about
+            curl -s -o index.html http://0.0.0.0:8000/about
 
             mkdir -p $out
             # We'll convert index.html into a mustache template in which ROUTE64

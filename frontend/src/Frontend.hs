@@ -91,17 +91,16 @@ mainDispatch
 mainDispatch route ndbs = do
   pb <- getPostBuild
   subRoute_ $ \case
-    FR_Prefix -> subRoute_ $ \case
-      FR_Main -> setRoute ((FR_Prefix :/ FR_FastDevelopment :/ NetRoute_Chainweb :/ ()) <$ pb)
-      FR_About -> prerender_ blank $ do
-        divClass "ui fixed inverted menu" $ nav NetId_FastDevelopment
-        aboutWidget
-      FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
-      FR_Testnet -> networkDispatch route ndbs NetId_Testnet
-      FR_Development -> networkDispatch route ndbs NetId_Development
-      FR_FastDevelopment -> networkDispatch route ndbs NetId_FastDevelopment
-      FR_Customnet -> subPairRoute_ $ \host ->
-        networkDispatch route ndbs (NetId_Custom host)
+    FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
+    FR_About -> prerender_ blank $ do
+      divClass "ui fixed inverted menu" $ nav NetId_Mainnet
+      aboutWidget
+    FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
+    FR_Testnet -> networkDispatch route ndbs NetId_Testnet
+    FR_Development -> networkDispatch route ndbs NetId_Development
+    FR_FastDevelopment -> networkDispatch route ndbs NetId_FastDevelopment
+    FR_Customnet -> subPairRoute_ $ \host ->
+      networkDispatch route ndbs (NetId_Custom host)
 
 networkDispatch
   :: (ObeliskWidget js t (R FrontendRoute) m)

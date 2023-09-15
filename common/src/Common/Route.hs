@@ -138,16 +138,13 @@ netRouteEncoder = pathComponentEncoder $ \case
   NetRoute_TransferSearch -> PathSegment "transfer" accountParamsEncoder
 
 data FrontendRoute :: * -> * where
-  FR_Prefix :: FrontendRoute (R FrontendRoute')
-
-data FrontendRoute' :: * -> * where
-  FR_Main :: FrontendRoute' ()
-  FR_About :: FrontendRoute' ()
-  FR_Mainnet :: FrontendRoute' (R NetRoute)
-  FR_Testnet :: FrontendRoute' (R NetRoute)
-  FR_Development :: FrontendRoute' (R NetRoute)
-  FR_FastDevelopment :: FrontendRoute' (R NetRoute)
-  FR_Customnet :: FrontendRoute' (NetConfig, R NetRoute)
+  FR_Main :: FrontendRoute ()
+  FR_About :: FrontendRoute ()
+  FR_Mainnet :: FrontendRoute (R NetRoute)
+  FR_Testnet :: FrontendRoute (R NetRoute)
+  FR_Development :: FrontendRoute (R NetRoute)
+  FR_FastDevelopment :: FrontendRoute (R NetRoute)
+  FR_Customnet :: FrontendRoute (NetConfig, R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
 backendRouteEncoder
@@ -157,22 +154,21 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
     FullRoute_Backend backendRoute -> case backendRoute of
       BackendRoute_Missing -> PathSegment "missing" $ unitEncoder mempty
     FullRoute_Frontend obeliskRoute -> obeliskRouteSegment obeliskRoute $ \case
-      FR_Prefix -> PathSegment "explorer" $ pathComponentEncoder $ \case
-        -- The encoder given to PathEnd determines how to parse query parameters,
-        -- in this example, we have none, so we insist on it.
-        FR_Main -> PathEnd $ unitEncoder mempty
-        FR_About -> PathSegment "about" $ unitEncoder mempty
-        FR_Mainnet -> PathSegment "mainnet" netRouteEncoder
-        FR_Testnet -> PathSegment "testnet" netRouteEncoder
-        FR_Development -> PathSegment "development" netRouteEncoder
-        FR_FastDevelopment -> PathSegment "fast-development" netRouteEncoder
-        FR_Customnet -> PathSegment "custom" $ pathParamEncoder netconfigEncoder netRouteEncoder
+      -- The encoder given to PathEnd determines how to parse query parameters,
+      -- in this example, we have none, so we insist on it.
+      FR_Main -> PathEnd $ unitEncoder mempty
+      FR_About -> PathSegment "about" $ unitEncoder mempty
+      FR_Mainnet -> PathSegment "mainnet" netRouteEncoder
+      FR_Testnet -> PathSegment "testnet" netRouteEncoder
+      FR_Development -> PathSegment "development" netRouteEncoder
+      FR_FastDevelopment -> PathSegment "fast-development" netRouteEncoder
+      FR_Customnet -> PathSegment "custom" $ pathParamEncoder netconfigEncoder netRouteEncoder
 
 netconfigEncoder :: Encoder (Either Text) (Either Text) NetConfig Text
 netconfigEncoder = reviewEncoder (prism' netConfigToRouteText netConfigFromRouteText)
 
 addNetRoute :: NetId -> Int -> R ChainRoute -> R FrontendRoute
-addNetRoute netId c r = FR_Prefix :/ case netId of
+addNetRoute netId c r = case netId of
   NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ (c, r)
   NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ (c, r)
   NetId_Development -> FR_Development :/ NetRoute_Chain :/ (c, r)
@@ -180,7 +176,7 @@ addNetRoute netId c r = FR_Prefix :/ case netId of
   NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_Chain :/ (c, r)))
 
 mkNetRoute :: NetId -> DSum NetRoute Identity -> R FrontendRoute
-mkNetRoute netId r = FR_Prefix :/ case netId of
+mkNetRoute netId r = case netId of
     NetId_Mainnet -> FR_Mainnet :/ r
     NetId_Testnet -> FR_Testnet :/ r
     NetId_Development -> FR_Development :/ r
@@ -190,7 +186,6 @@ mkNetRoute netId r = FR_Prefix :/ case netId of
 concat <$> mapM deriveRouteComponent
   [ ''BackendRoute
   , ''FrontendRoute
-  , ''FrontendRoute'
   , ''BlockRoute
   , ''ChainRoute
   , ''NetRoute
@@ -204,11 +199,11 @@ getAppRoute = do
       Just r -> return $ T.dropWhileEnd (== '/') $ T.strip $ decodeUtf8 r
 
 -- | Provide a human-readable name for a given section
-tabTitle :: DomBuilder t m => Some FrontendRoute' -> m ()
+tabTitle :: DomBuilder t m => Some FrontendRoute -> m ()
 tabTitle = text . frToText
 
 -- | Provide a human-readable name for a given section
-frToText :: Some FrontendRoute' -> Text
+frToText :: Some FrontendRoute -> Text
 frToText (Some.Some sec) = case sec of
   FR_Main -> "Home"
   FR_About -> "About"
