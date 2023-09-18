@@ -111,6 +111,8 @@ defaultDataBackends :: DataBackends
 defaultDataBackends = DataBackends $ M.fromList
   [ ("mainnet01", netHost NetId_Mainnet)
   , ("testnet04", netHost NetId_Testnet)
+  , ("development", netHost NetId_Development)
+  , ("fast-development", netHost NetId_FastDevelopment)
   ]
 
 
@@ -128,6 +130,8 @@ instance FromJSON ChainwebHost
 data NetId
    = NetId_Mainnet
    | NetId_Testnet
+   | NetId_Development
+   | NetId_FastDevelopment
    | NetId_Custom NetConfig
    deriving (Eq,Ord)
 
@@ -135,6 +139,8 @@ netIdPathSegment :: NetId -> Text
 netIdPathSegment = \case
   NetId_Mainnet -> "mainnet"
   NetId_Testnet -> "testnet"
+  NetId_Development -> "development"
+  NetId_FastDevelopment -> "fast-development"
   NetId_Custom _ -> "custom"
 
 --getNetConfig :: NetId -> AppConfig -> NetConfig
@@ -145,6 +151,8 @@ netIdPathSegment = \case
 netHost :: NetId -> NetConfig
 netHost NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h (Just h)
 netHost NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h Nothing
+netHost NetId_Development     = let h = Host "http" "localhost" 8080 in NetConfig h h (Just h)
+netHost NetId_FastDevelopment = let h = Host "http" "localhost" 8080 in NetConfig h h Nothing
 netHost (NetId_Custom nc) = nc
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a

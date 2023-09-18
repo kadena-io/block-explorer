@@ -108,8 +108,8 @@ accountParamsEncoder = unsafeMkEncoder $ EncoderImpl dec enc where
     [] -> Left "Something about no account name in the url."
     _ -> Left "Something about unexpected path segments after the account name."
   enc ap = ([apAccount ap], params) where
-    params = 
-      M.singleton "token" (Just $ apToken ap) 
+    params =
+      M.singleton "token" (Just $ apToken ap)
       <> maybe mempty (M.singleton "chain" . Just . T.pack . show)  (apChain ap)
       <> maybe mempty (M.singleton "minheight" . Just . T.pack . show) (apMinHeight ap)
       <> maybe mempty (M.singleton "maxheight" . Just . T.pack . show) (apMaxHeight ap)
@@ -142,6 +142,8 @@ data FrontendRoute :: * -> * where
   FR_About :: FrontendRoute ()
   FR_Mainnet :: FrontendRoute (R NetRoute)
   FR_Testnet :: FrontendRoute (R NetRoute)
+  FR_Development :: FrontendRoute (R NetRoute)
+  FR_FastDevelopment :: FrontendRoute (R NetRoute)
   FR_Customnet :: FrontendRoute (NetConfig, R NetRoute)
   -- This type is used to define frontend routes, i.e. ones for which the backend will serve the frontend.
 
@@ -158,6 +160,8 @@ backendRouteEncoder = handleEncoder (const (FullRoute_Backend BackendRoute_Missi
       FR_About -> PathSegment "about" $ unitEncoder mempty
       FR_Mainnet -> PathSegment "mainnet" netRouteEncoder
       FR_Testnet -> PathSegment "testnet" netRouteEncoder
+      FR_Development -> PathSegment "development" netRouteEncoder
+      FR_FastDevelopment -> PathSegment "fast-development" netRouteEncoder
       FR_Customnet -> PathSegment "custom" $ pathParamEncoder netconfigEncoder netRouteEncoder
 
 netconfigEncoder :: Encoder (Either Text) (Either Text) NetConfig Text
@@ -167,12 +171,16 @@ addNetRoute :: NetId -> Int -> R ChainRoute -> R FrontendRoute
 addNetRoute netId c r = case netId of
   NetId_Mainnet -> FR_Mainnet :/ NetRoute_Chain :/ (c, r)
   NetId_Testnet -> FR_Testnet :/ NetRoute_Chain :/ (c, r)
+  NetId_Development -> FR_Development :/ NetRoute_Chain :/ (c, r)
+  NetId_FastDevelopment -> FR_FastDevelopment :/ NetRoute_Chain :/ (c, r)
   NetId_Custom host -> FR_Customnet :/ (host, (NetRoute_Chain :/ (c, r)))
 
 mkNetRoute :: NetId -> DSum NetRoute Identity -> R FrontendRoute
 mkNetRoute netId r = case netId of
     NetId_Mainnet -> FR_Mainnet :/ r
     NetId_Testnet -> FR_Testnet :/ r
+    NetId_Development -> FR_Development :/ r
+    NetId_FastDevelopment -> FR_FastDevelopment :/ r
     NetId_Custom host -> FR_Customnet :/ (host, r)
 
 concat <$> mapM deriveRouteComponent
@@ -201,4 +209,6 @@ frToText (Some.Some sec) = case sec of
   FR_About -> "About"
   FR_Mainnet -> "Block"
   FR_Testnet -> "Block"
+  FR_Development -> "Block"
+  FR_FastDevelopment -> "Block"
   FR_Customnet -> "Block"

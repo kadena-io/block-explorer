@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PackageImports             #-}
 {-# LANGUAGE RecursiveDo                #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
@@ -42,6 +43,10 @@ import           Reflex.Dom.Core hiding (Value)
 import           Reflex.Dom.EventSource
 import           Reflex.Network
 import           Text.Printf
+import qualified GHCJS.DOM as DOM
+import qualified GHCJS.DOM.EventM as DOM
+import qualified "ghcjs-dom" GHCJS.DOM.Document as DOM
+import           Reflex.Dom.Builder.Immediate (wrapDomEvent)
 ------------------------------------------------------------------------------
 import           Chainweb.Api.BlockHeader
 import           Chainweb.Api.BlockHeaderTx
@@ -86,12 +91,16 @@ mainDispatch
 mainDispatch route ndbs = do
   pb <- getPostBuild
   subRoute_ $ \case
-    FR_Main -> setRoute ((FR_Mainnet :/ NetRoute_Chainweb :/ ()) <$ pb)
-    FR_About -> do
+    FR_Main -> do
+      r <- mainRoute
+      setRoute (r <$ pb)
+    FR_About -> prerender_ blank $ do
       divClass "ui fixed inverted menu" $ nav NetId_Mainnet
       aboutWidget
     FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
     FR_Testnet -> networkDispatch route ndbs NetId_Testnet
+    FR_Development -> networkDispatch route ndbs NetId_Development
+    FR_FastDevelopment -> networkDispatch route ndbs NetId_FastDevelopment
     FR_Customnet -> subPairRoute_ $ \host ->
       networkDispatch route ndbs (NetId_Custom host)
 
@@ -369,7 +378,7 @@ mkSearchRoute netId str EventSearch = mkEventSearchRoute netId str Nothing
 mkSearchRoute netId str AccountSearch = mkAccountRoute netId "coin" str Nothing Nothing Nothing
 
 mainPageWidget
-  :: forall js r t m. (MonadAppIO r t m, Prerender js t m,
+  :: forall js r t m. (MonadJSM m, MonadAppIO r t m, Prerender js t m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m,
       DomBuilderSpace m ~ GhcjsDomSpace)
   => NetId
@@ -379,7 +388,13 @@ mainPageWidget _ Nothing = text "Error getting cut from server"
 mainPageWidget netId (Just height) = do
     appState <- ask
     let si = _as_serverInfo appState
-    (dbt, stats, mrecent) <- initBlockTable height
+    (dbt, stats, mrecent) <- do
+      (dbt, stats, mrecent) <- initBlockTable height
+      (,,)
+        <$> cullMainPageUpdates dbt
+        <*> cullMainPageUpdates stats
+        <*> mapM cullMainPageUpdates mrecent
+
     let maxBlockHeight = blockTableMaxHeight <$> dbt
 
     searchWidget netId
@@ -412,8 +427,10 @@ mainPageWidget netId (Just height) = do
 
     _ <- divClass "ui segment" $ do
       elDynAttr "div" (statAttrs <$> stats) $ do
-          statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
-          statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
+          -- These statistics are nonsensical on fast-development
+          unless (netId == NetId_FastDevelopment) $ do
+            statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
+            statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
 
           networkView $ ffor (statsList <$> stats) $ \ps -> do
             forM ps $ \(n,v) -> statistic n $ text v
@@ -459,6 +476,29 @@ mainPageWidget netId (Just height) = do
           (h', m) = divMod m' 60
           (d, h) = divMod h' 24
       in (d, h, m , s)
+
+    -- Filter down updates to the main page widget `Dynamic`s so that we don't
+    -- re-render too frequently and also when the page is not visible.
+    cullMainPageUpdates :: Dynamic t a -> RoutedT t r m (Dynamic t a)
+    cullMainPageUpdates d = do
+      -- 1. Visibility Filtering
+      visibilityEvent <- getPageVisibilityEvent
+      isVisible <- hold True (not <$> visibilityEvent)
+      let visibilityFilteredE = gate isVisible (updated d)
+
+      -- 2. Time-based Downsampling
+      throttledE <- throttle 2 visibilityFilteredE
+
+      -- Construct final Dynamic
+      initval <- sample $ current d
+      holdDyn initval throttledE
+
+    getPageVisibilityEvent :: RoutedT t r m (Event t Bool)
+    getPageVisibilityEvent = do
+      doc <- DOM.currentDocumentUnchecked
+      visibilityChangeEvent <- wrapDomEvent doc (`DOM.on` DOM.visibilitychange) (pure ())
+      performEvent $ (DOM.getHidden doc) <$ visibilityChangeEvent
+
 
 --mkGrid n [] = []
 --mkGrid n xs = let (x,rest) = splitAt n xs
