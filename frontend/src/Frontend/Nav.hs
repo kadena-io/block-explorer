@@ -24,6 +24,12 @@ import           Common.Route
 import           Common.Types
 ------------------------------------------------------------------------------
 
+-- We want to avoid a double setRoute in the navigation bar, so we link directly
+-- to the target of the main route. We declare mainRoute as a monadic type because
+-- we might need to do some dynamic routing in the future without changing call sites.
+mainRoute :: Monad m => m (R FrontendRoute)
+mainRoute = return $ FR_Mainnet :/ NetRoute_Chainweb :/ ()
+
 nav
   :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m,
       RouteToUrl (R FrontendRoute) m, SetRoute t (R FrontendRoute) m, Routed t r m)
@@ -31,7 +37,7 @@ nav
   -> m ()
 nav netId = do
   divClass "ui container" $ do
-    let mainLink = routeLinkAttr (FR_Main :/ ())
+    mainLink <- routeLinkAttr <$> mainRoute
     mainLink ("class" =: "header item" <> "style" =: "color: #e8098f;") $
       elAttr "img" ("class" =: "logo" <>
                     "src" =: static @"kadena-k-logo.png") $
