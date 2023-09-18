@@ -28,7 +28,7 @@ import           Common.Types
 -- to the target of the main route. We declare mainRoute as a monadic type because
 -- we might need to do some dynamic routing in the future without changing call sites.
 mainRoute :: Monad m => m (R FrontendRoute)
-mainRoute = return $ FR_Mainnet :/ NetRoute_Chainweb :/ ()
+mainRoute = return $ FR_Prefix :/ FR_FastDevelopment :/ NetRoute_Chainweb :/ ()
 
 nav
   :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m,
@@ -42,10 +42,10 @@ nav netId = do
       elAttr "img" ("class" =: "logo" <>
                     "src" =: static @"kadena-k-logo.png") $
         text "Kadena Block Explorer"
-    routeLinkAttr (FR_Main :/ ()) ("class" =: "header item") $
+    routeLinkAttr (FR_Prefix :/ FR_Main :/ ()) ("class" =: "header item") $
       text "Kadena Block Explorer"
     divClass "right menu" $ do
-      routeLinkAttr (FR_About :/ ()) ("class" =: "item") $ text "About"
+      routeLinkAttr (FR_Prefix :/ FR_About :/ ()) ("class" =: "item") $ text "About"
       getStarted
       learnMore
       networkWidget netId
@@ -118,8 +118,7 @@ networkWidget netId = mdo
     text $ networkName netId
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      networkItem "Testnet" $ FR_Testnet :/ NetRoute_Chainweb :/ ()
-      networkItem "Mainnet" $ FR_Mainnet :/ NetRoute_Chainweb :/ ()
+      networkItem "FastDevelopment" $ FR_Prefix :/ FR_FastDevelopment :/ NetRoute_Chainweb :/ ()
   route <- askRoute
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
