@@ -77,9 +77,9 @@ transferHelper
   -> App r t m ()
 transferHelper aps = do
      (AppState _ _ cw _) <- ask
-     case cw >>= _netConfig_dataHost of
+     case _netConfig_dataHost cw of
        Nothing -> text "Transfers view is not supported unless a chainweb-data url is included in the config!"
-       Just _dataHost -> transferWidget aps (fromJust cw) -- We can assume the netconfig exists if we got to this branch!
+       Just _dataHost -> transferWidget aps cw -- We can assume the netconfig exists if we got to this branch!
 
 transferWidget
   :: ( MonadApp r t m

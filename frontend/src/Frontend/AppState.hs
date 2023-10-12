@@ -152,7 +152,7 @@ setStartTime t gs = gs { _gs_startTime = t }
 data AppState t = AppState
     { _as_network    :: NetId
     , _as_serverInfo :: ServerInfo
-    , _as_netConfig :: Maybe NetConfig
+    , _as_netConfig :: NetConfig
     , _as_graphAdjacencies :: SM.Map Int Int
     } deriving Generic
 
@@ -171,15 +171,15 @@ stateManager
     :: DomBuilder t m
     => Text
     -- ^ Application route...not in use yet
-    -> DataBackends
+    -> Maybe DataBackends
     -> NetId
     -> ServerInfo
     -> Event t AppTriggers
     -- ^ Not in use yet
     -> m (AppState t)
-stateManager _ (DataBackends ndbs) n si _ = do
+stateManager _ mdbs n si _ = do
     let adjs = maybe mempty (SM.fromList . zip [0..] . floydWarshall . M.fromList . snd . head) $ _siGraphs si
-    return $ AppState n si (M.lookup (_siChainwebVer si) ndbs) adjs
+    return $ AppState n si (lookupNetConfigWithDefault n mdbs) adjs
 
 pairToBhtx :: (BlockHeader, Text) -> BlockHeaderTx
 pairToBhtx (h, bhBinBase64) =

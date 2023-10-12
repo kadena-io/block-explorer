@@ -74,8 +74,7 @@ requestKeyWidget
 requestKeyWidget si netId = do
     as <- ask
     reqKey <- askRoute
-    let n = _as_network as
-        chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
+    let chainwebHost = ChainwebHost (_as_netConfig as) (_siChainwebVer si)
         xhrs rk = M.fromList $ map (\c -> (c, requestKeyXhr chainwebHost c rk)) $
                       S.toList $ _siChains si
 
@@ -103,8 +102,8 @@ requestKeyWidget si netId = do
         Right (PollResponses pr) -> if HM.null pr
                                     then Nothing
                                     else pure $ Right pr
-    reqParseErrorMsg e rk = do 
-      el "div" $ dynText $ 
+    reqParseErrorMsg e rk = do
+      el "div" $ dynText $
         fmap ("An unexpected error occured when processing request key: " <>) rk
       el "div" $ text "Help us make our tools better by filing an issue with the below message at www.github.com/kadena-io/block-explorer :"
       el "div" $ text e

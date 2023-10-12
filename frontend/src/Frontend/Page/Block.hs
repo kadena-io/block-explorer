@@ -59,8 +59,7 @@ blockHashWidget
   -> App (Text, R BlockRoute) t m ()
 blockHashWidget si netId cid = do
   as <- ask
-  let n = _as_network as
-      chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
+  let chainwebHost = ChainwebHost (_as_netConfig as) (_siChainwebVer si)
       c = ChainId cid
   subPairRoute_ $ \hash -> do
     ebh <- getBlockHeader chainwebHost c hash
@@ -79,8 +78,7 @@ blockHeightWidget
   -> App (Int, R BlockRoute) t m ()
 blockHeightWidget si netId cid = do
   as <- ask
-  let n = _as_network as
-      chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
+  let chainwebHost = ChainwebHost (_as_netConfig as) (_siChainwebVer si)
       c = ChainId cid
   subPairRoute_ $ \height -> do
     ebh <- getBlockHeaderByHeight chainwebHost c height
