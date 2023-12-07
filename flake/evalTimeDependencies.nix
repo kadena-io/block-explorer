@@ -32,8 +32,8 @@ let
     sha256 = "sha256:0wn96xn6prjzcsh4n8p1n40wi8la53ym5h2frlqbfzas7isxwygg";
   };
   chainweb-api = builtins.fetchTarball {
-    url = "https://github.com/kadena-io/chainweb-api/archive/00650534d4b3065342207a732131c88519209177.tar.gz";
-    sha256 = "sha256:0lmrk9plhp4x8g1xczs4f8hld9arglvfsvbkcj9xf82sjs3cj3sm";
+    url = "https://github.com/kadena-io/chainweb-api/archive/0229d02ff4ca9ca2a7a0bb5d7413feba18d708f1.tar.gz";
+    sha256 = "sha256:1sk4801ak5nlx654d5cbi8xdc83v7hdxby3027h728imjsdb8paa";
   };
   pact = builtins.fetchTarball {
     url = "https://github.com/kadena-io/pact/archive/d4452cbf7cbf589be294ec0980bd44e97edb4729.tar.gz";
