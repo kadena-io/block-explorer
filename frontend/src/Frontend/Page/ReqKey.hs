@@ -14,10 +14,13 @@ module Frontend.Page.ReqKey
 
 import Control.Monad (join)
 import Control.Monad.Reader
+import Control.Lens
 
 import Data.Aeson as A
+import Data.Aeson.Lens
 import Data.Bifunctor
 import qualified Data.ByteString.Lazy as BL
+import Data.Functor.Compose (Compose(..))
 import Data.Foldable (traverse_)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
@@ -27,17 +30,12 @@ import qualified Data.Text as T (pack)
 import qualified Data.Text.Encoding as T
 
 
+import Chainweb.Api.PactPollResponses
+
 import GHCJS.DOM.Types (MonadJSM)
 
 import Obelisk.Route
 import Obelisk.Route.Frontend
-
-import Pact.Types.API
-import qualified Pact.Types.Hash as Pact
-import Pact.Types.Command
-import Pact.Types.Runtime (PactEvent(..))
-import Pact.Types.Util
-
 
 import Reflex.Dom.Core hiding (Value)
 import Reflex.Network
@@ -103,8 +101,8 @@ requestKeyWidget si netId = do
         Right (PollResponses pr) -> if HM.null pr
                                     then Nothing
                                     else pure $ Right pr
-    reqParseErrorMsg e rk = do 
-      el "div" $ dynText $ 
+    reqParseErrorMsg e rk = do
+      el "div" $ dynText $
         fmap ("An unexpected error occured when processing request key: " <>) rk
       el "div" $ text "Help us make our tools better by filing an issue with the below message at www.github.com/kadena-io/block-explorer :"
       el "div" $ text e
@@ -121,30 +119,33 @@ requestKeyResultPage
        )
     => NetId
     -> ChainId
-    -> CommandResult Pact.Hash
+    -> CommandResult PactHash
     -> m ()
-requestKeyResultPage netId cid (CommandResult rk txid pr g logs pcont meta evs) = do
+requestKeyResultPage netId cid (CommandResult (RequestKey rk) txid pr (Gas g) logs pcont meta evs) = do
     el "h2" $ text "Transaction Results"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
         tfield "Chain" $ text $ tshow $ unChainId cid
-        tfield "Request Key" $ text $ requestKeyToB16Text rk
+        tfield "Request Key" $ text rk
         tfield "Transaction Id" $ text $ maybe "" tshow txid
         tfield "Result" $ renderPactResult pr
         tfield "Gas" $ text $ tshow g
-        tfield "Logs" $ text $ maybe "" Pact.hashToText logs
+        tfield "Logs" $ text $ maybe "" unHash logs
         tfield "Continuation" $ text $ maybe "" tshow pcont
         tfield "Metadata" $ renderMetaData netId cid meta
         tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
                 forM_ evs $ \ ev -> el "tr" $ do
-                  elClass "td" "two wide" $ text (ename ev)
-                  -- el "td" $ el "pre" $ text $ prettyJSON ev
+                  elClass "td" "two wide" $ mapM_ text (getEventName ev)
                   elClass "td" "evtd" $ elClass "table" "evtable" $
-                    forM_ (_eventParams ev) $ \v ->
+                    forM_ (Compose $ getEventParams ev) $ \v ->
                       elClass "tr" "evtable" $ elClass "td" "evtable" $
-                        text $ unwrapJSON $ toJSON v
+                        text $ unwrapJSON v
   where
+    getEventName ev = go
+        <$> ev ^? key "module" . key "name" . _String
+        <*> ev ^? key "name" . _String
+      where
+       go moduleName eventName = moduleName <> "." <> eventName
+    getEventParams ev = ev ^? key "params" . _Array
     renderPactResult (PactResult r) =
       text $ join either unwrapJSON (bimap toJSON toJSON r)
-
-    ename PactEvent{..} = asString _eventModule <> "." <> _eventName
