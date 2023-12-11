@@ -152,14 +152,17 @@ transferWidget AccountParams{..} nc = do
                      (Right parsedA, Right parsedB)
                         | a == initialMinHeight && b == initialMaxHeight ->
                             Left ("ui disabled button", "The height range has not changed!")
-                        | otherwise -> Right ("ui button", (parsedA,parsedB))
+                        | otherwise -> Right ("ui blue button", (parsedA,parsedB))
               let onEnter w = if w == 13 then Just () else Nothing
+              let filterText = "Filter Results"
+              let greenCheckMark = "\x2705"
+              let redCrossMark = "\x2717"
               let filterButtonWidget a b = case buttonClass a b of
                    Left (tt,errToolTip) -> void
-                       $ elAttr "span" ("data-tooltip" =: errToolTip)
-                       $ elAttr' "button" ("class" =: tt) $ text "Filter results"
+                       $ elAttr "span" ("data-tooltip" =: errToolTip <> "style" =: "display: contents;")
+                       $ elAttr' "button" ("class" =: tt) $ text redCrossMark
                    Right (enabled, (minHeight,maxHeight)) -> do
-                       (d,_) <- elAttr' "button" ("class" =: enabled) $ text "Filter results"
+                       (d,_) <- elAttr' "button" ("class" =: enabled) $ text greenCheckMark
                        let route = mkTransferSearchRoute n apAccount apToken apChain minHeight maxHeight
                        setRoute
                            $ route
