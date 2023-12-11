@@ -1,7 +1,7 @@
 {
   "owner": "kadena-io",
   "repo": "chainweb-api",
-  "branch": "emmanuel/poll-responses-from-pact",
+  "branch": "master",
   "private": false,
   "rev": "9f5b5e53b73cde75aef829ede637dc5626d34ceb",
   "sha256": "16qsxffdvmyxrmq4lsimqwph56fic3k47vyyplvdmdzdb4pbf1jj"
