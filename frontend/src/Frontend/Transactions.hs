@@ -80,39 +80,36 @@ transactionSearch
        )
     => App (Map Text (Maybe Text)) t m ()
 transactionSearch = do
-    (AppState n _ mnc _) <- ask
-    case mnc of
-      Nothing -> text "Transaction search feature not available for this network"
-      Just nc -> do
-        pmap <- askRoute
-        pb <- getPostBuild
-        let page = do
-              pm <- pmap
-              pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
-            needle = do
-              pm <- pmap
-              pure $ fromMaybe "" $ join (M.lookup qParam pm)
-            newSearch = leftmost [pb, () <$ updated pmap]
+    (AppState n _ nc _) <- ask
+    pmap <- askRoute
+    pb <- getPostBuild
+    let page = do
+          pm <- pmap
+          pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
+        needle = do
+          pm <- pmap
+          pure $ fromMaybe "" $ join (M.lookup qParam pm)
+        newSearch = leftmost [pb, () <$ updated pmap]
 
-        res <- searchTxs nc
-                 (constDyn $ Just $ Limit itemsPerPage)
-                 (Just . Offset . (*itemsPerPage) . pred <$> page)
-                 (QParamSome <$> needle) (constDyn QNone) (constDyn QNone) (constDyn QNone) newSearch
+    res <- searchTxs nc
+              (constDyn $ Just $ Limit itemsPerPage)
+              (Just . Offset . (*itemsPerPage) . pred <$> page)
+              (QParamSome <$> needle) (constDyn QNone) (constDyn QNone) (constDyn QNone) newSearch
 
-        divClass "ui pagination menu" $ do
-          let setSearchRoute f e = setRoute $
-                tag (current $ mkTxSearchRoute n <$> needle <*> fmap (Just . f) page) e
-              prevAttrs p = if p == 1
-                              then "class" =: "disabled item"
-                              else "class" =: "item"
-          (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
-          setSearchRoute pred (domEvent Click p)
-          divClass "disabled item" $ display page
-          (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
-          setSearchRoute succ (domEvent Click next)
+    divClass "ui pagination menu" $ do
+      let setSearchRoute f e = setRoute $
+            tag (current $ mkTxSearchRoute n <$> needle <*> fmap (Just . f) page) e
+          prevAttrs p = if p == 1
+                          then "class" =: "disabled item"
+                          else "class" =: "item"
+      (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
+      setSearchRoute pred (domEvent Click p)
+      divClass "disabled item" $ display page
+      (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
+      setSearchRoute succ (domEvent Click next)
 
-        let f = either text (txTable n "Transaction Search")
-        void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
+    let f = either text (txTable n "Transaction Search")
+    void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
 
 mkReqKeySearchRoute :: NetId -> Text -> R FrontendRoute
 mkReqKeySearchRoute netId str = mkNetRoute netId (NetRoute_TxReqKey :/ str)
@@ -135,43 +132,40 @@ eventSearch
        )
     => App (Map Text (Maybe Text)) t m ()
 eventSearch = do
-    (AppState n _ mnc _) <- ask
-    case mnc of
-      Nothing -> text "Event search feature not available for this network"
-      Just nc -> do
-        pmap <- askRoute
-        pb <- getPostBuild
-        let page = do
-              pm <- pmap
-              pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
-            needle = do
-              pm <- pmap
-              pure $ fromMaybe "" $ join (M.lookup qParam pm)
-            newSearch = leftmost [pb, () <$ updated pmap]
-        res <- searchEvents nc
-            (constDyn $ Just $ Limit itemsPerPage)
-            (Just . Offset . (*itemsPerPage) . pred <$> page)
-            (QParamSome <$> needle)
-            (constDyn QNone) 
-            (constDyn QNone)
-            (constDyn QNone)
-            (constDyn QNone)
-            (constDyn QNone)
-            newSearch
-        divClass "ui pagination menu" $ do
-          let setSearchRoute f e = setRoute $
-                tag (current $ mkEventSearchRoute n <$> needle <*> fmap (Just . f) page) e
-              prevAttrs p = if p == 1
-                              then "class" =: "disabled item"
-                              else "class" =: "item"
-          (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
-          setSearchRoute pred (domEvent Click p)
-          divClass "disabled item" $ display page
-          (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
-          setSearchRoute succ (domEvent Click next)
+    (AppState n _ nc _) <- ask
+    pmap <- askRoute
+    pb <- getPostBuild
+    let page = do
+          pm <- pmap
+          pure $ fromMaybe 1 $ readMaybe . T.unpack =<< join (M.lookup pageParam pm)
+        needle = do
+          pm <- pmap
+          pure $ fromMaybe "" $ join (M.lookup qParam pm)
+        newSearch = leftmost [pb, () <$ updated pmap]
+    res <- searchEvents nc
+        (constDyn $ Just $ Limit itemsPerPage)
+        (Just . Offset . (*itemsPerPage) . pred <$> page)
+        (QParamSome <$> needle)
+        (constDyn QNone)
+        (constDyn QNone)
+        (constDyn QNone)
+        (constDyn QNone)
+        (constDyn QNone)
+        newSearch
+    divClass "ui pagination menu" $ do
+      let setSearchRoute f e = setRoute $
+            tag (current $ mkEventSearchRoute n <$> needle <*> fmap (Just . f) page) e
+          prevAttrs p = if p == 1
+                          then "class" =: "disabled item"
+                          else "class" =: "item"
+      (p,_) <- elDynAttr' "div" (prevAttrs <$> page) $ text "Prev"
+      setSearchRoute pred (domEvent Click p)
+      divClass "disabled item" $ display page
+      (next,_) <- elAttr' "div" ("class" =: "item") $ text "Next"
+      setSearchRoute succ (domEvent Click next)
 
-        let f = either text (evTable n)
-        void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
+    let f = either text (evTable n)
+    void $ networkHold (inlineLoader "Querying blockchain...") (f <$> res)
 
 mkEventSearchRoute :: NetId -> Text -> Maybe Integer -> R FrontendRoute
 mkEventSearchRoute netId str page = mkNetRoute netId (NetRoute_EventSearch :/ (qParam =: Just str <> p ))

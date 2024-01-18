@@ -48,7 +48,7 @@ transactionPage
      , MonadJSM (Performable m)
      )
   => NetId
-  -> Maybe NetConfig
+  -> NetConfig
   -> ChainId
   -> BlockPayloadWithOutputs
   -> Hash -- blockhash
@@ -77,7 +77,7 @@ transactionPage netId netConfig cid bp hash = do
     el "h2" $ text $ "Block Transactions"
     elClass "table" "ui definition table" $ do
       el "tbody" $ do
-        tfield "Block Hash" blockLink 
+        tfield "Block Hash" blockLink
     elClass "table" "ui compact celled table" $ do
       el "thead" $ el "tr" $ do
         elAttr "th" ("style" =: "width: auto") $ text "Status"
@@ -87,8 +87,8 @@ transactionPage netId netConfig cid bp hash = do
         forM_ txs $ \(t,tout) -> el "tr" $ do
           let reqKey = requestkey t
           elAttr "td" ("class" =: "center aligned") $ status tout
-          elAttr "td" ("data-tooltip" =: requestkey t <> "style" =: "max-width: 400px; padding: 0px;") $ 
-              el "div" $ cutText $ 
+          elAttr "td" ("data-tooltip" =: requestkey t <> "style" =: "max-width: 400px; padding: 0px;") $
+              el "div" $ cutText $
                   routeLink (mkTxDetailRoute netId $ requestkey t) $ text $ requestkey t
           let chainEmoji = "\x1F517"
               contToolTip = "This is a continuation of another transaction. The code is the initial code of the transaction that created this continuation."
@@ -97,14 +97,11 @@ transactionPage netId netConfig cid bp hash = do
               ExecPayload e -> routeLink (mkTxDetailRoute netId reqKey) $ text $ _exec_code e
               ContPayload _c -> do
                 elAttr "span" ("class" =: "bubble-tag") $ text $ chainEmoji <> " "
-                case netConfig of
-                  Nothing -> text "Continuation"
-                  Just nc -> do
-                    res <- getTxDetails nc (constDyn $ QParamSome $ RequestKey reqKey) pb
-                    void $ networkHold (el "it" $ text "Loading...") $ res <&> \case
-                        Left err -> text $ tshow $ "Error: " <> err
-                        Right rs -> case rs of
-                          [] -> text "Continuation missing in the supporting database."
-                          (r:_) -> case (,) <$> _txDetail_initialCode r <*> (lastMay =<< _txDetail_previousSteps r) of
-                            Nothing -> text "Continuation missing in the supporting database."
-                            Just (i,initReqKey) -> routeLink (mkTxDetailRoute netId initReqKey) $ text i
+                res <- getTxDetails netConfig (constDyn $ QParamSome $ RequestKey reqKey) pb
+                void $ networkHold (el "it" $ text "Loading...") $ res <&> \case
+                    Left err -> text $ tshow $ "Error: " <> err
+                    Right rs -> case rs of
+                      [] -> text "Continuation missing in the supporting database."
+                      (r:_) -> case (,) <$> _txDetail_initialCode r <*> (lastMay =<< _txDetail_previousSteps r) of
+                        Nothing -> text "Continuation missing in the supporting database."
+                        Just (i,initReqKey) -> routeLink (mkTxDetailRoute netId initReqKey) $ text i

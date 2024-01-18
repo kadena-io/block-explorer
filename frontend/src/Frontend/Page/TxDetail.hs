@@ -58,20 +58,17 @@ txDetailWidget
     => NetId
     -> App T.Text t m ()
 txDetailWidget netId = do
-  (AppState _ si mnc _) <- ask
-  case mnc of
-    Nothing -> text "Tx detail not available for this network"
-    Just nc -> do
-      reqKey <- askRoute
-      pb <- getPostBuild
-      res <- getTxDetails nc
-          (QParamSome . RequestKey <$> reqKey)
-          (leftmost [pb, () <$ updated reqKey])
-      void $ networkHold (inlineLoader "Querying blockchain ...") $ res <&> \case
-        Left err -> text $ "Error fetching transactions: " <> err
-        Right txDetails -> case NE.nonEmpty txDetails of
-          Nothing -> text "No transaction found"
-          Just neTxDetails -> txDetailPage nc netId (_siChainwebVer si) neTxDetails
+  (AppState _ si nc _) <- ask
+  reqKey <- askRoute
+  pb <- getPostBuild
+  res <- getTxDetails nc
+      (QParamSome . RequestKey <$> reqKey)
+      (leftmost [pb, () <$ updated reqKey])
+  void $ networkHold (inlineLoader "Querying blockchain ...") $ res <&> \case
+    Left err -> text $ "Error fetching transactions: " <> err
+    Right txDetails -> case NE.nonEmpty txDetails of
+      Nothing -> text "No transaction found"
+      Just neTxDetails -> txDetailPage nc netId (_siChainwebVer si) neTxDetails
 
 txDetailPage
   :: ( MonadApp r t m
@@ -87,6 +84,7 @@ txDetailPage
   -> NE.NonEmpty TxDetail
   -> m ()
 txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
+  netConfig <- asks _as_netConfig
   el "h2" $ text $ "Transaction Detail"
   elClass "table" "ui definition table" $ do
     el "tbody" $ do
@@ -96,7 +94,7 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
         let tagIfOrphan cid height hash = if null restTxs
               then dynText $ constDyn mempty
               else do
-                  let h = ChainwebHost (netHost netId) cwVer
+                  let h = ChainwebHost netConfig cwVer
                   winningHash <- _blockHeader_hash . fst <$$$> getBlockHeaderByHeight h cid height
                   t <- holdDyn " (Determining if an orphan...)" $
                         fmap (\whash -> if whash == hash then "" else " (orphan)") (fforMaybe winningHash (fmap hashB64U))

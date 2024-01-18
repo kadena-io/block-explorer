@@ -72,8 +72,7 @@ requestKeyWidget
 requestKeyWidget si netId = do
     as <- ask
     reqKey <- askRoute
-    let n = _as_network as
-        chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
+    let chainwebHost = ChainwebHost (_as_netConfig as) (_siChainwebVer si)
         xhrs rk = M.fromList $ map (\c -> (c, requestKeyXhr chainwebHost c rk)) $
                       S.toList $ _siChains si
 
