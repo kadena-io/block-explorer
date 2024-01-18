@@ -57,13 +57,13 @@ runApp
 --  :: (DomBuilder t m, Routed t r m, MonadHold t m, MonadFix m, Prerender js t m, PostBuild t m, MonadJSM (Performable m), HasJSContext (Performable m), PerformEvent t m, TriggerEvent t m)
   :: (DomBuilder t m, Routed t r m, MonadFix m)
   => Text
-  -> DataBackends
+  -> Maybe DataBackends
   -> NetId
   -> ServerInfo
   -> RoutedT t r (ReaderT (AppState t) (EventWriterT t AppTriggers m)) a
   -> m a
-runApp publicUrl ndbs net si m = mdo
+runApp publicUrl mdbs net si m = mdo
     r <- askRoute
-    as <- stateManager publicUrl ndbs net si triggers
+    as <- stateManager publicUrl mdbs net si triggers
     (res, triggers) <- runEventWriterT (runReaderT (runRoutedT m r) as)
     return res

@@ -87,9 +87,9 @@ accountWidget
   -> Text
   -> App r t m ()
 accountWidget token account = do
-  (AppState n si _ _) <- ask
+  (AppState _ si nc _) <- ask
   let chains = S.toList $ _siChains si
-      chainwebHost = ChainwebHost (netHost n) (_siChainwebVer si)
+      chainwebHost = ChainwebHost nc (_siChainwebVer si)
   curTime <- liftIO getCurrentTime
   let meta chain = ChainwebMeta
         (tshow $ unChainId chain)

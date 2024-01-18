@@ -13,6 +13,7 @@ import           Data.Aeson
 import           Data.Readable
 import qualified Data.Map as M
 import           Data.Map (Map)
+import           Data.Maybe (fromMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Text (Text)
@@ -107,14 +108,16 @@ newtype DataBackends = DataBackends
   } deriving (Eq,Ord,Show,Read)
     deriving newtype (FromJSON, ToJSON)
 
-defaultDataBackends :: DataBackends
-defaultDataBackends = DataBackends $ M.fromList
-  [ ("mainnet01", netHost NetId_Mainnet)
-  , ("testnet04", netHost NetId_Testnet)
-  , ("development", netHost NetId_Development)
-  , ("fast-development", netHost NetId_FastDevelopment)
-  ]
-
+lookupNetConfigWithDefault :: NetId -> Maybe DataBackends -> NetConfig
+lookupNetConfigWithDefault n dbs = case n of
+    NetId_Mainnet -> withDefault "mainnet01" $ Host "https" "estats.chainweb.com" 443
+    NetId_Testnet -> withDefault "testnet04" $ Host "https" "estats.testnet.chainweb.com" 443
+    NetId_Development -> withDefault "development" $ Host "http" "localhost" 8080
+    NetId_FastDevelopment -> withDefault "fast-development" $ Host "http" "localhost" 8080
+    NetId_Custom nc -> nc
+  where
+    withDefault k h = fromMaybe def $ M.lookup k . dataBackendMap =<< dbs where
+      def = NetConfig h h (Just h)
 
 type ChainwebVersion = Text
 
@@ -147,13 +150,6 @@ netIdPathSegment = \case
 --getNetConfig NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h h
 --getNetConfig NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h h
 --getNetConfig (NetId_Custom nc) = nc
-
-netHost :: NetId -> NetConfig
-netHost NetId_Mainnet    = let h = Host "https" "estats.chainweb.com" 443 in NetConfig h h (Just h)
-netHost NetId_Testnet    = let h = Host "https" "api.testnet.chainweb.com" 443 in NetConfig h h Nothing
-netHost NetId_Development     = let h = Host "http" "localhost" 8080 in NetConfig h h (Just h)
-netHost NetId_FastDevelopment = let h = Host "http" "localhost" 8080 in NetConfig h h Nothing
-netHost (NetId_Custom nc) = nc
 
 humanReadableTextPrism :: (Humanizable a, Readable a) => Prism Text Text a a
 humanReadableTextPrism = prism' humanize fromText

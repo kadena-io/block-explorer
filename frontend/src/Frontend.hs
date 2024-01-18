@@ -79,14 +79,14 @@ frontend = Frontend
   , _frontend_body = do
       route <- getAppRoute
       ndbs <- getJsonCfg "frontend/data-backends"
-      mainDispatch route (either (const defaultDataBackends) id ndbs)
+      mainDispatch route (either (const Nothing) Just ndbs)
       footer
   }
 
 mainDispatch
   :: ObeliskWidget js t (R FrontendRoute) m
   => Text
-  -> DataBackends
+  -> Maybe DataBackends
   -> App (R FrontendRoute) t m ()
 mainDispatch route ndbs = do
   pb <- getPostBuild
@@ -107,21 +107,21 @@ mainDispatch route ndbs = do
 networkDispatch
   :: (ObeliskWidget js t (R FrontendRoute) m)
   => Text
-  -> DataBackends
+  -> Maybe DataBackends
   -> NetId
   -> App (R NetRoute) t m ()
 networkDispatch route ndbs netId = prerender_ blank $ do
+  let netConfig = lookupNetConfigWithDefault netId ndbs
   divClass "ui fixed inverted menu" $ nav netId
   elAttr "div" ("class" =: "ui main container" <> "style" =: "width: 1124px;") $ do
-    dsi <- getServerInfo $ netHost netId
+    dsi <- getServerInfo $ netConfig
     dyn_ $ ffor dsi $ \case
       Nothing -> inlineLoader "Loading..."
       Just si -> runApp route ndbs netId si $ subRoute_ $ \case
         NetRoute_Chainweb -> do
           as <- ask
           pb <- getPostBuild
-          let h = netHost $ _as_network as
-          let ch = ChainwebHost h $ _siChainwebVer $ _as_serverInfo as
+          let ch = ChainwebHost netConfig $ _siChainwebVer $ _as_serverInfo as
               f = maximum . map _tipHeight . HM.elems . _cutChains
           height <- f <$$$> getCut (ch <$ pb)
           void $ networkHold (inlineLoader "Getting latest cut...") (mainPageWidget netId <$> height)
@@ -246,9 +246,9 @@ initBlockTable
   => BlockHeight
   -> App r t m (Dynamic t BlockTable, Dynamic t GlobalStats, Maybe (Dynamic t RecentTxs))
 initBlockTable height = do
-    (AppState n si mdbh _) <- ask
+    (AppState _ si netConfig _) <- ask
     let cfg = EventSourceConfig never True
-    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
+    let ch = ChainwebHost netConfig (_siChainwebVer si)
     es <- startEventSource ch cfg
     let downEvent = _eventSource_recv es
 
@@ -274,10 +274,8 @@ initBlockTable height = do
         onlyTxs Nothing = Nothing
         blocksWithTxs = fmapMaybe onlyTxs downEvent
 
-    (recentTxs, ecds) <- case mdbh of
-      Nothing -> return (Nothing, never)
-      Just dbh -> do
-        eRecentTxs <- getRecentTxs dbh (_eventSource_open es)
+    (recentTxs, ecds) <- do
+        eRecentTxs <- getRecentTxs netConfig (_eventSource_open es)
         ebp <- getBlockPayload2 ch blocksWithTxs
 
         recent <- foldDyn ($) (RecentTxs mempty) $ leftmost
@@ -285,7 +283,7 @@ initBlockTable height = do
           , addNewTransaction <$> filterRight ebp
           ]
 
-        ecds <- getChainwebStats dbh pb
+        ecds <- getChainwebStats netConfig pb
         return $ (Just recent, ecds)
 
     stats <- foldDyn ($) (GlobalStats 0 t0 mempty 0 Nothing Nothing Nothing) $ mergeWith (.)
@@ -305,9 +303,9 @@ initRecents
   :: (MonadAppIO r t m, Prerender js t m)
   => App r t m (Maybe (Dynamic t RecentTxs))
 initRecents = do
-    (AppState n si mdbh _) <- ask
+    (AppState _ si netConfig _) <- ask
     let cfg = EventSourceConfig never True
-    let ch = ChainwebHost (netHost n) (_siChainwebVer si)
+    let ch = ChainwebHost netConfig (_siChainwebVer si)
     es <- startEventSource ch cfg
     let downEvent = _eventSource_recv es
 
@@ -315,17 +313,14 @@ initRecents = do
         onlyTxs Nothing = Nothing
         blocksWithTxs = fmapMaybe onlyTxs downEvent
 
-    case mdbh of
-      Nothing -> return Nothing
-      Just dbh -> do
-        eRecentTxs <- getRecentTxs dbh (_eventSource_open es)
-        ebp <- getBlockPayload2 ch blocksWithTxs
+    eRecentTxs <- getRecentTxs netConfig (_eventSource_open es)
+    ebp <- getBlockPayload2 ch blocksWithTxs
 
-        recent <- foldDyn ($) (RecentTxs mempty) $ leftmost
-          [ either (const id) mergeRecentTxs <$> eRecentTxs
-          , addNewTransaction <$> filterRight ebp
-          ]
-        return $ Just recent
+    recent <- foldDyn ($) (RecentTxs mempty) $ leftmost
+      [ either (const id) mergeRecentTxs <$> eRecentTxs
+      , addNewTransaction <$> filterRight ebp
+      ]
+    return $ Just recent
 
 data SearchType = RequestKeySearch | TxSearch | EventSearch | AccountSearch
   deriving (Eq,Ord,Show,Read,Enum)
