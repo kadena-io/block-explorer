@@ -51,9 +51,11 @@ td {
     vertical-align: middle;
 }
 
-.leaf-cell {
-  overflow-x: auto;
-  max-width: 200px;
+.leaf-cell-td {
+    max-width: 200px;
+}
+.leaf-cell-div {
+    overflow-x: auto;
 }
 
 div.header-row {
