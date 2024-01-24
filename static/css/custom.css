@@ -55,6 +55,11 @@ td {
     vertical-align: middle;
 }
 
+.leaf-cell {
+  overflow-x: auto;
+  max-width: 200px;
+}
+
 div.header-row {
     border-top: 1px solid rgba(34, 36, 38, 0.1);
     border-bottom: 1px solid rgba(34, 36, 38, 0.1);

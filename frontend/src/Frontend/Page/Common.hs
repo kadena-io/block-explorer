@@ -130,10 +130,10 @@ renderMetaData _ _ (Just A.Null) = text ""
 renderMetaData netId cid (Just v) = case fromJSON v of
     Success (PollMetaData bh bt bhash phash) -> do
       detailsSection $ do
-        tfield "Block Height" $ text $ tshow bh
-        tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
-        tfield "Block Hash" $ transactionsLink netId cid bhash
-        tfield "Parent Hash" $ transactionsLink netId cid phash
+        tfieldLeaf "Block Height" $ text $ tshow bh
+        tfieldLeaf "Creation Time" $ text $ tshow $ posixSecondsToUTCTime bt
+        tfieldLeaf "Block Hash" $ transactionsLink netId cid bhash
+        tfieldLeaf "Parent Hash" $ transactionsLink netId cid phash
     A.Error e -> text $ "Unable to decode metadata: " <> T.pack e
 
 -- | Render an object as a structured table, instead of raw json
@@ -148,7 +148,7 @@ renderRichObject m
       $ detailsSection
       $ HM.traverseWithKey go m
   where
-    go label v = tfield label $ text $ unwrapJSON v
+    go label v = tfieldLeaf label $ text $ unwrapJSON v
 
 -- | Render the 'Payload' of a 'Transaction'
 --
@@ -162,11 +162,11 @@ renderPayload = \case
         voidMaybe (tfieldPre "Data" . text . prettyJSON) d
     ContPayload (Cont pid rb step d p) -> do
       detailsSection $ do
-        tfield "Pact Id" $ text pid
-        tfield "Rollback" $ text $ tshow rb
-        tfield "Step" $ text $ tshow step
-        tfield "Data" $ text $ unwrapJSON d
-        tfield "Cont Proof" $ text $ fromMaybe "" p
+        tfieldLeaf "Pact Id" $ text pid
+        tfieldLeaf "Rollback" $ text $ tshow rb
+        tfieldLeaf "Step" $ text $ tshow step
+        tfieldLeaf "Data" $ text $ unwrapJSON d
+        tfieldLeaf "Cont Proof" $ text $ fromMaybe "" p
 
 -- | Render a 'PactExec' object in a 'CommandResult'
 --
@@ -181,14 +181,14 @@ renderPactExec
     -> m ()
 renderPactExec (PactExec stepCount y x step (PactId pid) pcont rb) netId res =
     detailsSection $ do
-      tfield "Step Count" $ text $ tshow stepCount
+      tfieldLeaf "Step Count" $ text $ tshow stepCount
       voidMaybe (tfield "Yield" . renderYield) y
-      voidMaybe (tfield "Executed" . text . tshow) x
-      tfield "Step" $ text $ tshow step
-      tfield "Pact Id" $ text pid
+      voidMaybe (tfieldLeaf "Executed" . text . tshow) x
+      tfieldLeaf "Step" $ text $ tshow step
+      tfieldLeaf "Pact Id" $ text pid
       tfield "Continuation" $ renderContinuation pcont
-      tfield "Rollback" $ text $ tshow rb
-      tfield "Next Step" $ case res of
+      tfieldLeaf "Rollback" $ text $ tshow rb
+      tfieldLeaf "Next Step" $ case res of
         Left err -> tfield "Error" $ text err
         Right xs -> case span ((== TxSucceeded) . _txSummary_result) xs of
           (ys,zs) -> do
@@ -218,8 +218,8 @@ renderProvenance
     -> m ()
 renderProvenance (Provenance (Pact.ChainId c) mhash) =
     detailsSection $ do
-      tfield "Target Chain" $ text c
-      tfield "Module Hash" $ text $ tshow mhash
+      tfieldLeaf "Target Chain" $ text c
+      tfieldLeaf "Module Hash" $ text $ tshow mhash
 
 -- | Render 'Yield' pact type
 --
@@ -229,7 +229,7 @@ renderYield
     -> m ()
 renderYield (Yield (ObjectMap m) p mCid) =
     detailsSection $ do
-      voidMaybe (tfield "Source Chain" . text . Pact._chainId) mCid
+      voidMaybe (tfieldLeaf "Source Chain" . text . Pact._chainId) mCid
       tfield "Data" $ renderRichObject $ yieldMap m
       voidMaybe (tfield "Provenance" . renderProvenance) p
   where
