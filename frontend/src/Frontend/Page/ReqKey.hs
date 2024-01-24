@@ -124,18 +124,18 @@ requestKeyResultPage netId cid (CommandResult (RequestKey rk) txid pr (Gas g) lo
     el "h2" $ text "Transaction Results"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Chain" $ text $ tshow $ unChainId cid
-        tfield "Request Key" $ text rk
-        tfield "Transaction Id" $ text $ maybe "" tshow txid
-        tfield "Result" $ renderPactResult pr
-        tfield "Gas" $ text $ tshow g
-        tfield "Logs" $ text $ maybe "" unHash logs
-        tfield "Continuation" $ text $ maybe "" tshow pcont
+        tfieldLeaf "Chain" $ text $ tshow $ unChainId cid
+        tfieldLeaf "Request Key" $ text rk
+        tfieldLeaf "Transaction Id" $ text $ maybe "" tshow txid
+        tfieldLeaf "Result" $ renderPactResult pr
+        tfieldLeaf "Gas" $ text $ tshow g
+        tfieldLeaf "Logs" $ text $ maybe "" unHash logs
+        tfieldLeaf "Continuation" $ text $ maybe "" tshow pcont
         tfield "Metadata" $ renderMetaData netId cid meta
         tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
                 forM_ evs $ \ ev -> el "tr" $ do
                   elClass "td" "two wide" $ mapM_ text (getEventName ev)
-                  elClass "td" "evtd" $ elClass "table" "evtable" $
+                  elClass "td" "evtd leaf-cell" $ elClass "table" "evtable" $
                     forM_ (Compose $ getEventParams ev) $ \v ->
                       elClass "tr" "evtable" $ elClass "td" "evtable" $
                         text $ unwrapJSON v

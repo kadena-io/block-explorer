@@ -159,20 +159,20 @@ blockHeaderPage netId h c (bh, bhBinBase64) bp resolveOrphan = do
     el "h2" $ dynText ( ("Block Header " <>) <$> orphanText)
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Creation Time" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_creationTime bh
-        tfield "Chain" $ text $ tshow $ _blockHeader_chainId bh
-        tfield "Block Height" $ text $ tshow $ _blockHeader_height bh
-        tfield "Parent" $ parent $ _blockHeader_parent bh
-        tfield "POW Hash" $ text $ either (const "") id (calcPowHash =<< decodeB64UrlNoPaddingText bhBinBase64)
-        tfield "Target" $ text $ hexFromBytesLE $ _blockHeader_target bh
-        tfield "Hash" $ text $ hashHex $ _blockHeader_hash bh
-        tfield "Weight" $ text $ hexFromBytesLE $ _blockHeader_weight bh
-        tfield "Epoch Start" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_epochStart bh
-        tfield "Neighbors" $ neighbors $ _blockHeader_neighbors bh
-        tfield "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash bh
-        tfield "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
-        tfield "Flags" $ text $ T.pack $ printf "0x%08x" (_blockHeader_flags bh)
-        tfield "Nonce" $ text $ T.pack $ showHex (_blockHeader_nonce bh) ""
+        tfieldLeaf "Creation Time" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_creationTime bh
+        tfieldLeaf "Chain" $ text $ tshow $ _blockHeader_chainId bh
+        tfieldLeaf "Block Height" $ text $ tshow $ _blockHeader_height bh
+        tfieldLeaf "Parent" $ parent $ _blockHeader_parent bh
+        tfieldLeaf "POW Hash" $ text $ either (const "") id (calcPowHash =<< decodeB64UrlNoPaddingText bhBinBase64)
+        tfieldLeaf "Target" $ text $ hexFromBytesLE $ _blockHeader_target bh
+        tfieldLeaf "Hash" $ text $ hashHex $ _blockHeader_hash bh
+        tfieldLeaf "Weight" $ text $ hexFromBytesLE $ _blockHeader_weight bh
+        tfieldLeaf "Epoch Start" $ text $ tshow $ posixSecondsToUTCTime $ _blockHeader_epochStart bh
+        tfieldLeaf "Neighbors" $ neighbors $ _blockHeader_neighbors bh
+        tfieldLeaf "Payload Hash" $ text $ hashB64U $ _blockHeader_payloadHash bh
+        tfieldLeaf "Chainweb Version" $ text $ _blockHeader_chainwebVer bh
+        tfieldLeaf "Flags" $ text $ T.pack $ printf "0x%08x" (_blockHeader_flags bh)
+        tfieldLeaf "Nonce" $ text $ T.pack $ showHex (_blockHeader_nonce bh) ""
         return ()
     blockPayloadWithOutputsWidget netId c bh bp
   where
@@ -208,16 +208,16 @@ blockPayloadWidget netId c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Miner" $ do
+        tfieldLeaf "Miner" $ do
           let account = _minerData_account (_blockPayload_minerData bp)
           el "div" $ routeLink (mkCoinAccountSearchRoute netId account) $
             text $ "Account: " <> account
           el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayload_minerData bp)
           el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayload_minerData bp)
-        tfield "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
-        tfield "Outputs Hash" $ text $ hashB64U $ _blockPayload_outputsHash bp
-        tfield "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp
-        tfield "Transactions" $ transactionsLink netId c $ _blockHeader_hash bh
+        tfieldLeaf "Transactions Hash" $ text $ hashB64U $ _blockPayload_transactionsHash bp
+        tfieldLeaf "Outputs Hash" $ text $ hashB64U $ _blockPayload_outputsHash bp
+        tfieldLeaf "Payload Hash" $ text $ hashB64U $ _blockPayload_payloadHash bp
+        tfieldLeaf "Transactions" $ transactionsLink netId c $ _blockHeader_hash bh
 
 blockPayloadWithOutputsWidget
   :: (MonadApp r t m,
@@ -233,32 +233,32 @@ blockPayloadWithOutputsWidget netId c bh bp = do
     el "h2" $ text "Block Payload"
     elAttr "table" ("class" =: "ui definition table") $ do
       el "tbody" $ do
-        tfield "Miner" $ do
+        tfieldLeaf "Miner" $ do
           let account = _minerData_account (_blockPayloadWithOutputs_minerData bp)
           el "div" $ routeLink (mkCoinAccountSearchRoute netId account) $
             text $ "Account: " <> account
           el "div" $ text $ "Public Keys: " <> tshow (_minerData_publicKeys $ _blockPayloadWithOutputs_minerData bp)
           el "div" $ text $ "Predicate: " <> _minerData_predicate (_blockPayloadWithOutputs_minerData bp)
-        tfield "Transactions Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_transactionsHash bp
-        tfield "Outputs Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_outputsHash bp
-        tfield "Payload Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_payloadHash bp
+        tfieldLeaf "Transactions Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_transactionsHash bp
+        tfieldLeaf "Outputs Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_outputsHash bp
+        tfieldLeaf "Payload Hash" $ text $ hashB64U $ _blockPayloadWithOutputs_payloadHash bp
         let coinbase = fromCoinbase $ _blockPayloadWithOutputs_coinbase bp
         tfield "Coinbase Output" $ do
           elClass "table" "ui definition table" $ el "tbody" $ do
-          tfield "Gas" $ text $ tshow $ _toutGas coinbase
-          tfield "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult coinbase
-          tfield "Request Key" $ text $ hashB64U $ _toutReqKey coinbase
-          tfield "Logs" $ text $ (maybe "" hashB64U $ _toutLogs coinbase)
-          tfield "Metadata" $ renderMetaData netId c $ _toutMetaData coinbase
-          maybe (pure ()) (tfield "Continuation" . text . tshow) $ _toutContinuation coinbase
-          tfield "Transaction ID" $ maybe blank (text . tshow) $ _toutTxId coinbase
+            tfieldLeaf "Gas" $ text $ tshow $ _toutGas coinbase
+            tfieldLeaf "Result" $ text $ join either unwrapJSON $ fromPactResult $ _toutResult coinbase
+            tfieldLeaf "Request Key" $ text $ hashB64U $ _toutReqKey coinbase
+            tfieldLeaf "Logs" $ text $ (maybe "" hashB64U $ _toutLogs coinbase)
+            tfield "Metadata" $ renderMetaData netId c $ _toutMetaData coinbase
+            maybe (pure ()) (tfieldLeaf "Continuation" . text . tshow) $ _toutContinuation coinbase
+            tfieldLeaf "Transaction ID" $ maybe blank (text . tshow) $ _toutTxId coinbase
 
         let numberOfTransactions =
               case length $ _blockPayloadWithOutputs_transactionsWithOutputs bp of
                 n | n <= 0 -> "No transactions"
                   | n == 1 -> "1 Transaction"
                   | otherwise -> tshow n <> " Transactions"
-        tfield numberOfTransactions $ transactionsLink netId c $ _blockHeader_hash bh
+        tfieldLeaf numberOfTransactions $ transactionsLink netId c $ _blockHeader_hash bh
   where
     fromCoinbase (Coinbase cb) = cb
     fromPactResult (PactResult pr) = pr
