@@ -119,9 +119,9 @@ transferWidget AccountParams{..} nc = do
           elAttr "h2" ("data-tooltip" =: apAccount) $ text $ "Transfer Info"
           elClass "table" "ui definition table" $ do
             el "tbody" $ do
-              tfield "Token" $ text apToken
-              tfield "Account" $ accountSearchLink n apToken apAccount apAccount
-              maybe (pure ()) (\cid -> tfield "Chain ID" $ text $ tshow cid) apChain
+              tfieldLeaf "Token" $ text apToken
+              tfieldLeaf "Account" $ accountSearchLink n apToken apAccount apAccount
+              maybe (pure ()) (\cid -> tfieldLeaf "Chain ID" $ text $ tshow cid) apChain
           let initialMinHeight = maybe "" tshow apMinHeight
               initialMaxHeight = maybe "" tshow apMaxHeight
           elClass "div" "ui labeled input" $ do

@@ -88,9 +88,9 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
   el "h2" $ text $ "Transaction Detail"
   elClass "table" "ui definition table" $ do
     el "tbody" $ do
-      tfield "Request Key" $ text (_txDetail_requestKey $ firstTx)
-      tfield "Chain" $ text $ tshow $ (_txDetail_chain $ firstTx)
-      tfield "Block" $ do
+      tfieldLeaf "Request Key" $ text (_txDetail_requestKey $ firstTx)
+      tfieldLeaf "Chain" $ text $ tshow $ (_txDetail_chain $ firstTx)
+      tfieldLeaf "Block" $ do
         let tagIfOrphan cid height hash = if null restTxs
               then dynText $ constDyn mempty
               else do
@@ -102,9 +102,9 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
         forM_ txs $ \tx -> el "tr" $ do
             blockHashLink netId (ChainId (_txDetail_chain tx)) (_txDetail_blockHash tx) $ (_txDetail_blockHash tx)
             tagIfOrphan (ChainId $ _txDetail_chain tx) (_txDetail_height tx) (_txDetail_blockHash tx)
-      tfield "Code" $ case _txDetail_code firstTx of
-        Just c -> elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
-        Nothing -> do
+      case _txDetail_code firstTx of
+        Just c -> tfieldLeaf "Code" $ elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
+        Nothing -> tfield "Code" $ do
           let previousSteps = _txDetail_previousSteps firstTx
               initialCode = _txDetail_initialCode firstTx
               mkTxDetailRoute rk = mkNetRoute netId (NetRoute_TxDetail :/ rk)
@@ -113,23 +113,23 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
                 routeLink (mkTxDetailRoute rk) $ text rk
           elClass "table" "ui definition table" $ el "tbody" $ do
             case previousSteps of
-              Just steps -> tfield "Past Steps" $ do
+              Just steps -> tfieldLeaf "Past Steps" $ do
                 let l = length steps
                 iforM_ steps $ \i step -> do
                   txDetailLink step
                   unless (i >= l - 1) $ el "br" blank
               Nothing -> text "No previous steps?"
-            forM_ initialCode $ \c -> tfield "Initial Code" $ elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
+            forM_ initialCode $ \c -> tfieldLeaf "Initial Code" $ elAttr "pre" ("style" =: "white-space: pre-wrap;") $ text c
       tfield "Transaction Output" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
-          tfield "Gas" $ text $ tshow $ _txDetail_gas firstTx
-          tfield "Result" $ do
+          tfieldLeaf "Gas" $ text $ tshow $ _txDetail_gas firstTx
+          tfieldLeaf "Result" $ do
             if _txDetail_success firstTx then
               elAttr "i" ("class" =: "green check icon" <> "title" =: "Succeeded") blank
                 else
               elAttr "i" ("class" =: "red close icon" <> "title" =: "Failed") blank
             text $ pactValueJSON $ _txDetail_result firstTx
-          tfield "Logs" $ text $ _txDetail_logs firstTx
+          tfieldLeaf "Logs" $ text $ _txDetail_logs firstTx
           tfield "Metadata" $ renderMetaData netId (ChainId $ _txDetail_chain firstTx) (Just $ _txDetail_metadata firstTx)
           tfield "Continuation" $ do
             pb <- getPostBuild
@@ -146,33 +146,33 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
                  (constDyn (QParamSome $ _txDetail_requestKey firstTx))
                  (constDyn QNone) (constDyn QNone) pb
               widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c . ditchPartialResult <$> res)
-          tfield "Transaction ID" $ text $ tshow $ _txDetail_txid firstTx
+          tfieldLeaf "Transaction ID" $ text $ tshow $ _txDetail_txid firstTx
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
         forM_ (_txDetail_events firstTx) $ \ ev -> el "tr" $ do
           elClass "td" "two wide" $ text (_txEvent_name ev)
-          elClass "td" "evtd" $ elClass "table" "evtable" $
+          elClass "td" "evtd leaf-cell" $ elClass "table" "evtable" $
             forM_ (_txEvent_params ev) $ \v ->
               elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ pactValueJSON v
 
 
       tfieldPre "Data" $ text $ prettyJSON $ _txDetail_data firstTx
-      tfield "Nonce" $ text $ _txDetail_nonce firstTx
+      tfieldLeaf "Nonce" $ text $ _txDetail_nonce firstTx
       tfield "Meta" $ do
         elClass "table" "ui definition table" $ el "tbody" $ do
-          tfield "Chain" $ text $ tshow $ _txDetail_chain firstTx
-          tfield "Sender" $ text $ _txDetail_sender firstTx
-          tfield "Gas Price" $ text $ tshow $ _txDetail_gasPrice firstTx
-          tfield "Gas Limit" $ text $ tshow $ _txDetail_gasLimit firstTx
-          tfield "TTL" $ text $ tshow $ _txDetail_ttl firstTx
-          tfield "Creation Time" $ text $ tshow $ _txDetail_creationTime firstTx
+          tfieldLeaf "Chain" $ text $ tshow $ _txDetail_chain firstTx
+          tfieldLeaf "Sender" $ text $ _txDetail_sender firstTx
+          tfieldLeaf "Gas Price" $ text $ tshow $ _txDetail_gasPrice firstTx
+          tfieldLeaf "Gas Limit" $ text $ tshow $ _txDetail_gasLimit firstTx
+          tfieldLeaf "TTL" $ text $ tshow $ _txDetail_ttl firstTx
+          tfieldLeaf "Creation Time" $ text $ tshow $ _txDetail_creationTime firstTx
 
 
       tfield "Signers" $ do
         forM_ (_txDetail_signers firstTx) $ \s -> do
           elClass "table" "ui definition table" $ el "tbody" $ do
-            tfield "Public Key" $ text $ _signer_pubKey s
-            forM_ (_signer_addr s) $ tfield "Address" . text
-            forM_ (_signer_scheme s) $ tfield "Scheme" . text
+            tfieldLeaf "Public Key" $ text $ _signer_pubKey s
+            forM_ (_signer_addr s) $ tfieldLeaf "Address" . text
+            forM_ (_signer_scheme s) $ tfieldLeaf "Scheme" . text
             tfield "Signature Capabilities" $ do
               when (not $ null $ _signer_capList s) $ do
                 elClass "table" "ui celled table" $ do
@@ -184,11 +184,11 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
                   el "tbody" $
                     forM_ (_signer_capList s) $ \c -> el "tr" $ do
                       el "td" $ text $ _scName c
-                      elClass "td" "evtd" $ elClass "table" "evtable" $
+                      elClass "td" "evtd leaf-cell" $ elClass "table" "evtable" $
                         forM_ (_scArgs c) $ \arg -> elClass "tr" "evtable" $
                           elClass "td" "evtable" $ text $ unwrapJSON arg
       tfield "Signatures" $ do
-        elClass "table" "evtable" $
+        elClass "table" "evtable leaf-cell" $
           forM_ (_txDetail_sigs firstTx) $ \s ->
             elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ unSig s
   where

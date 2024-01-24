@@ -72,15 +72,22 @@ detailsSection :: DomBuilder t m => m a -> m a
 detailsSection c = do
   elClass "table" "ui fixed line definition table" $ el "tbody" c
 
+-- See tfieldLeaf
 tfield :: DomBuilder t m => Text -> m a -> m a
 tfield nm v = el "tr" $ do
   elClass "td" "two wide" $ text nm
   el "td" v
 
-tfieldPre :: DomBuilder t m => Text -> m a -> m a
-tfieldPre nm v = el "tr" $ do
+-- We use tfield for displaying the field of potentially nested data structures
+-- tfieldLeaf should be used for displaying the leaf nodes of a data structure
+-- allowing the scrolling to work properly when a cell is too wide
+tfieldLeaf :: DomBuilder t m => Text -> m a -> m a
+tfieldLeaf nm v = el "tr" $ do
   elClass "td" "two wide" $ text nm
-  el "td" $ el "pre" v
+  elClass "td" "leaf-cell" v
+
+tfieldPre :: DomBuilder t m => Text -> m a -> m a
+tfieldPre nm v = tfieldLeaf nm $ el "pre" v
 
 jsonTable :: DomBuilder t m => Value -> m ()
 jsonTable (Object o) = detailsSection $ forM_ (HM.toList o) $ \(k,v) -> do
