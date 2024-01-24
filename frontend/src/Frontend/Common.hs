@@ -84,7 +84,7 @@ tfield nm v = el "tr" $ do
 tfieldLeaf :: DomBuilder t m => Text -> m a -> m a
 tfieldLeaf nm v = el "tr" $ do
   elClass "td" "two wide" $ text nm
-  elClass "td" "leaf-cell" v
+  elClass "td" "leaf-cell-td" $ elClass "div" "leaf-cell-div" v
 
 tfieldPre :: DomBuilder t m => Text -> m a -> m a
 tfieldPre nm v = tfieldLeaf nm $ el "pre" v

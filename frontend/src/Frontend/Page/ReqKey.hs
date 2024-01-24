@@ -23,6 +23,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Functor.Compose (Compose(..))
 import Data.Foldable (traverse_)
 import qualified Data.HashMap.Strict as HM
+import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Text (Text)
@@ -133,9 +134,8 @@ requestKeyResultPage netId cid (CommandResult (RequestKey rk) txid pr (Gas g) lo
         tfieldLeaf "Continuation" $ text $ maybe "" tshow pcont
         tfield "Metadata" $ renderMetaData netId cid meta
         tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
-                forM_ evs $ \ ev -> el "tr" $ do
-                  elClass "td" "two wide" $ mapM_ text (getEventName ev)
-                  elClass "td" "evtd leaf-cell" $ elClass "table" "evtable" $
+                forM_ evs $ \ ev -> tfieldLeaf (fromMaybe "" (getEventName ev)) $
+                  elClass "table" "evtable" $
                     forM_ (Compose $ getEventParams ev) $ \v ->
                       elClass "tr" "evtable" $ elClass "td" "evtable" $
                         text $ unwrapJSON v
