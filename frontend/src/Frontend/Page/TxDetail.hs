@@ -148,9 +148,8 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
               widgetHold_ (inlineLoader "Querying continuation info...") (renderCont c . ditchPartialResult <$> res)
           tfieldLeaf "Transaction ID" $ text $ tshow $ _txDetail_txid firstTx
       tfield "Events" $ elClass "table" "ui definition table" $ el "tbody" $
-        forM_ (_txDetail_events firstTx) $ \ ev -> el "tr" $ do
-          elClass "td" "two wide" $ text (_txEvent_name ev)
-          elClass "td" "evtd leaf-cell" $ elClass "table" "evtable" $
+        forM_ (_txDetail_events firstTx) $ \ ev ->
+          tfieldLeaf (_txEvent_name ev) $ elClass "table" "evtable" $
             forM_ (_txEvent_params ev) $ \v ->
               elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ pactValueJSON v
 
@@ -176,19 +175,13 @@ txDetailPage nc netId cwVer txs@(firstTx NE.:| restTxs) = do
             tfield "Signature Capabilities" $ do
               when (not $ null $ _signer_capList s) $ do
                 elClass "table" "ui celled table" $ do
-                  el "thead" $ do
-                    el "tr" $ do
-                      el "th" $ text "Name"
-                      el "th" $ text "Arguments"
-
                   el "tbody" $
-                    forM_ (_signer_capList s) $ \c -> el "tr" $ do
-                      el "td" $ text $ _scName c
-                      elClass "td" "evtd leaf-cell" $ elClass "table" "evtable" $
+                    forM_ (_signer_capList s) $ \c ->
+                      tfieldLeaf (_scName c) $ elClass "table" "evtable" $
                         forM_ (_scArgs c) $ \arg -> elClass "tr" "evtable" $
-                          elClass "td" "evtable" $ text $ unwrapJSON arg
-      tfield "Signatures" $ do
-        elClass "table" "evtable leaf-cell" $
+                          elClass "td" "evtable" $ text $ pactValueJSON arg
+      tfieldLeaf "Signatures" $ do
+        elClass "table" "evtable" $
           forM_ (_txDetail_sigs firstTx) $ \s ->
             elClass "tr" "evtable" $ elClass "td" "evtable" $ text $ unSig s
   where
