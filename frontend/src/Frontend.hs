@@ -422,8 +422,8 @@ mainPageWidget netId (Just height) = do
 
     _ <- divClass "ui segment" $ do
       elDynAttr "div" (statAttrs <$> stats) $ do
-          -- These statistics are nonsensical on fast-development
-          unless (netId == NetId_FastDevelopment) $ do
+          -- These statistics are nonsensical on (fast-)development
+          unless (netId == NetId_FastDevelopment || netId == NetId_Development) $ do
             statistic "Est. Network Hash Rate" (dynText $ maybe "-" ((<>"/s") . diffStr) <$> hashrate)
             statistic "Total Difficulty" (dynText $ diffStr . totalDifficulty <$> dbt)
 

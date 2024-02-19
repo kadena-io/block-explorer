@@ -75,6 +75,8 @@
             echo '{ "mock": "mock" }' > config/frontend/data-backends
             DATA_BACKENDS64=$(base64 config/frontend/data-backends)
 
+            echo no-tracking > config/frontend/tracking-id
+
             ${exe}/backend &
             sleep 1
 
