@@ -95,7 +95,7 @@ mainDispatch route ndbs = do
       r <- mainRoute
       setRoute (r <$ pb)
     FR_About -> prerender_ blank $ do
-      divClass "ui fixed inverted menu" $ nav NetId_FastDevelopment
+      divClass "ui fixed inverted menu" $ nav NetId_Development
       aboutWidget
     FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
     FR_Testnet -> networkDispatch route ndbs NetId_Testnet

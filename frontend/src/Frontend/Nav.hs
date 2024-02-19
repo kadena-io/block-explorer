@@ -28,7 +28,7 @@ import           Common.Types
 -- to the target of the main route. We declare mainRoute as a monadic type because
 -- we might need to do some dynamic routing in the future without changing call sites.
 mainRoute :: Monad m => m (R FrontendRoute)
-mainRoute = return $ FR_Prefix :/ FR_FastDevelopment :/ NetRoute_Chainweb :/ ()
+mainRoute = return $ FR_Prefix :/ FR_Development :/ NetRoute_Chainweb :/ ()
 
 nav
   :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m,
@@ -118,7 +118,7 @@ networkWidget netId = mdo
     text $ networkName netId
     let mkAttrs as vis = "class" =: (if vis then (as <> " visible") else as)
     elDynAttr "div" (mkAttrs "menu transition" <$> dropdownVisible) $ do
-      networkItem "FastDevelopment" $ FR_Prefix :/ FR_FastDevelopment :/ NetRoute_Chainweb :/ ()
+      networkItem "Development" $ FR_Prefix :/ FR_Development :/ NetRoute_Chainweb :/ ()
   route <- askRoute
   dropdownVisible <- holdDyn False $ leftmost
     [ True <$ domEvent Mouseenter e
