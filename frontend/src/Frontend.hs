@@ -90,12 +90,12 @@ mainDispatch
   -> App (R FrontendRoute) t m ()
 mainDispatch route ndbs = do
   pb <- getPostBuild
-  subRoute_ $ \case
+  subRoute_ $ \FR_Prefix -> subRoute_ $ \case
     FR_Main -> do
       r <- mainRoute
       setRoute (r <$ pb)
     FR_About -> prerender_ blank $ do
-      divClass "ui fixed inverted menu" $ nav NetId_Mainnet
+      divClass "ui fixed inverted menu" $ nav NetId_Development
       aboutWidget
     FR_Mainnet -> networkDispatch route ndbs NetId_Mainnet
     FR_Testnet -> networkDispatch route ndbs NetId_Testnet
